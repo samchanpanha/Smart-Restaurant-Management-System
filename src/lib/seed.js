@@ -238,7 +238,9 @@ export function buildSeed() {
     { id: 'w_1', inventoryItemId: 'inv_lettuce', qty: 4, reason: 'spoil', at: minAgo(300), by: 'closer' },
   ]
   const invoiceLog = [
+    { id: 'invlog_0', vendor: 'Harbor Fish', at: minAgo(7 * 1440), lines: [{ inventoryItemId: 'inv_salmon', qty: 12, unitCost: 5.18 }] },
     { id: 'invlog_1', vendor: 'Harbor Fish', at: minAgo(1440), lines: [{ inventoryItemId: 'inv_salmon', qty: 12, unitCost: 5.8 }] },
+    { id: 'invlog_2', vendor: 'Prime Meats', at: minAgo(2 * 1440), lines: [{ inventoryItemId: 'inv_steak', qty: 10, unitCost: 8.5 }, { inventoryItemId: 'inv_patty', qty: 48, unitCost: 2.25 }] },
   ]
 
   return {

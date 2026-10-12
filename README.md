@@ -27,11 +27,11 @@ React 19 + Vite + Tailwind CSS v4. In-memory store (`useReducer` + context) with
 | 1 | Object model + status machines | ✅ Done | Tables, tickets, items, recipes, inventory, alerts; strict machines; seed data; role-aware shell |
 | 2 | Floor seat/dirty | ✅ Done | Live map by zone, tap-to-seat, over-cap confirm, reservations, waitlist + honest wait quotes |
 | 3 | Ticket compose/send/undo | ✅ Done | Composer + required mods, 86 w/ substitute, course fire, 15s undo, split/pay/void/comp |
-| 4 | KDS fire/bump/86 | ⬜ Next | Station columns, age alerts, 86 board, 60s recall |
-| 5 | Theoretical inventory on fire | ⬜ Next | Receive, count sheet, waste log, par alerts |
+| 4 | KDS fire/bump/86 | ✅ Done | Station columns + expo, live SLA timers, bump-all, 60s recall, shared 86 board |
+| 5 | Theoretical inventory on fire | ✅ Done | Stock exceptions, receive w/ plate-cost impact, count sheet w/ variance reasons, waste log |
 | 6 | Dashboard alerts | ✅ Done | KPIs, tappable alert rail, rush watch, sparkline, sellers/losers, SLA, floor snapshot |
-| 7 | Recipe cost + matrix | ⬜ | Coster, popularity×margin matrix, ingredient shock |
-| 8 | Reports | ⬜ | Sales, server/table, voids, variance, P&L-lite |
+| 7 | Recipe cost + matrix | ✅ Done | Recipe coster w/ snapshots, 86 write-through, menu matrix, ingredient shocks, in-place reprice |
+| 8 | Reports | ⬜ Next | Sales, server/table, voids, variance, P&L-lite |
 
 ## Key rules (from spec — enforced in code)
 
