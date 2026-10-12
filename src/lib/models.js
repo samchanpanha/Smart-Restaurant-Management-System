@@ -149,10 +149,30 @@ export function quoteWaitMinutes(partySize, turnsToday) {
 // ─── Orders ─────────────────────────────────────────────────────
 
 export function orderSubtotal(order, menuById) {
-  return (order.items || []).reduce((sum, it) => {
+  return orderBillable(order).reduce((sum, it) => {
     const menu = menuById[it.menuItemId]
     return sum + (menu?.price ?? 0) * (it.qty || 0)
   }, 0)
+}
+
+// Billable lines exclude comps and voids (manager actions remove the charge,
+// the line stays for audit).
+export function orderBillable(order) {
+  return (order.items || []).filter((i) => !i.comped && !i.voided)
+}
+
+export function orderTotals(order, menuById, taxPct = 0) {
+  const lines = orderBillable(order).map((it) => {
+    const menu = menuById[it.menuItemId]
+    const price = menu?.price ?? 0
+    return { ...it, name: menu?.name || 'Unknown', price, lineTotal: price * (it.qty || 0) }
+  })
+  const subtotal = lines.reduce((s, l) => s + l.lineTotal, 0)
+  const compTotal = (order.items || [])
+    .filter((i) => i.comped && !i.voided)
+    .reduce((s, it) => s + (menuById[it.menuItemId]?.price ?? 0) * (it.qty || 0), 0)
+  const tax = subtotal * taxPct
+  return { lines, subtotal, compTotal, tax, total: subtotal + tax }
 }
 
 export function orderStatusFromItems(items) {

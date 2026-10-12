@@ -5,86 +5,12 @@
 
 import { useMemo, useState } from 'react'
 import StatusPill from '../components/StatusPill'
+import { Field, Modal, Stepper, inputCls } from '../components/ui'
 import { TABLE_STATUS_META, TARGETS } from '../lib/constants'
 import { formatClock, isSeatBlocked, minutesBetween, needsOverSeatConfirm } from '../lib/models'
 import { quoteWait, useNow, useRestora } from '../lib/store'
 
 const ZONES = ['Bar', 'Main', 'Patio']
-
-// ─── Small building blocks ──────────────────────────────────────
-
-function Modal({ title, sub, onClose, children, wide }) {
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
-      onClick={onClose}
-    >
-      <div
-        className={`w-full ${wide ? 'max-w-lg' : 'max-w-md'} rounded-2xl border border-[var(--color-ink-600)] bg-[var(--color-ink-900)] p-6 shadow-2xl`}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mb-1 flex items-start justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-bold tracking-tight">{title}</h2>
-            {sub && <p className="mt-0.5 text-xs text-zinc-400">{sub}</p>}
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close dialog"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-xl text-zinc-400 hover:bg-white/5 hover:text-zinc-100"
-          >
-            ×
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>
-  )
-}
-
-function Field({ label, children }) {
-  return (
-    <label className="block">
-      <span className="mb-1 block text-[11px] font-semibold uppercase tracking-widest text-zinc-500">
-        {label}
-      </span>
-      {children}
-    </label>
-  )
-}
-
-const inputCls =
-  'w-full rounded-lg border border-[var(--color-ink-600)] bg-[var(--color-ink-800)] px-3 py-2.5 text-sm text-zinc-100 min-h-[44px]'
-
-function Stepper({ value, onChange, min = 1, max = 12 }) {
-  return (
-    <div className="flex items-center gap-2">
-      <button
-        type="button"
-        aria-label="Decrease party size"
-        onClick={() => onChange(Math.max(min, value - 1))}
-        className="flex h-11 w-11 items-center justify-center rounded-lg border border-[var(--color-ink-600)] text-xl text-zinc-200 hover:bg-white/5"
-      >
-        −
-      </button>
-      <div className="tnum min-w-14 text-center text-2xl font-bold" aria-live="polite">
-        {value}
-      </div>
-      <button
-        type="button"
-        aria-label="Increase party size"
-        onClick={() => onChange(Math.min(max, value + 1))}
-        className="flex h-11 w-11 items-center justify-center rounded-lg border border-[var(--color-ink-600)] text-xl text-zinc-200 hover:bg-white/5"
-      >
-        +
-      </button>
-    </div>
-  )
-}
 
 // ─── Seat dialog ────────────────────────────────────────────────
 // Seats walk-ins, reservations, or waitlist parties. Over-capacity

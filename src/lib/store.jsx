@@ -162,10 +162,14 @@ function reducer(state, action) {
     }
 
     case 'SEND_ORDER': {
-      const { orderId } = action
+      const { orderId, courses } = action
       const order = state.orders.find((o) => o.id === orderId)
       if (!order) return state
-      const heldItems = order.items.filter((i) => i.status === 'held')
+      // Fire held items — optionally only the given courses (hold desserts,
+      // send starters/mains). Theoretical stock drops here, on fire.
+      const heldItems = order.items.filter(
+        (i) => i.status === 'held' && !i.voided && (!courses || courses.includes(i.course)),
+      )
       if (!heldItems.length) return state
       const nowIso = new Date().toISOString()
       const inventoryById = Object.fromEntries(state.inventory.map((i) => [i.id, i]))
@@ -304,15 +308,33 @@ function reducer(state, action) {
       return { ...state, orders }
     }
 
+    case 'VOID_ITEM': {
+      // Manager void of one line (fired or held). The line stays for audit;
+      // comps/voids are excluded from the bill. Held voids never touched stock.
+      const { orderId, itemId, reason } = action
+      const order = state.orders.find((o) => o.id === orderId)
+      if (!order || ['paid', 'void'].includes(order.status)) return state
+      const orders = state.orders.map((o) => {
+        if (o.id !== orderId) return o
+        return {
+          ...o,
+          items: o.items.map((i) =>
+            i.id === itemId ? { ...i, voided: true, voidReason: reason || 'manager void' } : i,
+          ),
+        }
+      })
+      return { ...state, orders }
+    }
+
     case 'PAY_ORDER': {
-      const { orderId, method = 'card' } = action
+      const { orderId, method = 'card', split = null } = action
       const order = state.orders.find((o) => o.id === orderId)
       if (!order || !['ready', 'served', 'in_prep', 'sent'].includes(order.status)) return state
       const menuById = Object.fromEntries(state.menu.map((m) => [m.id, m]))
       const total = orderSubtotal(order, menuById)
       const orders = state.orders.map((o) =>
         o.id === orderId
-          ? { ...o, status: 'paid', paidAt: new Date().toISOString(), payMethod: method, total }
+          ? { ...o, status: 'paid', paidAt: new Date().toISOString(), payMethod: method, split, total }
           : o,
       )
       // Table ordered -> billed; record the turn for host wait quotes

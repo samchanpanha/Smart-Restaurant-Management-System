@@ -26,8 +26,8 @@ React 19 + Vite + Tailwind CSS v4. In-memory store (`useReducer` + context) with
 |------|--------|--------|----------------|
 | 1 | Object model + status machines | ✅ Done | Tables, tickets, items, recipes, inventory, alerts; strict machines; seed data; role-aware shell |
 | 2 | Floor seat/dirty | ✅ Done | Live map by zone, tap-to-seat, over-cap confirm, reservations, waitlist + honest wait quotes |
-| 3 | Ticket compose/send/undo | ⬜ Next | Composer, required mods, 15s undo, split/pay/void/comp |
-| 4 | KDS fire/bump/86 | ⬜ | Station columns, age alerts, 86 board, 60s recall |
+| 3 | Ticket compose/send/undo | ✅ Done | Composer + required mods, 86 w/ substitute, course fire, 15s undo, split/pay/void/comp |
+| 4 | KDS fire/bump/86 | ⬜ Next | Station columns, age alerts, 86 board, 60s recall |
 | 5 | Theoretical inventory on fire | ⬜ | Receive, count sheet, waste log, par alerts |
 | 6 | Dashboard alerts | ⬜ | KPIs, alert rail, sparkline, SLA, floor snapshot |
 | 7 | Recipe cost + matrix | ⬜ | Coster, popularity×margin matrix, ingredient shock |
