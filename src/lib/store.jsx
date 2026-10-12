@@ -647,7 +647,9 @@ function loadPersisted() {
 export function RestoraProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, undefined, () => loadPersisted() || buildSeed())
   const [role, setRole] = useState('owner')
-  const [screen, setScreen] = useState('system')
+  const [screen, setScreen] = useState('floor')
+  // UI-only: which table the next screen should focus (e.g. Floor → Tickets handoff)
+  const [selectedTableId, setSelectedTableId] = useState(null)
 
   useEffect(() => {
     try {
@@ -670,8 +672,8 @@ export function RestoraProvider({ children }) {
   }, [state.pendingUndo])
 
   const value = useMemo(
-    () => ({ state, dispatch, role, setRole, screen, setScreen }),
-    [state, role, screen],
+    () => ({ state, dispatch, role, setRole, screen, setScreen, selectedTableId, setSelectedTableId }),
+    [state, role, screen, selectedTableId],
   )
   return <RestoraContext.Provider value={value}>{children}</RestoraContext.Provider>
 }
