@@ -29,7 +29,7 @@ React 19 + Vite + Tailwind CSS v4. In-memory store (`useReducer` + context) with
 | 3 | Ticket compose/send/undo | ✅ Done | Composer + required mods, 86 w/ substitute, course fire, 15s undo, split/pay/void/comp |
 | 4 | KDS fire/bump/86 | ⬜ Next | Station columns, age alerts, 86 board, 60s recall |
 | 5 | Theoretical inventory on fire | ⬜ Next | Receive, count sheet, waste log, par alerts |
-| 6 | Dashboard alerts | ⬜ | KPIs, alert rail, sparkline, SLA, floor snapshot |
+| 6 | Dashboard alerts | ⬜ Next | KPIs, alert rail, sparkline, SLA, floor snapshot |
 | 7 | Recipe cost + matrix | ⬜ | Coster, popularity×margin matrix, ingredient shock |
 | 8 | Reports | ⬜ | Sales, server/table, voids, variance, P&L-lite |
 

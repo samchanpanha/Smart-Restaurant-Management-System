@@ -2,6 +2,7 @@ import AppShell from './components/AppShell'
 import { RestoraProvider, useRestora } from './lib/store'
 import ComingSoon from './screens/ComingSoon'
 import FloorScreen from './screens/FloorScreen'
+import InventoryScreen from './screens/InventoryScreen'
 import KitchenScreen from './screens/KitchenScreen'
 import SystemScreen from './screens/SystemScreen'
 import TicketsScreen from './screens/TicketsScreen'
@@ -12,6 +13,7 @@ function Router() {
   if (screen === 'floor') return <FloorScreen />
   if (screen === 'tickets') return <TicketsScreen />
   if (screen === 'kitchen') return <KitchenScreen />
+  if (screen === 'inventory') return <InventoryScreen />
   return <ComingSoon screen={screen} />
 }
 
