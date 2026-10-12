@@ -7,6 +7,7 @@ import FloorScreen from './screens/FloorScreen'
 import InventoryScreen from './screens/InventoryScreen'
 import KitchenScreen from './screens/KitchenScreen'
 import MenuScreen from './screens/MenuScreen'
+import ReportsScreen from './screens/ReportsScreen'
 import SystemScreen from './screens/SystemScreen'
 import TicketsScreen from './screens/TicketsScreen'
 
@@ -20,6 +21,7 @@ function Router() {
   if (screen === 'inventory') return <InventoryScreen />
   if (screen === 'menu') return <MenuScreen />
   if (screen === 'costing') return <CostingScreen />
+  if (screen === 'reports') return <ReportsScreen />
   return <ComingSoon screen={screen} />
 }
 

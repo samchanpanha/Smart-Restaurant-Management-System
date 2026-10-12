@@ -31,7 +31,7 @@ React 19 + Vite + Tailwind CSS v4. In-memory store (`useReducer` + context) with
 | 5 | Theoretical inventory on fire | ✅ Done | Stock exceptions, receive w/ plate-cost impact, count sheet w/ variance reasons, waste log |
 | 6 | Dashboard alerts | ✅ Done | KPIs, tappable alert rail, rush watch, sparkline, sellers/losers, SLA, floor snapshot |
 | 7 | Recipe cost + matrix | ✅ Done | Recipe coster w/ snapshots, 86 write-through, menu matrix, ingredient shocks, in-place reprice |
-| 8 | Reports | ⬜ Next | Sales, server/table, voids, variance, P&L-lite |
+| 8 | Reports | ✅ Done | Sales/hour/category/day, service, voids audit, variance, P&L-lite — every report ends in an action |
 
 ## Key rules (from spec — enforced in code)
 

@@ -281,19 +281,19 @@ export default function SystemScreen() {
 
       {/* Spine */}
       <Card
-        title="Friday-night spine — build order"
-        sub="Every later step hitches to one of these beats. Steps 2–8 each deliver one working module."
+        title="Friday-night spine — build complete"
+        sub="All eight steps delivered. Every module hitches to one of these beats."
       >
         <ol className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
           {[
             ['1 · Model', 'Objects + machines (this screen)', true],
-            ['2 · Floor', 'Seat parties, turn tables', false],
-            ['3 · Tickets', 'Compose, send, undo, pay', false],
-            ['4 · Kitchen', 'Fire, bump, 86 board', false],
-            ['5 · Inventory', 'Receive, count, waste', false],
-            ['6 · Dashboard', 'Shift health + alerts', false],
-            ['7 · Costing', 'Recipes + menu matrix', false],
-            ['8 · Reports', 'Sales, voids, P&L-lite', false],
+            ['2 · Floor', 'Seat parties, turn tables', true],
+            ['3 · Tickets', 'Compose, send, undo, pay', true],
+            ['4 · Kitchen', 'Fire, bump, 86 board', true],
+            ['5 · Inventory', 'Receive, count, waste', true],
+            ['6 · Dashboard', 'Shift health + alerts', true],
+            ['7 · Costing', 'Recipes + menu matrix', true],
+            ['8 · Reports', 'Sales, voids, P&L-lite', true],
           ].map(([step, label, done]) => (
             <li
               key={step}
