@@ -17,9 +17,9 @@ import {
   ticketAgeState,
   uid,
 } from './models.js'
-import { buildSeed } from './seed.js'
+import { buildSeed, buildSeedRiverside } from './seed.js'
 
-export { buildSeed }
+export { buildSeed, buildSeedRiverside }
 
 // ─── Reducer ────────────────────────────────────────────────────
 
@@ -38,7 +38,7 @@ function decrementInventory(inventory, decMap, sign = -1) {
   return next
 }
 
-export function reducer(state, action) {
+function shopReducer(state, action) {
   switch (action.type) {
     // ── Floor ──────────────────────────────────────────────
     case 'SEAT_PARTY': {
@@ -556,15 +556,49 @@ export function reducer(state, action) {
         ? state
         : { ...state, dismissedAlerts: [...state.dismissedAlerts, action.key] }
 
-    case 'RESET_ALL':
-      return buildSeed()
-
-    case 'HYDRATE':
-      return action.state
-
     default:
       return state
   }
+}
+
+// ─── Empire router (multi-location) ───────────────────────────────
+// State shape v2: { version: 2, locations: { downtown: shop, riverside: shop } }.
+// Every shop action travels wrapped: { type: 'LOC', locId, action: inner }.
+// RESET_ALL reseeds the whole empire; HYDRATE swaps it (bootstrap only).
+
+export function buildEmpire() {
+  const downtown = buildSeed()
+  downtown.settings.restaurantName = 'Restora · Downtown'
+  return { version: 2, locations: { downtown, riverside: buildSeedRiverside() } }
+}
+
+export function migrateToEmpire(old) {
+  if (!old) return null
+  if (old.version === 2 && old.locations?.downtown && old.locations?.riverside) return old
+  if (old.version === 1 && Array.isArray(old.tables)) {
+    const downtown = { ...old, settings: { ...old.settings, restaurantName: 'Restora · Downtown' } }
+    return { version: 2, locations: { downtown, riverside: buildSeedRiverside() } }
+  }
+  return null
+}
+
+export function reducer(state, action) {
+  if (!action || typeof action.type !== 'string') return state
+  if (action.type === 'HYDRATE') return action.state
+  if (action.type === 'RESET_ALL') return buildEmpire()
+  if (action.type === 'LOC') {
+    const shop = state.locations?.[action.locId]
+    if (!shop || !action.action) return state
+    const next = shopReducer(shop, action.action)
+    if (next === shop) return state
+    return { ...state, locations: { ...state.locations, [action.locId]: next } }
+  }
+  // Back-compat: a bare shop action applies to downtown (old clients/logs).
+  const shop = state.locations?.downtown
+  if (!shop) return state
+  const next = shopReducer(shop, action)
+  if (next === shop) return state
+  return { ...state, locations: { ...state.locations, downtown: next } }
 }
 
 // ─── Derived: alerts ──────────────────────────────────────────────

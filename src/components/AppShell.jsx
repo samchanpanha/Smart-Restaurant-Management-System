@@ -4,10 +4,10 @@
 
 import StatusPill from './StatusPill'
 import { NAV_SECTIONS, ROLES, ROLE_NAV } from '../lib/constants'
-import { useRestora } from '../lib/store'
+import { LOCATIONS, useRestora } from '../lib/store'
 
 export default function AppShell({ children }) {
-  const { state, dispatch, role, setRole, screen, setScreen, link, resync, notice } = useRestora()
+  const { state, dispatch, role, setRole, screen, setScreen, link, resync, notice, locId, setLocId } = useRestora()
   const allowed = ROLE_NAV[role] || []
 
   const linkPill =
@@ -31,6 +31,28 @@ export default function AppShell({ children }) {
           <div className="mt-0.5 truncate text-xs text-zinc-400">
             {state.settings.restaurantName}
           </div>
+          {role === 'owner' ? (
+            <div className="mt-2 grid grid-cols-2 gap-1 rounded-lg bg-black/30 p-1" role="tablist" aria-label="Store">
+              {LOCATIONS.map((l) => (
+                <button
+                  key={l.id}
+                  role="tab"
+                  aria-selected={locId === l.id}
+                  type="button"
+                  onClick={() => setLocId(l.id)}
+                  className={`min-h-[36px] rounded-md text-xs font-bold transition-colors ${
+                    locId === l.id ? 'bg-amber-500 text-black' : 'text-zinc-400 hover:text-zinc-100'
+                  }`}
+                >
+                  {l.short}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-2 text-[11px] text-zinc-500">
+              📍 Terminal pinned to {LOCATIONS.find((l) => l.id === locId)?.short}
+            </div>
+          )}
           <div className="mt-2 flex items-center gap-2">
             <StatusPill tone={linkPill.tone} size="sm">
               {linkPill.label}

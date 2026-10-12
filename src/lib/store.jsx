@@ -1,21 +1,24 @@
 // ─── Restora store + terminal sync ──────────────────────────────────
-// One ticket, one truth — now across terminals. When an API server is
-// reachable, this client boots from its snapshot, posts every action
-// (optimistic, tagged with a local id), and follows the shared action
-// log live over SSE. The server re-runs the SAME reducer, so illegal
-// transitions (two hosts, one table) are rejected and the loser resyncs.
-// No server? The app runs standalone on localStorage, exactly as before.
-//
-// Local-only actions (never posted): HYDRATE (bootstrap), EXPIRE_UNDO
-// and DISMISS_ALERT (each terminal manages its own timers/dismissals).
+// Multi-location empire, one shared brain. State shape v2:
+//   { version: 2, locations: { downtown: shop, riverside: shop } }
+// Screens keep reading `state` — the provider points it at the active
+// shop — so every module is location-scoped with zero screen changes.
+// Actions travel wrapped ({ type:'LOC', locId, action }) to the server,
+// which runs the SAME empire reducer. Owner sees the switcher + compare;
+// staff terminals stay pinned (?loc= kiosk param or downtown).
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { ROLE_NAV } from './constants'
 import { uid } from './models'
-import { buildSeed, reducer } from './reducer'
+import { buildEmpire, migrateToEmpire, reducer } from './reducer'
 
 // Re-exported so screens keep importing from one place.
 export { getAlerts, getDashboard, quoteWait, tableName } from './reducer'
+
+export const LOCATIONS = [
+  { id: 'downtown', short: 'Downtown' },
+  { id: 'riverside', short: 'Riverside' },
+]
 
 const STORAGE_KEY = 'restora-v1'
 const LOCAL_ONLY = new Set(['HYDRATE', 'EXPIRE_UNDO', 'DISMISS_ALERT'])
@@ -27,9 +30,7 @@ function loadPersisted() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return null
-    const parsed = JSON.parse(raw)
-    if (parsed?.version !== 1) return null
-    return { ...parsed, pendingUndo: null, recalls: {} }
+    return migrateToEmpire(JSON.parse(raw))
   } catch {
     return null
   }
@@ -48,32 +49,47 @@ function getClientId() {
   }
 }
 
-// Kiosk mode: /?role=kitchen&screen=kitchen boots a terminal straight in.
+// Kiosk mode: /?role=kitchen&screen=kitchen&loc=riverside, /?guest=t14
 function kioskParams() {
   try {
     const q = new URLSearchParams(window.location.search)
     const role = q.get('role')
-    const screen = q.get('screen')
+    const loc = q.get('loc')
     return {
       role: role && ROLE_NAV[role] ? role : null,
-      screen: screen || null,
+      screen: q.get('screen') || null,
+      loc: loc && LOCATIONS.some((l) => l.id === loc) ? loc : null,
+      guest: q.get('guest') || null,
     }
   } catch {
-    return { role: null, screen: null }
+    return { role: null, screen: null, loc: null, guest: null }
   }
+}
+
+function locOfTable(empire, tableId) {
+  if (!tableId) return null
+  for (const { id } of LOCATIONS) {
+    if (empire.locations[id]?.tables.some((t) => t.id === tableId)) return id
+  }
+  return null
 }
 
 async function fetchState(signal) {
   const res = await fetch('/api/state', { signal })
   if (!res.ok) throw new Error(`state ${res.status}`)
   const json = await res.json()
-  if (!json?.state || json.state.version !== 1) throw new Error('bad snapshot')
-  return json
+  const empire = migrateToEmpire(json?.state)
+  if (!empire) throw new Error('bad snapshot')
+  return { empire, seq: json.seq || 0 }
 }
 
 export function RestoraProvider({ children }) {
-  const [state, rawDispatch] = useReducer(reducer, undefined, () => loadPersisted() || buildSeed())
+  const empireInit = useMemo(() => loadPersisted() || buildEmpire(), [])
   const kiosk = useMemo(kioskParams, [])
+  const [empire, rawDispatch] = useReducer(reducer, empireInit)
+  const [locId, setLocId] = useState(
+    () => locOfTable(empireInit, kiosk.guest) || kiosk.loc || 'downtown',
+  )
   const [role, setRole] = useState(kiosk.role || 'owner')
   const [screen, setScreen] = useState(() => {
     if (kiosk.screen) return kiosk.screen
@@ -83,13 +99,18 @@ export function RestoraProvider({ children }) {
   const [selectedTableId, setSelectedTableId] = useState(null)
   const [selectedDishId, setSelectedDishId] = useState(null)
 
+  const state = useMemo(
+    () => empire.locations[locId] || empire.locations.downtown,
+    [empire, locId],
+  )
+
   // link: { mode: 'local'|'server', status: 'starting'|'live'|'offline'|'local' }
   const [link, setLink] = useState({ mode: 'local', status: 'starting' })
   const [notice, setNotice] = useState(null)
-  const linkRef = useRef(link)
-  linkRef.current = link
+  const locRef = useRef(locId)
+  locRef.current = locId
   const seqRef = useRef(0)
-  const lidAt = useRef(new Map()) // local action id → seen timestamp (echo guard)
+  const lidAt = useRef(new Map())
   const clientId = useMemo(getClientId, [])
   const esRef = useRef(null)
   const retryRef = useRef(null)
@@ -108,12 +129,18 @@ export function RestoraProvider({ children }) {
     if (lidAt.current.size > 5000) lidAt.current.clear()
   }, [])
 
-  // ── Resync: server snapshot is authoritative ───────────────────
+  // Guests land in whichever store holds their table.
+  useEffect(() => {
+    if (!kiosk.guest) return
+    const found = locOfTable(empire, kiosk.guest)
+    if (found && found !== locRef.current) setLocId(found)
+  }, [empire, kiosk.guest])
+
   const resync = useCallback(async () => {
     try {
       const json = await fetchState()
       seqRef.current = json.seq || 0
-      rawDispatch({ type: 'HYDRATE', state: json.state })
+      rawDispatch({ type: 'HYDRATE', state: json.empire })
       setLink({ mode: 'server', status: 'live' })
       return true
     } catch {
@@ -122,7 +149,6 @@ export function RestoraProvider({ children }) {
     }
   }, [])
 
-  // ── SSE lifecycle (manual reconnect → snapshot, never stale replay)
   const connectStream = useCallback(() => {
     if (esRef.current) {
       esRef.current.close()
@@ -147,7 +173,6 @@ export function RestoraProvider({ children }) {
         return
       }
       if (msg.hello) {
-        // Gap too big for replay → take the snapshot instead.
         if (msg.seq - seqRef.current > 200) {
           resync().then((ok) => {
             if (ok) connectStream()
@@ -165,18 +190,17 @@ export function RestoraProvider({ children }) {
         return
       }
       if (typeof msg.seq === 'number') {
-        if (msg.seq <= seqRef.current) return // already applied
+        if (msg.seq <= seqRef.current) return
         seqRef.current = msg.seq
       }
-      const lid = msg.action?._lid
-      if (lid && lidAt.current.has(lid)) return // own echo — already applied optimistically
+      const lid = msg.action?._lid ?? msg.action?.action?._lid
+      if (lid && lidAt.current.has(lid)) return
       if (lid) lidAt.current.set(lid, Date.now())
       pruneLids()
       setLink({ mode: 'server', status: 'live' })
       try {
         rawDispatch(msg.action)
       } catch {
-        // Remote action illegal against our optimistic state → take truth.
         resync()
       }
     }
@@ -193,7 +217,6 @@ export function RestoraProvider({ children }) {
     }
   }, [pruneLids, resync])
 
-  // ── Boot: server snapshot if reachable, else standalone ─────────
   useEffect(() => {
     const ctrl = new AbortController()
     const timer = window.setTimeout(() => ctrl.abort(), BOOT_TIMEOUT_MS)
@@ -201,13 +224,13 @@ export function RestoraProvider({ children }) {
       .then((json) => {
         window.clearTimeout(timer)
         seqRef.current = json.seq || 0
-        rawDispatch({ type: 'HYDRATE', state: json.state })
+        rawDispatch({ type: 'HYDRATE', state: json.empire })
         setLink({ mode: 'server', status: 'live' })
         connectStream()
       })
       .catch(() => {
         window.clearTimeout(timer)
-        setLink({ mode: 'local', status: 'local' }) // standalone demo, as before
+        setLink({ mode: 'local', status: 'local' })
       })
     return () => {
       window.clearTimeout(timer)
@@ -218,15 +241,35 @@ export function RestoraProvider({ children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // ── Dispatch: optimistic locally, posted when linked ────────────
+  // Dispatch: HYDRATE swaps the empire; shop actions wrap in LOC;
+  // RESET_ALL reseeds every store (broadcast to all terminals).
   const dispatch = useCallback(
     (action) => {
-      if (linkRef.current.mode !== 'server' || LOCAL_ONLY.has(action.type)) {
+      if (!action || typeof action.type !== 'string') return
+      if (action.type === 'HYDRATE') {
         rawDispatch(action)
         return
       }
+      const linked = linkRef.current.mode === 'server'
+      if (action.type === 'RESET_ALL') {
+        rawDispatch(action)
+        if (!linked) return
+        const lid = uid('l')
+        lidAt.current.set(lid, Date.now())
+        fetch('/api/actions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: { ...action, _lid: lid }, clientId }),
+        }).catch(() => setLink((l) => ({ ...l, status: 'offline' })))
+        return
+      }
+      const wrapped = { type: 'LOC', locId: locRef.current, action }
+      if (!linked || LOCAL_ONLY.has(action.type)) {
+        rawDispatch(wrapped)
+        return
+      }
       const lid = uid('l')
-      const tagged = { ...action, _lid: lid }
+      const tagged = { type: 'LOC', locId: locRef.current, action: { ...action, _lid: lid } }
       lidAt.current.set(lid, Date.now())
       rawDispatch(tagged)
       fetch('/api/actions', {
@@ -237,7 +280,6 @@ export function RestoraProvider({ children }) {
         .then(async (res) => {
           const json = await res.json().catch(() => ({}))
           if (!res.ok) {
-            // Server rejected (e.g. lost a race) — take truth, say why.
             flashNotice(json.error ? `Server kept truth (${json.error}). Resynced.` : 'Server hiccup — resynced.')
             resync()
           } else if (typeof json.seq === 'number') {
@@ -253,34 +295,37 @@ export function RestoraProvider({ children }) {
     [clientId, resync],
   )
 
-  // Local cache (offline fallback + instant boot paint next visit)
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(empire))
     } catch {
       /* storage full/blocked — app still works in memory */
     }
-  }, [state])
+  }, [empire])
 
-  // Expire the 15s undo window without user action (local-only)
+  // Expire the 15s undo window without user action (local-only, this shop)
+  const pendingUndo = state.pendingUndo
   useEffect(() => {
-    if (!state.pendingUndo) return
-    const ms = state.pendingUndo.expiresAt - Date.now()
+    if (!pendingUndo) return
+    const ms = pendingUndo.expiresAt - Date.now()
     if (ms <= 0) {
-      rawDispatch({ type: 'EXPIRE_UNDO' })
+      rawDispatch({ type: 'LOC', locId: locRef.current, action: { type: 'EXPIRE_UNDO' } })
       return
     }
-    const t = setTimeout(() => rawDispatch({ type: 'EXPIRE_UNDO' }), ms + 50)
+    const t = setTimeout(
+      () => rawDispatch({ type: 'LOC', locId: locRef.current, action: { type: 'EXPIRE_UNDO' } }),
+      ms + 50,
+    )
     return () => clearTimeout(t)
-  }, [state.pendingUndo])
+  }, [pendingUndo])
 
   const value = useMemo(
     () => ({
-      state, dispatch, role, setRole, screen, setScreen,
+      state, empire, dispatch, role, setRole, screen, setScreen,
       selectedTableId, setSelectedTableId, selectedDishId, setSelectedDishId,
-      link, resync, notice,
+      locId, setLocId, link, resync, notice,
     }),
-    [state, dispatch, role, screen, selectedTableId, selectedDishId, link, resync, notice],
+    [state, empire, dispatch, role, screen, selectedTableId, selectedDishId, locId, link, resync, notice],
   )
 
   if (link.status === 'starting') {
@@ -303,7 +348,6 @@ export function useRestora() {
   return ctx
 }
 
-// Tick hook for live timers (KDS clocks, seated minutes, undo countdown)
 export function useNow(intervalMs = 1000) {
   const [now, setNow] = useState(Date.now())
   useEffect(() => {

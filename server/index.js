@@ -14,7 +14,7 @@
 import express from 'express'
 import fs from 'node:fs'
 import path from 'node:path'
-import { buildSeed, reducer } from '../src/lib/reducer.js'
+import { buildEmpire, migrateToEmpire, reducer } from '../src/lib/reducer.js'
 import { actionsSince, appendAction, loadSnapshot, logStats, saveSnapshot } from './db.js'
 
 const PORT = Number(process.env.PORT || 3001)
@@ -26,13 +26,19 @@ const REJECTED = new Set(['HYDRATE'])
 // ─── Boot ───────────────────────────────────────────────────────
 
 let persisted = loadSnapshot()
-let state = persisted?.state && persisted.state.version === 1 ? persisted.state : buildSeed()
+let migrated = migrateToEmpire(persisted?.state)
+let state = migrated || buildEmpire()
 let seq = persisted?.seq || 0
-if (!persisted || persisted.state.version !== 1) {
+if (!migrated) {
   saveSnapshot(state, seq)
-  console.log('[restora] seeded fresh Friday-night state')
+  console.log('[restora] seeded fresh two-store empire')
 } else {
-  console.log(`[restora] restored snapshot at seq=${seq}`)
+  if (persisted.state.version !== 2) {
+    saveSnapshot(state, seq)
+    console.log('[restora] migrated v1 snapshot → two-store empire')
+  } else {
+    console.log(`[restora] restored empire snapshot at seq=${seq}`)
+  }
 }
 
 // ─── App ────────────────────────────────────────────────────────

@@ -273,3 +273,45 @@ export function buildSeed() {
     meta: { seededAt: new Date(now()).toISOString() },
   }
 }
+
+// ─── Second store: Riverside ──────────────────────────────────────
+// Smaller room (10 tables), softer history, its own stock. Notably it
+// HAS salmon — per-store independence you can see on the 86 board.
+export function buildSeedRiverside() {
+  const base = buildSeed()
+  const keep = ['t01', 't02', 't03', 't04', 't05', 't06', 't07', 't08', 't09', 't10']
+  const remap = Object.fromEntries(keep.map((id, i) => [id, `r${String(i + 1).padStart(2, '0')}`]))
+
+  const tables = base.tables
+    .filter((t) => keep.includes(t.id))
+    .map((t) => ({ ...t, id: remap[t.id] }))
+  const orders = base.orders
+    .filter((o) => !o.tableId || keep.includes(o.tableId))
+    .map((o) => (o.tableId ? { ...o, tableId: remap[o.tableId] } : o))
+    .filter((o, _, arr) => o.status !== 'paid' || arr.filter((x) => x.status === 'paid').indexOf(o) < 5)
+  const reservations = base.reservations.slice(0, 2).map((r) => ({
+    ...r,
+    tableId: r.tableId ? remap[r.tableId] || 'r06' : r.tableId,
+  }))
+  const waitlist = base.waitlist.slice(0, 1)
+  const inventory = base.inventory.map((i) =>
+    i.id === 'inv_salmon'
+      ? { ...i, onHand: 8 }
+      : { ...i, onHand: Math.max(2, Math.round(i.onHand * 0.6)), par: Math.max(4, Math.round(i.par * 0.6)) },
+  )
+  const menu = base.menu.map((m) => (m.id === 'm_salmon' ? { ...m, available: true } : m))
+  const salesHistory = base.salesHistory.map((d) => ({ ...d, sales: Math.round(d.sales * 0.55) }))
+
+  return {
+    ...base,
+    tables,
+    orders,
+    reservations,
+    waitlist,
+    inventory,
+    menu,
+    salesHistory,
+    settings: { ...base.settings, restaurantName: 'Restora · Riverside' },
+    meta: { seededAt: new Date(now()).toISOString() },
+  }
+}

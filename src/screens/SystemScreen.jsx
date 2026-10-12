@@ -129,7 +129,7 @@ export default function SystemScreen() {
         <div className="text-[11px] font-semibold uppercase tracking-widest text-amber-300">
           Build step 1 · object model + status machines
         </div>
-        <h1 className="mt-1 text-3xl font-bold tracking-tight">System &amp; Model</h1>
+        <h1 className="mt-1 text-3xl font-bold tracking-tight">System &amp; Model · {state.settings.restaurantName}</h1>
         <p className="mt-2 max-w-3xl text-sm leading-relaxed text-zinc-400">
           The ticket is the system of record — floor, kitchen, and inventory read the same order
           object. Every screen in steps 2–8 operates on the objects below; nothing invents a new

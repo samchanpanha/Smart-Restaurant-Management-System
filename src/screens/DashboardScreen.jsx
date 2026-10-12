@@ -8,7 +8,7 @@ import { useMemo } from 'react'
 import StatusPill from '../components/StatusPill'
 import { MARGIN_BAND_META, TABLE_STATUS_META, TARGETS } from '../lib/constants'
 import { money } from '../lib/models'
-import { getAlerts, getDashboard, useNow, useRestora } from '../lib/store'
+import { LOCATIONS, getAlerts, getDashboard, useNow, useRestora } from '../lib/store'
 
 function Card({ title, action, children }) {
   return (
@@ -78,11 +78,15 @@ function SalesSpark({ history, tonight }) {
 // ─── Screen ─────────────────────────────────────────────────────
 
 export default function DashboardScreen() {
-  const { state, dispatch, setScreen } = useRestora()
+  const { state, empire, dispatch, setScreen, role, locId, setLocId } = useRestora()
   useNow(15000) // late-ticket + turn alerts are time-derived
 
   const dash = useMemo(() => getDashboard(state), [state])
   const alerts = useMemo(() => getAlerts(state), [state])
+  const empireDash = useMemo(
+    () => LOCATIONS.map((l) => ({ ...l, dash: getDashboard(empire.locations[l.id]) })),
+    [empire],
+  )
 
   const paidCount = state.orders.filter((o) => o.status === 'paid').length
   const openCount = state.orders.filter((o) => !['paid', 'void'].includes(o.status)).length
@@ -195,6 +199,47 @@ export default function DashboardScreen() {
               </div>
             ))}
           </div>
+
+          {role === 'owner' && (
+            <Card
+              title="Across locations · tonight"
+              action={
+                <span className="tnum text-sm font-bold text-amber-300">
+                  {money(empireDash.reduce((s, r) => s + r.dash.sales, 0))} combined
+                </span>
+              }
+            >
+              <ul className="space-y-2">
+                {empireDash.map((r) => (
+                  <li key={r.id}>
+                    <button
+                      type="button"
+                      onClick={() => setLocId(r.id)}
+                      aria-current={locId === r.id}
+                      className={`flex w-full flex-wrap items-center justify-between gap-2 rounded-xl px-3.5 py-2.5 text-left ring-1 ring-inset transition-colors ${
+                        locId === r.id
+                          ? 'bg-amber-500/10 ring-amber-500/40'
+                          : 'bg-[var(--color-ink-800)] ring-[var(--color-ink-600)] hover:bg-white/5'
+                      }`}
+                    >
+                      <span className="text-sm font-bold text-zinc-100">
+                        {r.short}
+                        {locId === r.id && <span className="ml-2 text-[11px] font-normal text-amber-300">viewing</span>}
+                      </span>
+                      <span className="flex flex-wrap gap-1.5">
+                        <StatusPill tone="muted" size="sm">{money(r.dash.sales)} sales</StatusPill>
+                        <StatusPill tone="muted" size="sm">{r.dash.covers} covers</StatusPill>
+                        <StatusPill tone={r.dash.foodCost7d <= foodCap ? 'ok' : 'warn'} size="sm">
+                          FC {(r.dash.foodCost7d * 100).toFixed(1)}%
+                        </StatusPill>
+                        <StatusPill tone="info" size="sm">{Math.round(r.dash.occupancy * 100)}% occ</StatusPill>
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
 
           {inRushWindow && parWatch.length > 0 && (
             <div className="animate-status-in rounded-2xl border border-amber-500/40 bg-amber-500/5 p-4">

@@ -59,6 +59,22 @@ and get a light consumer app at `/?guest=<tableId>` — no login, no sidebar:
 
 Demo routing is by table id; production tents would carry unguessable tokens.
 
+## Multi-location
+
+Two demo stores — **Downtown** (16 tables) and **Riverside** (10 tables, softer
+history, and it *has* salmon). State shape v2 keeps a full shop per store:
+
+- Owner gets a **store switcher** in the sidebar; staff terminals stay pinned
+  (`?loc=riverside` kiosk param, else Downtown)
+- Every screen is location-scoped with zero per-screen changes — actions travel
+  wrapped as `{ type: 'LOC', locId, action }` through the same shared reducer
+- Dashboard (owner) adds an **Across locations** strip: per-store sales, covers,
+  food cost, occupancy + combined total, tap to jump stores
+- Menus, stock, tickets, and 86 boards are fully independent per store
+  (86 wings downtown — Riverside keeps selling them)
+- Old v1 snapshots (server DB + localStorage) **migrate on boot**: v1 becomes
+  Downtown, Riverside seeds fresh; bare pre-LOC actions still apply to Downtown
+
 ## Stack
 
 React 19 + Vite + Tailwind CSS v4. `useReducer` + context, synced to
