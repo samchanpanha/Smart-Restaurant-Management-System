@@ -1,0 +1,88 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: ui-sans-serif, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Restora operational surfaces */
+  --color-ink-950: #0b0d12; /* app bg (Live) */
+  --color-ink-900: #12151d; /* panel bg */
+  --color-ink-850: #171b25; /* raised panel */
+  --color-ink-800: #1e2330; /* card bg */
+  --color-ink-700: #2a3040; /* borders-strong / hover */
+  --color-ink-600: #3a4256; /* borders */
+
+  --color-paper-50: #f6f7f9; /* Insight surface */
+  --color-paper-100: #eceef2;
+  --color-paper-200: #dde1e8;
+
+  /* Brand accent — primary actions only (Send, Seat, Bump) */
+  --color-brand-400: #f59e0b;
+  --color-brand-500: #e8930c;
+  --color-brand-600: #c87a06;
+}
+
+/* Base: dark operational UI by default (Live screens) */
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-ink-950);
+  color: #e8eaf0;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Large numerals for KPIs + ticket timers */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* Scrollbars that stay out of the way on dense screens */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-ink-600) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--color-ink-600);
+  border-radius: 8px;
+}
+
+/* Focus visibility for keyboard (office reports) */
+:focus-visible {
+  outline: 2px solid var(--color-brand-400);
+  outline-offset: 2px;
+}
+
+/* Motion only for status changes / new tickets — respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@keyframes restora-pulse-in {
+  0% {
+    transform: scale(0.97);
+    opacity: 0.4;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+.animate-status-in {
+  animation: restora-pulse-in 0.25s ease-out;
+}
