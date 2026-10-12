@@ -174,3 +174,10 @@
 *.lz
 *.lzma
 *.iso
+
+# Vite
+/dist-ssr/
+*.local
+
+# Restora server data (SQLite)
+server/data/
