@@ -2,12 +2,20 @@
 // Role-aware nav: Live / Control / Insight (+ Settings).
 // Dark operational surface for Live, per spec §10.
 
+import StatusPill from './StatusPill'
 import { NAV_SECTIONS, ROLES, ROLE_NAV } from '../lib/constants'
 import { useRestora } from '../lib/store'
 
 export default function AppShell({ children }) {
-  const { state, dispatch, role, setRole, screen, setScreen } = useRestora()
+  const { state, dispatch, role, setRole, screen, setScreen, link, resync, notice } = useRestora()
   const allowed = ROLE_NAV[role] || []
+
+  const linkPill =
+    link.status === 'live'
+      ? { tone: 'ok', label: 'Live · server' }
+      : link.status === 'offline'
+        ? { tone: 'warn', label: 'Offline · this terminal' }
+        : { tone: 'muted', label: 'Local demo' }
 
   return (
     <div className="flex h-full min-h-screen bg-[var(--color-ink-950)] text-zinc-100">
@@ -22,6 +30,21 @@ export default function AppShell({ children }) {
           </div>
           <div className="mt-0.5 truncate text-xs text-zinc-400">
             {state.settings.restaurantName}
+          </div>
+          <div className="mt-2 flex items-center gap-2">
+            <StatusPill tone={linkPill.tone} size="sm">
+              {linkPill.label}
+            </StatusPill>
+            {link.mode === 'server' && (
+              <button
+                type="button"
+                onClick={() => resync()}
+                title="Reload authoritative snapshot from server"
+                className="min-h-[28px] rounded-md border border-[var(--color-ink-600)] px-2 text-[11px] text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
+              >
+                Resync
+              </button>
+            )}
           </div>
         </div>
 
@@ -78,20 +101,28 @@ export default function AppShell({ children }) {
           <button
             type="button"
             onClick={() => {
-              if (window.confirm('Reset demo data to the Friday-night seed?')) {
+              const scope = link.mode === 'server' ? 'ALL terminals' : 'this terminal'
+              if (window.confirm(`Reset demo data to the Friday-night seed on ${scope}?`)) {
                 dispatch({ type: 'RESET_ALL' })
               }
             }}
             className="mt-2 w-full rounded-lg border border-[var(--color-ink-600)] px-2.5 py-2 text-xs text-zinc-400 transition-colors hover:border-red-500/50 hover:text-red-300"
           >
-            Reset demo data
+            Reset demo data{link.mode === 'server' ? ' (all terminals)' : ''}
           </button>
         </div>
       </aside>
 
       {/* Main */}
       <main className="min-w-0 flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-7xl px-6 py-6">{children}</div>
+        <div className="mx-auto max-w-7xl px-6 py-6">
+          {notice && (
+            <div className="animate-status-in mb-4 rounded-xl bg-sky-500/10 px-4 py-2.5 text-sm text-sky-200 ring-1 ring-inset ring-sky-500/40" role="status">
+              {notice}
+            </div>
+          )}
+          {children}
+        </div>
       </main>
     </div>
   )

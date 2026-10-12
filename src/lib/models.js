@@ -8,7 +8,7 @@ import {
   TICKET_TRANSITIONS,
   TARGETS,
   marginBandFor,
-} from './constants'
+} from './constants.js'
 
 export function uid(prefix = 'id') {
   return `${prefix}_${Math.random().toString(36).slice(2, 9)}${Date.now().toString(36).slice(-4)}`
