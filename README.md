@@ -44,6 +44,21 @@ Known v1 limits: actions apply optimistically — if two terminals race (same
 table), the server rejects the loser (`409`) and it resyncs. Edits made while
 offline are overwritten by the authoritative snapshot on reconnect.
 
+## Guest QR ordering
+
+Each table has a QR tent card (Floor → table → 📱 Table QR code). Guests scan
+and get a light consumer app at `/?guest=<tableId>` — no login, no sidebar:
+
+- Menu (86'd dishes vanish instantly) with required modifiers enforced
+- Cart → **Send to kitchen**: one atomic `GUEST_SEND` lands on the table's
+  shared ticket, tagged QR, and fires the KDS + decrements stock
+- Live status per line (🔥 In kitchen → ✓ Ready) over the same SSE sync
+- 🙋 Call server + bill request raise alerts on staff screens (Dashboard rail,
+  Tickets banner with "On my way" ack)
+- Pay the whole check with tip, or ask the server to take payment
+
+Demo routing is by table id; production tents would carry unguessable tokens.
+
 ## Stack
 
 React 19 + Vite + Tailwind CSS v4. `useReducer` + context, synced to

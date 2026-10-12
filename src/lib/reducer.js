@@ -8,6 +8,7 @@ import {
   assertTableTransition,
   costingFor,
   minutesBetween,
+  money,
   orderSubtotal,
   plateCostFor,
   quoteWaitMinutes,
@@ -93,7 +94,7 @@ export function reducer(state, action) {
       )
       if (existing) return state
       const order = {
-        id: uid('o'),
+        id: action.id || uid('o'),
         tableId,
         type: orderType,
         serverId: 'server',
@@ -112,7 +113,7 @@ export function reducer(state, action) {
     }
 
     case 'ADD_ITEM': {
-      const { orderId, menuItemId, qty = 1, modifiers = [], course = 'main', notes = '' } = action
+      const { orderId, menuItemId, qty = 1, modifiers = [], course = 'main', notes = '', by = 'server', guest = null } = action
       const menuItem = state.menu.find((m) => m.id === menuItemId)
       if (!menuItem || !menuItem.available) return state // 86 blocked
       const item = {
@@ -124,6 +125,8 @@ export function reducer(state, action) {
         status: 'held',
         course,
         notes,
+        by, // 'server' | 'guest' — guest scans feed the same ticket
+        guest, // optional guest name for KDS/server context
         firedAt: null,
         recipeSnapshot: null,
       }
@@ -211,6 +214,66 @@ export function reducer(state, action) {
         expiresAt: Date.now() + TARGETS.undoSendSeconds * 1000,
         itemIds: [...firedIds],
         restore: totalDec,
+      }
+      return { ...state, orders, inventory, tables, pendingUndo }
+    }
+
+    case 'GUEST_SEND': {
+      // Atomic QR order: find-or-create the table's check, add guest lines,
+      // fire them immediately. One action so two phones can't fork a check.
+      // 86'd lines are skipped (the live menu hides them; this is the race guard).
+      const { tableId, items = [] } = action
+      const table = state.tables.find((t) => t.id === tableId)
+      if (!table || !['seated', 'ordered'].includes(table.status)) return state
+      let order = state.orders.find(
+        (o) => o.tableId === tableId && !['paid', 'void'].includes(o.status),
+      )
+      let orders = state.orders
+      let tables = state.tables
+      if (!order) {
+        order = {
+          id: uid('o'), tableId, type: 'dine_in', serverId: 'server', status: 'open',
+          createdAt: new Date().toISOString(), sentAt: null, paidAt: null,
+          voidReason: null, compTotal: 0, items: [],
+        }
+        orders = [...orders, order]
+        tables = tables.map((t) => (t.id === tableId ? { ...t, currentCheckId: order.id } : t))
+      }
+      const nowIso = new Date().toISOString()
+      const inventoryById = Object.fromEntries(state.inventory.map((i) => [i.id, i]))
+      const newLines = []
+      const totalDec = {}
+      for (const g of items) {
+        const menuItem = state.menu.find((m) => m.id === g.menuItemId)
+        if (!menuItem || !menuItem.available) continue
+        const qty = Math.min(12, Math.max(1, Number(g.qty) || 1))
+        const recipe = state.recipes[g.menuItemId]
+        const dec = theoreticalDecrementFor(recipe, qty)
+        for (const [k, v] of Object.entries(dec)) totalDec[k] = (totalDec[k] || 0) + v
+        newLines.push({
+          id: uid('it'), menuItemId: g.menuItemId, qty,
+          modifiers: g.modifiers || [], station: menuItem.station, status: 'fired',
+          course: g.course || 'main', notes: g.notes || '',
+          by: 'guest', guest: g.guest || null, firedAt: nowIso,
+          recipeSnapshot: recipe ? { ...recipe, plateCost: plateCostFor(recipe, inventoryById) } : null,
+        })
+      }
+      if (!newLines.length) return state.orders === orders ? state : { ...state, orders, tables }
+      orders = orders.map((o) =>
+        o.id === order.id
+          ? { ...o, items: [...o.items, ...newLines], status: o.status === 'open' ? 'sent' : o.status === 'sent' ? 'in_prep' : o.status, sentAt: o.sentAt || nowIso }
+          : o,
+      )
+      const inventory = decrementInventory(state.inventory, totalDec, -1)
+      if (table.status === 'seated') {
+        tables = tables.map((t) =>
+          t.id === tableId ? { ...t, status: 'ordered', currentCheckId: order.id } : t,
+        )
+      }
+      const pendingUndo = {
+        orderId: order.id, sentAt: nowIso,
+        expiresAt: Date.now() + TARGETS.undoSendSeconds * 1000,
+        itemIds: newLines.map((l) => l.id), restore: totalDec,
       }
       return { ...state, orders, inventory, tables, pendingUndo }
     }
@@ -320,14 +383,14 @@ export function reducer(state, action) {
     }
 
     case 'PAY_ORDER': {
-      const { orderId, method = 'card', split = null } = action
+      const { orderId, method = 'card', split = null, tip = 0 } = action
       const order = state.orders.find((o) => o.id === orderId)
       if (!order || !['ready', 'served', 'in_prep', 'sent'].includes(order.status)) return state
       const menuById = Object.fromEntries(state.menu.map((m) => [m.id, m]))
       const total = orderSubtotal(order, menuById)
       const orders = state.orders.map((o) =>
         o.id === orderId
-          ? { ...o, status: 'paid', paidAt: new Date().toISOString(), payMethod: method, split, total }
+          ? { ...o, status: 'paid', paidAt: new Date().toISOString(), payMethod: method, split, tip: Number(tip) || 0, total, billRequested: null }
           : o,
       )
       // Table ordered -> billed; record the turn for host wait quotes
@@ -370,6 +433,38 @@ export function reducer(state, action) {
         return { ...o, items }
       })
       return { ...state, orders }
+    }
+
+    // ── Guest requests (QR ordering) ───────────────────────
+    case 'REQUEST_BILL': {
+      const { orderId } = action
+      const order = state.orders.find((o) => o.id === orderId)
+      if (!order || ['paid', 'void'].includes(order.status)) return state
+      const orders = state.orders.map((o) =>
+        o.id === orderId ? { ...o, billRequested: new Date().toISOString() } : o,
+      )
+      return { ...state, orders }
+    }
+
+    case 'CALL_SERVER': {
+      const { tableId } = action
+      const table = state.tables.find((t) => t.id === tableId)
+      if (!table) return state
+      const tables = state.tables.map((t) =>
+        t.id === tableId ? { ...t, serverCalledAt: new Date().toISOString() } : t,
+      )
+      return { ...state, tables }
+    }
+
+    case 'ACK_REQUESTS': {
+      const { orderId, tableId } = action
+      const orders = orderId
+        ? state.orders.map((o) => (o.id === orderId ? { ...o, billRequested: null } : o))
+        : state.orders
+      const tables = tableId
+        ? state.tables.map((t) => (t.id === tableId ? { ...t, serverCalledAt: null } : t))
+        : state.tables
+      return { ...state, orders, tables }
     }
 
     // ── Host: reservations + waitlist ──────────────────────
@@ -571,6 +666,34 @@ export function getAlerts(state) {
         label: `Losing dish · ${m.name}`,
         detail: `${(contribution * 100).toFixed(1)}% contribution — reprice or 86`,
         entityId: m.id,
+      })
+    }
+  }
+
+  // Guest requests from QR ordering
+  for (const order of state.orders) {
+    if (order.billRequested && !['paid', 'void'].includes(order.status)) {
+      alerts.push({
+        key: `bill_${order.id}`,
+        type: 'bill_request',
+        severity: 'med',
+        label: `Bill requested · Table ${tableName(state, order.tableId)}`,
+        detail: `${money(orderSubtotal(order, menuById))} due — guest is ready to pay`,
+        entityId: order.id,
+      })
+    }
+  }
+  for (const t of state.tables) {
+    if (!t.serverCalledAt) continue
+    const ageMin = (nowMs - new Date(t.serverCalledAt).getTime()) / 60000
+    if (ageMin < 15 && (t.status === 'seated' || t.status === 'ordered')) {
+      alerts.push({
+        key: `call_${t.id}`,
+        type: 'call_server',
+        severity: 'med',
+        label: `Guest calling · ${t.name}`,
+        detail: `Requested ${Math.max(1, Math.round(ageMin))}m ago — acknowledge on the ticket`,
+        entityId: t.id,
       })
     }
   }

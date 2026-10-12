@@ -596,7 +596,14 @@ function HeldLine({ order, item }) {
     <li className="rounded-xl bg-[var(--color-ink-800)] p-3 ring-1 ring-inset ring-[var(--color-ink-600)]">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="text-sm font-semibold text-zinc-100">{menu?.name}</div>
+          <div className="text-sm font-semibold text-zinc-100">
+            {menu?.name}
+            {item.by === 'guest' && (
+              <span className="ml-1.5 rounded bg-violet-500/20 px-1.5 py-0.5 align-middle text-[10px] font-bold text-violet-300 ring-1 ring-inset ring-violet-500/40">
+                QR{item.guest ? ` · ${item.guest}` : ''}
+              </span>
+            )}
+          </div>
           <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-400">
             <span className="rounded bg-black/40 px-1.5 py-0.5 font-semibold uppercase tracking-wide">{courseLabel(item.course)}</span>
             {item.modifiers?.map((m) => (
@@ -659,6 +666,11 @@ function FiredLine({ order, item, onComp, onVoid }) {
         <div className="min-w-0">
           <div className={`text-sm font-semibold ${item.voided ? 'text-zinc-500 line-through' : 'text-zinc-100'}`}>
             {item.qty}× {menu?.name}
+            {item.by === 'guest' && (
+              <span className="ml-1.5 rounded bg-violet-500/20 px-1.5 py-0.5 align-middle text-[10px] font-bold text-violet-300 ring-1 ring-inset ring-violet-500/40">
+                QR{item.guest ? ` · ${item.guest}` : ''}
+              </span>
+            )}
           </div>
           <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-400">
             <span className="rounded bg-black/40 px-1.5 py-0.5 font-semibold uppercase tracking-wide">{courseLabel(item.course)}</span>
@@ -729,6 +741,22 @@ function TicketWorkspace({ orderId, onError }) {
   return (
     <div className="space-y-4">
       <UndoBanner orderId={order.id} />
+      {(order.billRequested || table?.serverCalledAt) && !closed && (
+        <div className="animate-status-in flex flex-wrap items-center justify-between gap-2 rounded-xl bg-violet-500/10 px-4 py-2.5 ring-1 ring-inset ring-violet-500/40" role="alert">
+          <div className="text-sm text-violet-200">
+            {order.billRequested && <><strong>Guest requested the bill</strong> · </>}
+            {table?.serverCalledAt && <><strong>Guest is calling you</strong> · </>}
+            <span className="text-violet-200/70">from QR ordering</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => dispatch({ type: 'ACK_REQUESTS', orderId: order.id, tableId: order.tableId })}
+            className="min-h-[44px] shrink-0 rounded-lg bg-violet-500 px-4 text-sm font-bold text-white hover:bg-violet-400"
+          >
+            On my way
+          </button>
+        </div>
+      )}
 
       <div className="rounded-2xl border border-[var(--color-ink-700)] bg-[var(--color-ink-900)] p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">

@@ -4,6 +4,7 @@
 // tables will free next. Strict table machine enforced by the store.
 
 import { useMemo, useState } from 'react'
+import QrModal from '../components/QrModal'
 import StatusPill from '../components/StatusPill'
 import { Field, Modal, Stepper, inputCls } from '../components/ui'
 import { TABLE_STATUS_META, TARGETS } from '../lib/constants'
@@ -222,6 +223,7 @@ function TableCard({ table, onOpen }) {
 
 function TableDetail({ table, onClose, onSeat, onError }) {
   const { state, dispatch, setScreen, setSelectedTableId } = useRestora()
+  const [qrOpen, setQrOpen] = useState(false)
   useNow(15000)
   const meta = TABLE_STATUS_META[table.status]
   const mins = table.seatedAt ? minutesBetween(table.seatedAt) : 0
@@ -329,7 +331,12 @@ function TableDetail({ table, onClose, onSeat, onError }) {
             Why can&apos;t I free this table?
           </button>
         )}
+
+        <button type="button" className={btnGhost} onClick={() => setQrOpen(true)}>
+          📱 Table QR code
+        </button>
       </div>
+      {qrOpen && <QrModal table={table} onClose={() => setQrOpen(false)} />}
     </Modal>
   )
 }

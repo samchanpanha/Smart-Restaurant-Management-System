@@ -110,6 +110,8 @@ export default function DashboardScreen() {
     if (a.type === 'low_stock') return 'inventory'
     if (a.type === '86') return a.key.startsWith('out_') ? 'inventory' : 'kitchen'
     if (a.type === 'negative_margin') return 'costing'
+    if (a.type === 'bill_request') return 'tickets'
+    if (a.type === 'call_server') return 'floor'
     return 'system'
   }
 

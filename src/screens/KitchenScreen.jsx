@@ -67,6 +67,11 @@ function TicketCard({ order, tableName, server, lines, now }) {
                 <div className="min-w-0">
                   <div className="text-sm font-semibold leading-snug text-zinc-100">
                     {l.qty}× {l.name}
+                    {l.by === 'guest' && (
+                      <span className="ml-1.5 rounded bg-violet-500/20 px-1.5 py-0.5 align-middle text-[10px] font-bold text-violet-300 ring-1 ring-inset ring-violet-500/40">
+                        QR{l.guest ? ` · ${l.guest}` : ''}
+                      </span>
+                    )}
                     {isNew && (
                       <span className="animate-status-in ml-1.5 rounded bg-sky-500/20 px-1.5 py-0.5 align-middle text-[10px] font-bold text-sky-300 ring-1 ring-inset ring-sky-500/40">
                         NEW

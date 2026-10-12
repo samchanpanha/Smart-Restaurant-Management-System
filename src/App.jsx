@@ -4,12 +4,21 @@ import ComingSoon from './screens/ComingSoon'
 import CostingScreen from './screens/CostingScreen'
 import DashboardScreen from './screens/DashboardScreen'
 import FloorScreen from './screens/FloorScreen'
+import GuestScreen from './screens/GuestScreen'
 import InventoryScreen from './screens/InventoryScreen'
 import KitchenScreen from './screens/KitchenScreen'
 import MenuScreen from './screens/MenuScreen'
 import ReportsScreen from './screens/ReportsScreen'
 import SystemScreen from './screens/SystemScreen'
 import TicketsScreen from './screens/TicketsScreen'
+
+function guestTableId() {
+  try {
+    return new URLSearchParams(window.location.search).get('guest')
+  } catch {
+    return null
+  }
+}
 
 function Router() {
   const { screen } = useRestora()
@@ -26,6 +35,15 @@ function Router() {
 }
 
 export default function App() {
+  const guest = guestTableId()
+  // Guests get their own light app — same provider, same live ticket.
+  if (guest) {
+    return (
+      <RestoraProvider>
+        <GuestScreen tableId={guest} />
+      </RestoraProvider>
+    )
+  }
   return (
     <RestoraProvider>
       <AppShell>
