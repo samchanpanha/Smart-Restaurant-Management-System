@@ -5,12 +5,20 @@
 // totals, labeled wherever the two meet.
 
 import { useMemo, useState } from 'react'
+import { Icon } from '../components/Icon'
 import StatusPill from '../components/StatusPill'
+import { buildReportDocument, printHtml, renderDocumentHtml } from '../lib/documents'
 import { money, orderSubtotal, plateCostFor, theoreticalDecrementFor } from '../lib/models'
+import { MOVEMENT_KINDS } from '../lib/reducer'
+import { buildReports } from '../lib/reports'
+import { sanitizeSettings } from '../lib/settings'
 import { useRestora } from '../lib/store'
 
 const TABS = [
   { id: 'sales', label: 'Sales' },
+  { id: 'sellbuy', label: 'Sell & buy in/out' },
+  { id: 'pl', label: 'Profit & loss' },
+  { id: 'toplow', label: 'Top & bottom' },
   { id: 'service', label: 'Service' },
   { id: 'voids', label: 'Voids & comps' },
   { id: 'variance', label: 'Variance' },
@@ -583,11 +591,366 @@ function PnlReport() {
   )
 }
 
+// ─── Sell & buy in/out ──────────────────────────────────────────
+// Two sides of one ledger: what guests paid and what the house spent,
+// plus every signed row that moved stock in or out of the store room.
+
+const pct = (value) => `${(value * 100).toFixed(1)}%`
+const signedQty = (value) => {
+  const n = Number(value) || 0
+  if (!n) return '0'
+  return `${n > 0 ? '+' : '−'}${Math.abs(Math.round(n * 1000) / 1000)}`
+}
+const KIND_LABEL = Object.fromEntries(MOVEMENT_KINDS.map((kind) => [kind.id, kind.label]))
+
+function SellBuyReport({ range }) {
+  const { state, setScreen } = useRestora()
+  const reports = useMemo(() => buildReports(state, range), [state, range])
+  const { sales, purchases, movements } = reports
+
+  const methodRows = Object.entries(sales.byMethod).map(([method, value]) => ({ label: method, value }))
+  const supplierRows = purchases.bySupplier.slice(0, 6).map((row) => ({ label: row.name, value: row.value, sub: `${row.orders} order(s)` }))
+  const kindRows = movements.byKind
+    .filter((row) => row.count > 0)
+    .sort((a, b) => (b.inValue + b.outValue) - (a.inValue + a.outValue))
+  const flowRows = reports.flow.slice(0, 8)
+
+  return (
+    <div className="space-y-4">
+      <div className="grid items-start gap-4 xl:grid-cols-2">
+        <Card title={`Selling · ${reports.bounds.label}`}>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {[
+              { label: 'Takings', value: money(sales.takings), sub: 'incl. tax + tips' },
+              { label: 'Net sales', value: money(sales.netSales), sub: 'what the P&L counts' },
+              { label: 'Tax collected', value: money(sales.tax), sub: 'pass-through' },
+              { label: 'Tips', value: money(sales.tips), sub: 'to the floor' },
+              { label: 'Paid checks', value: String(sales.checks), sub: `${sales.covers} cover(s)` },
+              { label: 'Avg check', value: money(sales.avgCheck), sub: `${money(sales.avgCover)}/cover` },
+            ].map((kpi) => (
+              <div key={kpi.label} className="rounded-xl bg-black/30 px-3 py-2.5 ring-1 ring-inset ring-[var(--color-ink-700)]">
+                <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">{kpi.label}</div>
+                <div className="tnum mt-0.5 text-lg font-bold text-zinc-100">{kpi.value}</div>
+                <div className="text-[11px] text-zinc-500">{kpi.sub}</div>
+              </div>
+            ))}
+          </div>
+          {methodRows.length > 0 && (
+            <div className="mt-4">
+              <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500">Tender mix</h3>
+              <div className="mt-2"><Bars rows={methodRows} /></div>
+            </div>
+          )}
+          <NextAction onGo={() => setScreen('tickets')} goLabel="Tickets →">
+            {sales.checks
+              ? `Best seller this window: ${reports.rankings.sell.byRevenue[0]?.name || '—'} — keep it on the specials board.`
+              : 'No paid checks in this window yet.'}
+          </NextAction>
+        </Card>
+
+        <Card title={`Buying · ${reports.bounds.label}`}>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {[
+              { label: 'Spend', value: money(purchases.spend), sub: `${purchases.orders} receipt(s)` },
+              { label: 'Still on order', value: money(purchases.openValue), sub: `${purchases.openOrders.length} open` },
+              { label: 'Units bought', value: String(Math.round(purchases.units * 10) / 10), sub: 'across all lines' },
+              { label: 'Suppliers paid', value: String(purchases.bySupplier.length), sub: 'in this window' },
+              { label: 'Quick receipts', value: String(purchases.quickReceipts), sub: 'booked at the door' },
+              { label: 'Cash out', value: money(reports.pnl.cashOut), sub: 'purchases only' },
+            ].map((kpi) => (
+              <div key={kpi.label} className="rounded-xl bg-black/30 px-3 py-2.5 ring-1 ring-inset ring-[var(--color-ink-700)]">
+                <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">{kpi.label}</div>
+                <div className="tnum mt-0.5 text-lg font-bold text-zinc-100">{kpi.value}</div>
+                <div className="text-[11px] text-zinc-500">{kpi.sub}</div>
+              </div>
+            ))}
+          </div>
+          {supplierRows.length > 0
+            ? <div className="mt-4"><h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500">Spend by supplier</h3><div className="mt-2"><Bars rows={supplierRows} /></div></div>
+            : <p className="mt-4 text-sm text-zinc-500">Nothing was received in this window.</p>}
+          <NextAction onGo={() => setScreen('purchases')} goLabel="Purchases →">
+            {purchases.openOrders.length
+              ? `${purchases.openOrders.length} order(s) still coming — check the delivery dates on ${money(purchases.openValue)}.`
+              : 'Nothing on order. Fill the low-stock list before the rush.'}
+          </NextAction>
+        </Card>
+      </div>
+
+      <Card title="Stock in / out">
+        <div className="grid gap-3 sm:grid-cols-4">
+          {[
+            { label: 'In', value: money(movements.inValue), sub: `${movements.inUnits} units · ${movements.inCount} rows`, tone: 'text-emerald-300' },
+            { label: 'Out', value: money(movements.outValue), sub: `${movements.outUnits} units · ${movements.outCount} rows`, tone: 'text-red-300' },
+            { label: 'Net', value: money(movements.netValue), sub: 'in minus out', tone: 'text-zinc-100' },
+            { label: 'Opening baseline', value: money(movements.openingValue), sub: 'not counted as spend', tone: 'text-zinc-400' },
+          ].map((kpi) => (
+            <div key={kpi.label} className="rounded-xl bg-black/30 px-3 py-2.5 ring-1 ring-inset ring-[var(--color-ink-700)]">
+              <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">{kpi.label}</div>
+              <div className={`tnum mt-0.5 text-xl font-bold ${kpi.tone}`}>{kpi.value}</div>
+              <div className="text-[11px] text-zinc-500">{kpi.sub}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-4 overflow-hidden rounded-xl ring-1 ring-inset ring-[var(--color-ink-700)]">
+          <table className="w-full">
+            <thead className="bg-black/30">
+              <tr>
+                <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Reason</th>
+                <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Direction</th>
+                <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Rows</th>
+                <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Units</th>
+                <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Value</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-ink-800)]">
+              {kindRows.map((row) => (
+                <tr key={row.kind}>
+                  <td className="px-3 py-2 text-sm text-zinc-300">
+                    {KIND_LABEL[row.kind] || row.kind}
+                    {row.baseline && <span className="ml-2 text-[11px] text-zinc-500">baseline</span>}
+                  </td>
+                  <td className="px-3 py-2 text-sm text-zinc-400">
+                    {row.baseline ? 'baseline' : MOVEMENT_KINDS.find((kind) => kind.id === row.kind)?.direction === 'out' ? 'out' : 'in'}
+                  </td>
+                  <td className="tnum px-3 py-2 text-right text-sm text-zinc-300">{row.count}</td>
+                  <td className="tnum px-3 py-2 text-right text-sm text-zinc-300">{signedQty(row.units)}</td>
+                  <td className={`tnum px-3 py-2 text-right text-sm ${row.value < 0 ? 'text-red-300' : 'text-emerald-300'}`}>{signedQty(row.value) === '0' ? money(0) : `${row.value < 0 ? '−' : '+'}${money(Math.abs(row.value))}`}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {flowRows.length > 0 && (
+          <div className="mt-4 overflow-hidden rounded-xl ring-1 ring-inset ring-[var(--color-ink-700)]">
+            <table className="w-full">
+              <thead className="bg-black/30">
+                <tr>
+                  <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Item</th>
+                  <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Opened</th>
+                  <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-zinc-400">In</th>
+                  <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Out</th>
+                  <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-zinc-400">On hand</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-ink-800)]">
+                {flowRows.map((row) => (
+                  <tr key={row.itemId}>
+                    <td className="px-3 py-2 text-sm text-zinc-300">{row.name}</td>
+                    <td className="tnum px-3 py-2 text-right text-sm text-zinc-400">{signedQty(row.opening)}</td>
+                    <td className="tnum px-3 py-2 text-right text-sm text-emerald-300">{signedQty(row.inQty)}</td>
+                    <td className="tnum px-3 py-2 text-right text-sm text-red-300">{signedQty(-(row.outQty || 0))}</td>
+                    <td className="tnum px-3 py-2 text-right text-sm font-semibold text-zinc-100">{signedQty(row.onHand)} {row.unit}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <NextAction onGo={() => setScreen('movements')} goLabel="Ledger →">
+          Every number here traces to a signed row in the movement ledger.
+        </NextAction>
+      </Card>
+    </div>
+  )
+}
+
+// ─── Profit & loss ──────────────────────────────────────────────
+
+function ProfitLossReport({ range }) {
+  const { state, setScreen } = useRestora()
+  const reports = useMemo(() => buildReports(state, range), [state, range])
+  const { pnl } = reports
+
+  const rows = [
+    { label: 'Net sales (excl. tax & tips)', value: pnl.revenue, tone: 'text-zinc-100' },
+    { label: 'Cost of goods sold (recipe book)', value: -pnl.cogs, tone: 'text-red-300', sub: pct(pnl.foodCostPct) },
+    { label: 'Gross profit', value: pnl.grossProfit, tone: 'font-bold text-zinc-100', rule: true, sub: pct(pnl.marginPct) },
+    { label: `Waste (${pnl.wasteCount} logged)`, value: -pnl.waste, tone: 'text-red-300' },
+    { label: 'Count shrinkage', value: -pnl.shrinkage, tone: 'text-red-300' },
+    { label: 'Operating result', value: pnl.operatingResult, tone: 'font-bold text-emerald-300', rule: true, sub: pct(pnl.operatingMarginPct) },
+  ]
+
+  const cashRows = [
+    { label: 'Cash in (takings incl. tax + tips)', value: pnl.cashIn },
+    { label: 'Cash out (purchases received)', value: -pnl.cashOut },
+    { label: 'Net cash', value: pnl.netCash },
+  ]
+
+  return (
+    <div className="grid items-start gap-4 xl:grid-cols-2">
+      <Card title={`Profit & loss · ${reports.bounds.label}`}>
+        <ul className="space-y-1 text-sm">
+          {rows.map((row) => (
+            <li key={row.label} className={`flex items-center justify-between gap-2 rounded-lg px-3 py-2.5 ${row.rule ? 'bg-black/30 ring-1 ring-inset ring-[var(--color-ink-700)]' : ''}`}>
+              <span className="text-zinc-300">{row.label}</span>
+              <span className={`tnum ${row.tone}`}>
+                {row.value < 0 ? `−${money(-row.value)}` : money(row.value)}
+                {row.sub && <span className="ml-2 text-[11px] font-normal text-zinc-500">{row.sub}</span>}
+              </span>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-2 text-[11px] text-zinc-500">
+          Cost of goods is the recipe book applied to paid checks, frozen at the moment each plate fired — a delivery
+          arriving tomorrow cannot rewrite tonight&apos;s margin. Labour, rent and card fees stay out of scope.
+        </p>
+        <NextAction onGo={() => setScreen('costing')} goLabel="Costing →">
+          {pnl.targets.onTarget
+            ? `Food cost ${pct(pnl.foodCostPct)} is inside the ${pct(pnl.targets.foodCostCap)} cap — protect it.`
+            : `Food cost ${pct(pnl.foodCostPct)} is over the ${pct(pnl.targets.foodCostCap)} cap — reprice or 86 the worst plate.`}
+        </NextAction>
+      </Card>
+
+      <div className="space-y-4">
+        <Card title="Cash movement">
+          <ul className="space-y-1 text-sm">
+            {cashRows.map((row) => (
+              <li key={row.label} className="flex items-center justify-between gap-2 rounded-lg px-3 py-2.5">
+                <span className="text-zinc-300">{row.label}</span>
+                <span className={`tnum ${row.value < 0 ? 'text-red-300' : 'text-zinc-100'}`}>
+                  {row.value < 0 ? `−${money(-row.value)}` : money(row.value)}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-[11px] text-zinc-500">
+            Suppliers are paid when a receipt is booked, not when the order is raised — ordering alone never moves cash.
+          </p>
+        </Card>
+
+        <Card title="Where the money is made">
+          {pnl.byCategory.length ? (
+            <Bars
+              rows={pnl.byCategory.slice(0, 6).map((row) => ({
+                label: row.category,
+                value: row.margin,
+                sub: `${pct(row.marginPct)} on ${money(row.revenue)}`,
+              }))}
+            />
+          ) : (
+            <p className="text-sm text-zinc-500">No paid sales in this window.</p>
+          )}
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            <StatusPill tone={pnl.targets.onTarget ? 'ok' : 'bad'} size="sm">
+              food cost {pct(pnl.foodCostPct)} vs cap {pct(pnl.targets.foodCostCap)}
+            </StatusPill>
+            <StatusPill tone="muted" size="sm">waste {pct(pnl.revenue ? pnl.waste / pnl.revenue : 0)} of sales</StatusPill>
+            <StatusPill tone={pnl.shrinkage > 0 ? 'warn' : 'muted'} size="sm">
+              shrinkage {money(pnl.shrinkage)}
+            </StatusPill>
+          </div>
+        </Card>
+      </div>
+    </div>
+  )
+}
+
+// ─── Top & bottom ───────────────────────────────────────────────
+
+function TopLowReport({ range }) {
+  const { state, setScreen } = useRestora()
+  const [side, setSide] = useState('sell')
+  const reports = useMemo(() => buildReports(state, range), [state, range])
+  const { rankings } = reports
+
+  const sellRows = [
+    { title: 'Top sellers · revenue', rows: rankings.sell.byRevenue, value: (row) => row.revenue, sub: (row) => `${row.qty} sold` },
+    { title: 'Top sellers · units', rows: rankings.sell.byUnits, value: (row) => row.revenue, sub: (row) => `${row.qty} sold` },
+    { title: 'Best margin · contribution', rows: rankings.sell.byMargin, value: (row) => row.margin, sub: (row) => pct(row.marginPct) },
+    { title: 'Bottom · weakest contribution', rows: rankings.sell.worst, value: (row) => row.margin, sub: (row) => pct(row.marginPct) },
+  ]
+  const buyRows = [
+    { title: 'Biggest buys · spend', rows: rankings.buy.bySpend, value: (row) => row.value, sub: (row) => `${Math.round(row.qty * 10) / 10} units` },
+    { title: 'Biggest buys · units', rows: rankings.buy.byQty, value: (row) => row.value, sub: (row) => `${Math.round(row.qty * 10) / 10} units` },
+    { title: 'Smallest buys · spend', rows: rankings.buy.least, value: (row) => row.value, sub: (row) => `${Math.round(row.qty * 10) / 10} units` },
+  ]
+  const blocks = side === 'sell' ? sellRows : buyRows
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex gap-1.5 rounded-xl bg-[var(--color-ink-900)] p-1 ring-1 ring-inset ring-[var(--color-ink-700)]">
+          {[
+            { id: 'sell', label: 'Selling side' },
+            { id: 'buy', label: 'Buying side' },
+          ].map((entry) => (
+            <button
+              key={entry.id}
+              type="button"
+              onClick={() => setSide(entry.id)}
+              className={`min-h-[40px] rounded-lg px-4 text-sm font-semibold ${side === entry.id ? 'bg-amber-500/15 text-amber-200 ring-1 ring-inset ring-amber-500/40' : 'text-zinc-400 hover:text-zinc-200'}`}
+            >
+              {entry.label}
+            </button>
+          ))}
+        </div>
+        <span className="text-xs text-zinc-500">
+          {reports.bounds.label} · {rankings.sell.unsoldCount} menu item(s) sold nothing
+        </span>
+      </div>
+
+      <div className="grid items-start gap-4 xl:grid-cols-2">
+        {blocks.map((block) => (
+          <Card key={block.title} title={block.title}>
+            {block.rows.length ? (
+              <ul className="space-y-1.5">
+                {block.rows.map((row, index) => (
+                  <li key={row.id || row.name} className="flex items-center justify-between gap-3 rounded-lg bg-black/20 px-3 py-2 text-sm">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="tnum w-5 shrink-0 text-xs font-bold text-zinc-500">{index + 1}</span>
+                      <span className="min-w-0 truncate text-zinc-200">{row.name}</span>
+                    </span>
+                    <span className="shrink-0 text-right">
+                      <span className={`tnum font-semibold ${block.value(row) < 0 ? 'text-red-300' : 'text-zinc-100'}`}>
+                        {block.value(row) < 0 ? `−${money(-block.value(row))}` : money(block.value(row))}
+                      </span>
+                      <span className="ml-2 text-[11px] text-zinc-500">{block.sub(row)}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-zinc-500">Nothing to rank in this window.</p>
+            )}
+          </Card>
+        ))}
+
+        {side === 'sell' && rankings.sell.unsold.length > 0 && (
+          <Card title="Sold nothing this window">
+            <ul className="space-y-1.5">
+              {rankings.sell.unsold.map((row) => (
+                <li key={row.id} className="flex items-center justify-between gap-3 rounded-lg bg-black/20 px-3 py-2 text-sm">
+                  <span className="min-w-0 truncate text-zinc-200">{row.name}</span>
+                  <span className="shrink-0 text-xs text-zinc-500">{money(row.price)} · {row.category}</span>
+                </li>
+              ))}
+            </ul>
+            <NextAction onGo={() => setScreen('menu')} goLabel="Menu →">
+              {rankings.sell.unsoldCount} item(s) earned nothing — reprice, re-describe, or take one off the board.
+            </NextAction>
+          </Card>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── Screen ─────────────────────────────────────────────────────
 
 export default function ReportsScreen() {
+  const { state } = useRestora()
   const [tab, setTab] = useState('sales')
   const [range, setRange] = useState('tonight')
+
+  // The printed report is the same aggregation the screen shows — just on
+  // paper, with the location's report template and currency.
+  function printReport() {
+    const settings = sanitizeSettings(state.settings, state.settings?.restaurantName)
+    const doc = buildReportDocument({ shop: { ...state, settings }, settings, range })
+    printHtml(renderDocumentHtml(doc, settings, {}), { title: `${doc.title} ${range}` })
+  }
 
   return (
     <div className="space-y-4">
@@ -597,6 +960,14 @@ export default function ReportsScreen() {
           <h1 className="text-3xl font-bold tracking-tight text-zinc-900">Reports &amp; Analytics</h1>
           <p className="mt-1 text-sm text-zinc-500">Turn sales, service, and cost signals into the next best action.</p>
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={printReport}
+          className="flex min-h-[44px] items-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 text-sm font-semibold text-zinc-700 shadow-sm hover:bg-zinc-50"
+        >
+          <Icon name="printer" size={16} /> Print report
+        </button>
         <div className="flex gap-1 rounded-xl bg-[var(--color-ink-900)] p-1 ring-1 ring-inset ring-[var(--color-ink-700)]" role="tablist" aria-label="Date range">
           {RANGES.map((r) => (
             <button
@@ -611,11 +982,12 @@ export default function ReportsScreen() {
             </button>
           ))}
         </div>
+        </div>
       </header>
 
       <p className="text-xs text-zinc-500">
-        Range drives Sales totals; Service, Voids, Variance, and P&L-lite read tonight&apos;s live orders.
-        Previous-period compare is always on.
+        Sell &amp; buy, Profit &amp; loss and Top &amp; bottom read from the movement ledger for the selected range;
+        Service, Voids, Variance and P&amp;L-lite read tonight&apos;s live orders.
       </p>
 
       <div className="flex gap-1.5 overflow-x-auto rounded-xl bg-[var(--color-ink-900)] p-1.5 ring-1 ring-inset ring-[var(--color-ink-700)]" role="tablist" aria-label="Reports">
@@ -636,6 +1008,9 @@ export default function ReportsScreen() {
       </div>
 
       {tab === 'sales' && <SalesReport range={range} />}
+      {tab === 'sellbuy' && <SellBuyReport range={range} />}
+      {tab === 'pl' && <ProfitLossReport range={range} />}
+      {tab === 'toplow' && <TopLowReport range={range} />}
       {tab === 'service' && <ServiceReport />}
       {tab === 'voids' && <VoidsReport />}
       {tab === 'variance' && <VarianceReport />}

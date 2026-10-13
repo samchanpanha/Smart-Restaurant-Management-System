@@ -8,7 +8,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import StatusPill from '../components/StatusPill'
 import { Field, Modal, Stepper, btnGhost, btnPrimary, inputCls } from '../components/ui'
 import { TICKET_STATUS_META } from '../lib/constants'
+import {
+  buildInvoiceDocument, buildReceiptDocument, buildTicketDocument, documentFileName, downloadHtml,
+  printHtml, renderDocumentHtml,
+} from '../lib/documents'
 import { formatClock, minutesBetween, money, orderTotals } from '../lib/models'
+import { documentNumber, sanitizeSettings } from '../lib/settings'
 import { useNow, useRestora } from '../lib/store'
 
 const COURSES = [
@@ -708,9 +713,10 @@ function FiredLine({ order, item, onComp, onVoid }) {
 }
 
 function TicketWorkspace({ orderId, onError }) {
-  const { state, dispatch } = useRestora()
+  const { state, dispatch, issueDocument, link, locId } = useRestora()
   useNow(15000)
   const [paying, setPaying] = useState(false)
+  const [banner, setBanner] = useState(null)
   const [reasonCtx, setReasonCtx] = useState(null) // { kind: 'comp'|'voidItem'|'voidOrder', item? }
 
   const order = state.orders.find((o) => o.id === orderId)
@@ -737,6 +743,46 @@ function TicketWorkspace({ orderId, onError }) {
     const before = held.length
     dispatch({ type: 'SEND_ORDER', orderId: order.id, courses })
     if (before === 0) onError('Nothing held to send.')
+  }
+
+  function flash(message) {
+    setBanner(message)
+    window.setTimeout(() => setBanner(null), 4200)
+  }
+
+  // Documents come straight from the ticket of record and print with the
+  // location's configured template. Filing records the number; a plain
+  // print leaves the sequence untouched.
+  function documentFor(kind) {
+    const settings = sanitizeSettings(state.settings, state.settings?.restaurantName)
+    const shop = { ...state, settings }
+    if (kind === 'invoice') return buildInvoiceDocument({ shop, order, settings })
+    if (kind === 'receipt') return buildReceiptDocument({ shop, order, settings })
+    return buildTicketDocument({ shop, order, settings })
+  }
+
+  function printDocument(kind, { file = false } = {}) {
+    const settings = sanitizeSettings(state.settings, state.settings?.restaurantName)
+    let doc = documentFor(kind)
+    if (!doc) return
+    if (file) {
+      const saved = issueDocument(kind, { document: doc })
+      if (saved) doc = { ...doc, number: saved.number }
+    } else {
+      // Same formatter the reducer uses when filing — preview matches the
+      // number the document will actually get.
+      doc = { ...doc, number: `${documentNumber(settings, kind, settings.numbering[kind].next)} (preview)` }
+    }
+    printHtml(renderDocumentHtml(doc, settings, {}), { title: `${doc.title} ${doc.number}` })
+    flash(`${doc.title} sent to the printer${file ? ` — filed as ${doc.number}` : ''}.`)
+  }
+
+  function downloadDocument(kind) {
+    const settings = sanitizeSettings(state.settings, state.settings?.restaurantName)
+    const doc = documentFor(kind)
+    if (!doc) return
+    downloadHtml(renderDocumentHtml(doc, settings, {}), documentFileName(doc, settings))
+    flash(`${doc.title} downloaded as HTML.`)
   }
 
   return (
@@ -799,11 +845,49 @@ function TicketWorkspace({ orderId, onError }) {
           </div>
         )}
         {order.status === 'paid' && (
-          <div className="mt-3 rounded-xl bg-emerald-500/10 px-3.5 py-2.5 text-sm text-emerald-200 ring-1 ring-inset ring-emerald-500/30">
-            Paid {order.paidAt && formatClock(order.paidAt)} · {order.payMethod}
-            {order.split ? ` · ${order.split.kind === 'full' ? 'full' : order.split.kind === 'even' ? `split ${order.split.ways} ways` : `split by item (${order.split.seats} seats)`}` : ''} · {money(order.total ?? t.subtotal)}
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-emerald-500/10 px-3.5 py-2.5 text-sm text-emerald-200 ring-1 ring-inset ring-emerald-500/30">
+            <span>
+              Paid {order.paidAt && formatClock(order.paidAt)} · {order.payMethod}
+              {order.split ? ` · ${order.split.kind === 'full' ? 'full' : order.split.kind === 'even' ? `split ${order.split.ways} ways` : `split by item (${order.split.seats} seats)`}` : ''} · {money(order.total ?? t.subtotal)}
+            </span>
+            <button
+              type="button"
+              onClick={() => printDocument('receipt', { file: true })}
+              className="min-h-[36px] shrink-0 rounded-lg bg-emerald-500 px-3 text-xs font-bold text-black hover:bg-emerald-400"
+            >
+              Print &amp; file receipt
+            </button>
           </div>
         )}
+      </div>
+
+      {banner && (
+        <div className="animate-status-in rounded-xl bg-sky-500/10 px-4 py-2.5 text-sm text-sky-200 ring-1 ring-inset ring-sky-500/30" role="status">
+          {banner}
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-[var(--color-ink-700)] bg-[var(--color-ink-900)] px-4 py-3">
+        <span className="text-[11px] font-semibold uppercase tracking-widest text-zinc-500">Documents</span>
+        <button
+          type="button"
+          onClick={() => printDocument('receipt', { file: order.status === 'paid' })}
+          className="min-h-[36px] rounded-lg bg-amber-500 px-3 text-xs font-bold text-black hover:bg-amber-400"
+        >
+          Print receipt
+        </button>
+        <button type="button" onClick={() => printDocument('invoice')} className="min-h-[36px] rounded-lg border border-[var(--color-ink-600)] px-3 text-xs font-semibold text-zinc-200 hover:bg-white/5">
+          Print invoice
+        </button>
+        <button type="button" onClick={() => printDocument('ticket')} className="min-h-[36px] rounded-lg border border-[var(--color-ink-600)] px-3 text-xs font-semibold text-zinc-200 hover:bg-white/5">
+          Kitchen ticket
+        </button>
+        <button type="button" onClick={() => downloadDocument('invoice')} className="min-h-[36px] rounded-lg border border-[var(--color-ink-600)] px-3 text-xs font-semibold text-zinc-200 hover:bg-white/5">
+          Download
+        </button>
+        <span className="ml-auto text-[11px] text-zinc-500">
+          Template set in Settings → Documents {link.status === 'live' ? `· ${locId}` : '· offline terminal'}
+        </span>
       </div>
 
       {!closed && held.length > 0 && (

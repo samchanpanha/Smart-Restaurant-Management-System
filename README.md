@@ -12,10 +12,21 @@ One operational system of record for the ticket — floor, kitchen, stock, and o
 npm install
 npm run dev      # → http://localhost:5173 (standalone demo, localStorage)
 npm run build    # production build → dist/
-npm test         # reducer, SQLite menu catalog, and workspace tab checks
+npm run server   # API on :3001 (SQLite, SSE, Telegram webhook) — optional
+npm test         # reducer, SQLite catalog, settings/currency/documents, screens contracts, tabs
 ```
 
 No backend needed for the demo: state persists to `localStorage`; **Reset demo data** in the sidebar restores the Friday-night seed.
+
+With the API running, extra environment (all optional — nothing breaks without it):
+
+| Variable | What it is |
+|---|---|
+| `TELEGRAM_BOT_TOKEN` | BotFather token. Without it the bot answers in the screen and every push is a logged no-op. |
+| `TELEGRAM_CHAT_ROLES` | `12345:manager,67890:staff` — chat ids and the access they get (`*` is the default, `staff`). |
+| `TELEGRAM_WEBHOOK_SECRET` | Shared secret Telegram must echo back on every update. |
+| `RESTORA_PUBLIC_URL` | Public origin used for guest / mini-app links in replies. |
+| `RESTORA_DATA` | Where `restora.sqlite` lives (default `server/data/`). |
 
 ## Workspace tabs
 
@@ -92,6 +103,189 @@ Known v1 limits: actions apply optimistically — if two terminals race (same
 table), the server rejects the loser (`409`) and it resyncs. Edits made while
 offline are overwritten by the authoritative snapshot on reconnect.
 
+### Configuration, documents, catalog & suppliers
+
+**Control → Settings & Documents** is the configuration surface. Sections save
+together as one `UPDATE_SETTINGS` — or, with *Apply to all stores*, one action
+per location:
+
+- **Business profile** — company/legal name, tagline, description, address,
+  phone/email/website, tax ID, logo upload (data URL, warned above 400KB) or an
+  initials monogram, brand color, timezone
+- **Money & tax** — tax %, service charge %, custom labels, prices-include-tax,
+  bill rounding (`none` / `nearest 0.05` / `nearest whole`), tip presets,
+  auto-gratuity party size
+- **Documents & templates** — a designer for **invoice · receipt · ticket ·
+  report**: paper (A4 / A5 / Letter / 80mm / 58mm), title, accent, logo · QR ·
+  signature toggles, tax breakdown, notes, terms/bank details, footer, copies.
+  The preview is the exact HTML the printer receives; **File** registers the
+  document so it can be reprinted or voided from the registry
+- **Stock policy** — valuation (`last cost` / `weighted average`), reorder policy
+  (`par`, or `reorder point + safety days`), auto-86 on zero stock, negative
+  stock, receive rounding, cycle-count cadence, storage zones, shelf life
+- **POS & service** — ticket copies, printer routing names, guest QR ordering,
+  split/discount permissions, manager-void requirement
+- **Alerts** — low stock, late tickets, guest requests, negative margin,
+  throttle, digest time, channel
+- **Data** — JSON export, validated import (`HYDRATE`), per-section reset,
+  document registry (reprint · download · void)
+
+Documents print from where the work happens: **Tickets → Documents** bar
+(receipt — filed automatically once the check is paid — invoice, kitchen ticket,
+download), **Reports → Print report** for the shift P&L.
+
+### Multi-currency
+
+Money is stored as plain base-currency numbers and formatted through
+`src/lib/currency.js`; the store re-points the active currency whenever a
+location's settings change, so floor, tickets, reports, and CSV exports all
+follow the configured symbol, position, and decimals with no per-screen code.
+Rates are base-relative rows (`rate` = units per 1 base unit); a document can
+print in a foreign currency — the builder converts at build time and prints an
+`1 USD = …` FX note. `SET_BASE_CURRENCY` re-bases every rate and keeps the old
+base as a row. 20 currencies are pre-registered (USD, EUR, GBP, JPY, CNY, KHR,
+THB, VND, IDR, MYR, SGD, AUD, CAD, INR, KRW, AED, CHF, MXN, BRL, PHP).
+
+### Catalog & suppliers
+
+**Control → Catalog** owns the naming tree — categories *and* sub-categories for
+menus and inventory. Renaming re-labels the items; deleting a category requires
+choosing where its items go first. Products get inline price/station edits, bulk
+move, bulk 86/restore, and a full editor. Ingredients get supplier assignment,
+storage zone, par / reorder point, and a status that follows the stock policy.
+
+**Control → Suppliers** is vendor management: terms, delivery days, lead time,
+minimum order, rating, and notes; a per-supplier reorder list with copy/mailto,
+spend history from received invoices, and **Receive delivery** — which updates
+on-hand, last cost, and the weighted average used by recipe costing.
+
+### Buying stock, the movement ledger & reports
+
+**Operations → Purchases** is the buy side of the book. A purchase order is a
+real document with lines, a supplier, expected date, tax and shipping; it moves
+`draft → ordered → received` (or `cancelled`) and prints on the configured PO
+template. **Receive** converts each line from the unit it was ordered in (cases,
+kegs, bottles) into the unit the item is counted in, writes a signed `buy`
+movement per line, updates on-hand, last cost, and the weighted average used by
+recipe costing, and keeps partial deliveries open with the balance outstanding.
+Receive it in one click from the delivery, or with `/receive PO-2026-0100` from
+Telegram. Quick one-off deliveries skip the document: **Suppliers → Receive
+delivery** posts `RECEIVE_INVOICE`.
+
+**Operations → Stock movements** is the ledger behind all of it — every buy,
+sale, opening balance, return, waste, count, and adjustment as a signed row
+with value, unit cost, reference, and who did it. Filter by kind, item, or day,
+see the balance a row left behind, and export the window to CSV. On-hand is the
+sum of the ledger, so the numbers a screen shows and the rows an accountant
+reads are never two different stories.
+
+**Control → Reports** turns that into the four questions an owner actually
+asks, over *Tonight / 7 days / 30 days*:
+
+- **Sales, buys & stock** — takings, net sales, tax, tips, covers, by method,
+  by hour, by category, plus what was bought and what moved in and out
+- **Profit & loss** — revenue less cost of goods (from recipe snapshots), waste,
+  shrinkage, comps, and discounts, with the food-cost % against its target
+- **Top & bottom** — best and worst sellers by revenue, units, and contribution,
+  with unsold dishes called out; the same on the buy side by spend and units,
+  and who the money went to
+- **Service / Voids & comps / Variance** — the operational reads (turn times,
+  leakage, theoretical usage vs counted stock)
+
+Every report ends in an action: print it on the report template, or jump to the
+screen that fixes the problem.
+
+### Units of measure & packaging
+
+An item is *counted* in one unit and *bought* in another. The model is the same
+everywhere: `item.unit` is the stock unit the book is kept in, `item.packs`
+says what one purchase unit holds (`1 Case = 12 ea`, and packs can nest —
+`1 Keg = 6 Case`), and `item.purchaseUnit` is what a new order line starts on.
+`src/lib/units.js` owns the arithmetic (`packFactor`, `packPrice`, `basePrice`,
+`describeQty`) so the order line, the receiving screen, the stock list, and the
+bot all convert identically.
+
+- **Settings → Units** (in the Telegram/stock card set) defines the units
+  (`each`, `kg`, `ml`, `bottle`, `case`, …) and the pack vocabulary, plus the
+  defaults new items start from
+- Ordering by the case: `2 Case × $39.00` receives **18,000 ml** of stock at
+  `$0.0022/ml` (pack cost ÷ pack size, not the pack price), and the movement
+  line says which pack it came from
+- Stock lists print the pack breakdown (`1 Case + 1 Bottle + 70 ml`) instead of
+  a raw count when *Show pack breakdown* is on
+- Once an item has movements its stock unit is **frozen** — the reducer refuses
+  the change and the editor disables the field, because every historical row is
+  counted in it. Add a new item instead
+
+### Item images & food settings
+
+Menu items and stock items carry a photo (`imageUrl` — an upload kept as a small
+data URL, or a path/URL), a description, dietary tags (Vegetarian, Vegan,
+Gluten-free, Contains nuts…), spice level, allergens, station, prep time,
+availability windows (breakfast / lunch / dinner / late), courses, and
+modifier groups. The vocabulary is configurable under **Settings → Food**, the
+photo is capped by `food.imageMaxKb`, and images appear on the guest menu, the
+tickets, the KDS, and the printed documents.
+
+### Telegram bot & mini app
+
+The bot reads and writes the **same book** the terminals do: the engine
+(`src/lib/telegram.js`) is pure and returns the actions it wants, the webhook
+(`server/telegram.js`) applies them through the shared reducer, commits them
+like any terminal action, and broadcasts over SSE. Nothing is a shadow copy.
+
+1. Talk to **@BotFather**, create a bot, put its token in `TELEGRAM_BOT_TOKEN`.
+2. Point Telegram at this server:
+   ```bash
+   curl "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook?url=$RESTORA_PUBLIC_URL/api/telegram/webhook&secret_token=$TELEGRAM_WEBHOOK_SECRET"
+   ```
+3. Map chats to roles with `TELEGRAM_CHAT_ROLES=12345:manager,67890:staff`.
+   Anything unmapped gets staff access: look-ups only.
+
+**Commands** — staff: `/start /help /today /week /low /stock <item> /menu [term] /orders /qr <table> /table <n>`;
+managers add `/pnl /report [range] /86 <item> /un86 <item> /po /receive <PO#> /buy [range] /digest`.
+A staff chat asked for a manager command is told so politely, and the reply
+keyboard only ever shows that chat's commands.
+
+**The bot talks first.** Notices are derived by diffing the shop before and
+after every committed action, so no screen has to remember to notify: a check
+is fired, a table pays up, a dish is 86'd or comes back, stock crosses under
+par, a purchase order is placed or received. Targets are
+`settings.telegram.chatId`, the mapped chats, and **any chat that has messaged
+the bot** — wiring a new phone is *say `/start` once*, not editing env files.
+A close-of-day digest (sales, food cost, buying, what needs ordering) goes out
+once a day after its configured hour, and can be previewed or forced from the
+screen.
+
+**Control → Telegram & Mini App** is the operating surface: the wiring steps, a
+console that runs the exact command engine (preview, or apply through the
+reducer), the notification switches and digest button, and the mini app.
+
+**Mini app.** `/?tg=1&guest=<tableId>` is the guest menu packaged for Telegram:
+the same QR ordering surface with the platform chrome — header colour from
+`themeParams`, expand, closing confirmation, haptics and a toast when an order
+lands. Open it from a bot reply (`/qr 12`), a menu button, or the link/QR on the
+screen; outside Telegram it degrades to the plain web menu.
+
+Bot API surface: `POST /api/telegram/webhook` (always answers 200 so Telegram
+does not retry a command that already ran), `POST /api/telegram/simulate`
+(`dryRun` by default), `POST /api/telegram/digest` (`dryRun` previews),
+`GET /api/telegram/{status,commands,stats}`.
+
+### Configuration API
+
+- `GET /api/suppliers?loc=` · `GET /api/inventory?loc=&q=&supplierId=&exceptionsOnly=true`
+- `GET /api/categories?loc=` (`flat=true` for one level) · `GET /api/settings?loc=`
+- `GET /api/documents?loc=&kind=invoice|receipt|ticket|report&limit=` → summary + registry
+- `POST /api/actions` accepts the new actions — `UPDATE_SETTINGS`,
+  `RESET_SETTINGS`, `UPDATE_TEMPLATE`, `UPSERT_CATEGORY` / `DELETE_CATEGORY`,
+  `UPSERT_SUPPLIER` / `DELETE_SUPPLIER`, `ADD`/`UPDATE`/`DELETE_INVENTORY_ITEM`,
+  `SET_BASE_CURRENCY`, `RESCALE_CATALOG`, `ISSUE_DOCUMENT`, `VOID_DOCUMENT`,
+  and `RECEIVE_INVOICE` with a `supplierId`
+- Buy side: `UPSERT_PURCHASE`, `SET_PURCHASE_STATUS`, `RECEIVE_PURCHASE`,
+  `DELETE_PURCHASE`, and the stock movements they write
+  (`GET /api/state` carries `shop.purchases` and `shop.movements`)
+
 ## Guest QR ordering
 
 Each table has a QR tent card (Floor → table → 📱 Table QR code). Guests scan
@@ -140,6 +334,8 @@ Express + SQLite (`better-sqlite3`) via action log + SSE when a server is presen
 | 6 | Dashboard alerts | ✅ Done | KPIs, tappable alert rail, rush watch, sparkline, sellers/losers, SLA, floor snapshot |
 | 7 | Recipe cost + matrix | ✅ Done | Recipe coster w/ snapshots, 86 write-through, menu matrix, ingredient shocks, in-place reprice |
 | 8 | Reports | ✅ Done | Sales/hour/category/day, service, voids audit, variance, P&L-lite — every report ends in an action |
+| 9 | Configuration, documents & catalog | ✅ Done | Settings sections (identity · money · templates · stock · POS · alerts · data), invoice/receipt/ticket/report designer + print, multi-currency, document registry, category tree, suppliers, live preview/print from Tickets & Reports |
+| 10 | Buy side, units & Telegram | ✅ Done | Purchase CRUD → stock with pack conversion, the signed movement ledger, sell/buy + P&L + top/bottom reports, units of measure, item photos, bot console + push notices + digest, and the Telegram mini app |
 
 ## Key rules (from spec — enforced in code)
 

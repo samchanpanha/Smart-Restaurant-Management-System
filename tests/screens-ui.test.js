@@ -1,0 +1,210 @@
+// ─── Every owner screen renders, in a real DOM ──────────────────────
+// The tab tests prove the workspace shell; this proves the contents.
+// It boots the real provider + shell + router in jsdom with no server
+// (local demo mode), walks the sidebar, and checks each screen paints
+// its own heading instead of throwing.
+
+import assert from 'node:assert/strict'
+import test, { after, before } from 'node:test'
+import { JSDOM } from 'jsdom'
+import { createServer } from 'vite'
+
+const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', {
+  url: 'http://localhost:5173/?role=owner',
+  pretendToBeVisual: true,
+})
+
+globalThis.window = dom.window
+globalThis.document = dom.window.document
+Object.defineProperty(globalThis, 'navigator', { value: dom.window.navigator, configurable: true })
+for (const key of ['HTMLElement', 'Element', 'Node', 'Event', 'KeyboardEvent', 'MouseEvent', 'CustomEvent', 'location', 'history']) {
+  globalThis[key] = dom.window[key]
+}
+globalThis.getComputedStyle = dom.window.getComputedStyle
+globalThis.localStorage = dom.window.localStorage
+globalThis.sessionStorage = dom.window.sessionStorage
+globalThis.requestAnimationFrame = (cb) => dom.window.setTimeout(() => cb(Date.now()), 0)
+globalThis.cancelAnimationFrame = (id) => dom.window.clearTimeout(id)
+globalThis.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} }
+dom.window.ResizeObserver = globalThis.ResizeObserver
+dom.window.HTMLElement.prototype.scrollTo = function scrollTo() {}
+dom.window.HTMLElement.prototype.setPointerCapture = function setPointerCapture() {}
+dom.window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} })
+globalThis.matchMedia = dom.window.matchMedia
+globalThis.fetch = async () => { throw new Error('offline') }
+globalThis.EventSource = class { constructor() { this.readyState = 0 } addEventListener() {} close() {} }
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
+
+const React = (await import('react')).default
+const { act } = await import('react')
+const { createRoot } = await import('react-dom/client')
+
+const server = await createServer({ server: { middlewareMode: true }, appType: 'custom', logLevel: 'error' })
+const { RestoraProvider } = await server.ssrLoadModule('/src/lib/store.jsx')
+const { default: AppShell } = await server.ssrLoadModule('/src/components/AppShell.jsx')
+const { Router } = await server.ssrLoadModule('/src/App.jsx')
+const { NAV_SECTIONS } = await server.ssrLoadModule('/src/lib/constants.js')
+
+// One marker per screen: something that only that screen prints.
+const MARKERS = {
+  dashboard: "Today's sales overview",
+  floor: 'Restaurant floor',
+  tickets: 'Orders',
+  kitchen: 'Kitchen',
+  menu: 'Menu & Recipes',
+  catalog: 'Catalog',
+  inventory: 'Inventory',
+  movements: 'Stock movements',
+  purchases: 'Reorder suggestions',
+  suppliers: 'Suppliers',
+  reports: 'Reports & Analytics',
+  costing: 'Food Cost & Profit',
+  settings: 'Settings & Documents',
+  telegram: 'Telegram',
+  system: 'System & Model',
+}
+
+const settle = async (ms = 40) => {
+  await act(async () => { await new Promise((resolve) => dom.window.setTimeout(resolve, ms)) })
+}
+const text = () => document.body.textContent || ''
+const $$ = (selector) => [...document.querySelectorAll(selector)]
+const panel = () => document.querySelector('[data-testid="screen-panel"]') || document.querySelector('main') || document.body
+
+let root = null
+let container = null
+
+function mount() {
+  container = document.createElement('div')
+  document.body.appendChild(container)
+  root = createRoot(container)
+  act(() => {
+    root.render(
+      React.createElement(RestoraProvider, null,
+        React.createElement(AppShell, null, React.createElement(Router))),
+    )
+  })
+}
+
+function clickNav(label) {
+  const button = $$('.app-sidebar button, nav[aria-label="Main navigation"] button')
+    .find((entry) => (entry.textContent || '').includes(label))
+  assert.ok(button, `sidebar has a ${label} entry`)
+  act(() => { button.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+}
+
+before(async () => {
+  mount()
+  await settle(60)
+})
+
+after(() => {
+  act(() => { root?.unmount() })
+  container?.remove()
+  server.close()
+})
+
+test('boots into a screen instead of the connecting splash', () => {
+  assert.ok(text().length > 400, 'the app painted real content')
+  assert.equal(text().includes('Connecting to service'), false)
+})
+
+for (const section of NAV_SECTIONS) {
+  for (const item of section.items) {
+    test(`${item.label} screen renders`, async () => {
+      clickNav(item.label)
+      await settle()
+      const marker = MARKERS[item.id]
+      if (marker) {
+        assert.ok(
+          panel().textContent.includes(marker),
+          `${item.id} shows "${marker}" — saw: ${(panel().textContent || '').slice(0, 160)}`,
+        )
+      }
+      assert.equal(panel().textContent.includes('Something went wrong'), false)
+    })
+  }
+}
+
+test('the purchases screen shows supplier totals and the seeded orders', async () => {
+  clickNav('Purchases')
+  await settle()
+  const copy = panel().textContent
+  assert.ok(copy.includes('On order'), 'open-order value card')
+  assert.ok(copy.includes('Bought · 30 days'), 'spend card')
+  assert.ok(copy.includes('PO-'), 'seeded PO numbers are listed')
+  assert.ok(copy.includes('Harbor Fish') || copy.includes('Prime Meats') || copy.includes('Fresh Farms'), 'vendor names')
+})
+
+test('the movements screen reconciles opening + in − out', async () => {
+  clickNav('Stock movements')
+  await settle()
+  const copy = panel().textContent
+  assert.ok(copy.includes('Stock in') && copy.includes('Stock out'), 'in/out cards')
+  assert.ok(copy.includes('Opened with'), 'baseline card')
+  assert.ok(copy.includes('Opening stock') || copy.includes('Receipt') || copy.includes('baseline'), 'reason pills')
+
+  // Flip to the by-item view: opening, in, out and on-hand for one SKU.
+  const byItem = $$('button').find((entry) => entry.textContent.trim() === 'By item')
+  assert.ok(byItem, 'By item view exists')
+  act(() => { byItem.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+  assert.ok(panel().textContent.includes('On hand'), 'by-item table shows on hand')
+})
+
+test('the report tabs read the ledger: sell/buy, P&L, top & bottom', async () => {
+  clickNav('Reports')
+  await settle()
+  const reportTab = (label) => $$('[aria-label="Reports"] [role="tab"]').find((tab) => (tab.textContent || '').includes(label))
+  const rangeTab = (label) => $$('[aria-label="Date range"] [role="tab"]').find((tab) => (tab.textContent || '').includes(label))
+
+  // The seeded receipts landed two days ago, so the buying side is empty
+  // tonight and populated on the 7-day range — prove the range is real.
+  act(() => { rangeTab('7 days').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+  act(() => { reportTab('Sell & buy in/out').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+  let copy = text()
+  assert.ok(copy.includes('Stock in / out'), 'in/out card')
+  assert.ok(copy.includes('Spend by supplier'), 'buy side by supplier')
+  assert.ok(copy.includes('Opening baseline'), 'the baseline leg is labelled')
+
+  act(() => { reportTab('Profit & loss').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+  copy = text()
+  assert.ok(copy.includes('Cost of goods sold'), 'COGS line')
+  assert.ok(copy.includes('Gross profit') && copy.includes('Operating result'), 'the ladder')
+  assert.ok(copy.includes('Cash movement'), 'cash in/out')
+  assert.ok(copy.includes('food cost'), 'food cost against the cap')
+
+  act(() => { reportTab('Top & bottom').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+  copy = text()
+  assert.ok(copy.includes('Top sellers · revenue'), 'selling side rankings')
+  const buySide = $$('button').find((entry) => entry.textContent.trim() === 'Buying side')
+  act(() => { buySide.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+  assert.ok(text().includes('Biggest buys · spend'), 'buying side rankings')
+
+  // Back to tonight: no receipts in this window, so the buy cards say so
+  // instead of inventing spend.
+  act(() => { rangeTab('Tonight').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+  act(() => { reportTab('Sell & buy in/out').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+  assert.ok(text().includes('Nothing was received in this window'), 'tonight has no receipts')
+  assert.ok(text().includes('Stock in / out'), 'the ledger legs still render')
+})
+
+test('the movements screen can open the count sheet', async () => {
+  clickNav('Stock movements')
+  await settle(60)
+  const count = $$('button').find((entry) => entry.textContent.trim() === 'Count stock')
+  assert.ok(count, 'count stock action exists')
+  act(() => { count.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+  assert.ok(text().includes('Count the store room'), 'count modal opened')
+  const cancel = $$('button').find((entry) => entry.textContent.trim() === 'Cancel')
+  act(() => { cancel.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+})

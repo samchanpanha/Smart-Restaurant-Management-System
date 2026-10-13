@@ -4,6 +4,9 @@
 // Table 14 is a 4-top seated 22 min · Burger $16 / plate $4.10 / 74% ·
 // Salmon 86'd mid-service.
 
+import { defaultSettings } from './settings.js'
+import { plateCostFor } from './models.js'
+
 const now = () => Date.now()
 const minAgo = (m) => new Date(now() - m * 60000).toISOString()
 
@@ -13,10 +16,11 @@ export function buildSeed() {
     { id: 'inv_bun', name: 'Brioche bun', unit: 'each', onHand: 64, par: 40, lastCost: 0.35, vendor: 'Bakery Co', location: 'dry' },
     { id: 'inv_patty', name: 'Beef patty 6oz', unit: 'each', onHand: 48, par: 36, lastCost: 2.25, vendor: 'Prime Meats', location: 'walk_in' },
     { id: 'inv_tomato', name: 'Tomato', unit: 'each', onHand: 30, par: 20, lastCost: 0.4, vendor: 'Fresh Farms', location: 'walk_in' },
-    { id: 'inv_lettuce', name: 'Lettuce portion', unit: 'portion', onHand: 40, par: 24, lastCost: 0.25, vendor: 'Fresh Farms', location: 'walk_in' },
+    // Packs describe how the item is bought; `unit` is how it is counted.
+    { id: 'inv_lettuce', name: 'Lettuce portion', unit: 'portion', onHand: 40, par: 24, lastCost: 0.25, vendor: 'Fresh Farms', location: 'walk_in', packs: [{ id: 'case', name: 'Case', qty: 6 }], purchaseUnit: 'case' },
     { id: 'inv_cheese', name: 'Cheddar slice', unit: 'slice', onHand: 72, par: 48, lastCost: 0.45, vendor: 'Dairy Direct', location: 'walk_in' },
     { id: 'inv_fries', name: 'Fries portion', unit: 'portion', onHand: 36, par: 30, lastCost: 0.6, vendor: 'Fresh Farms', location: 'dry' },
-    { id: 'inv_salmon', name: 'Salmon fillet', unit: 'each', onHand: 0, par: 12, lastCost: 5.8, vendor: 'Harbor Fish', location: 'walk_in' },
+    { id: 'inv_salmon', name: 'Salmon fillet', unit: 'each', onHand: 0, par: 12, lastCost: 5.8, vendor: 'Harbor Fish', location: 'walk_in', packs: [{ id: 'case', name: 'Case', qty: 12 }], purchaseUnit: 'case' },
     { id: 'inv_chicken', name: 'Chicken breast', unit: 'each', onHand: 22, par: 18, lastCost: 2.9, vendor: 'Prime Meats', location: 'walk_in' },
     { id: 'inv_pasta', name: 'Pasta portion', unit: 'portion', onHand: 40, par: 20, lastCost: 0.8, vendor: 'Dry Goods Co', location: 'dry' },
     { id: 'inv_cream', name: 'Cream cup', unit: 'cup', onHand: 18, par: 12, lastCost: 0.9, vendor: 'Dairy Direct', location: 'walk_in' },
@@ -26,9 +30,164 @@ export function buildSeed() {
     { id: 'inv_steak', name: 'Ribeye 10oz', unit: 'each', onHand: 10, par: 8, lastCost: 8.5, vendor: 'Prime Meats', location: 'walk_in' },
     { id: 'inv_cake', name: 'Chocolate cake slice', unit: 'slice', onHand: 12, par: 8, lastCost: 2.1, vendor: 'Bakery Co', location: 'dry' },
     { id: 'inv_icecream', name: 'Ice cream scoops', unit: 'scoop', onHand: 40, par: 24, lastCost: 0.75, vendor: 'Dairy Direct', location: 'walk_in' },
-    { id: 'inv_soda', name: 'Soda can', unit: 'can', onHand: 96, par: 48, lastCost: 0.45, vendor: 'BevCo', location: 'dry' },
-    { id: 'inv_coffee', name: 'Coffee portion', unit: 'portion', onHand: 60, par: 30, lastCost: 0.55, vendor: 'BevCo', location: 'dry' },
+    { id: 'inv_soda', name: 'Soda can', unit: 'can', onHand: 96, par: 48, lastCost: 0.45, vendor: 'BevCo', location: 'dry', packs: [{ id: 'case', name: 'Case', qty: 24 }], purchaseUnit: 'case' },
+    { id: 'inv_coffee', name: 'Coffee portion', unit: 'portion', onHand: 60, par: 30, lastCost: 0.55, vendor: 'BevCo', location: 'dry', packs: [{ id: 'case', name: 'Case', qty: 20 }], purchaseUnit: 'case' },
   ]
+
+  // Food detail per dish: the course it belongs to, when it sells, how hot
+  // it is, and a demo photo. Owners edit all of it in Catalog → Products,
+  // and the vocabulary behind it lives in Settings → Food & menu.
+  const MENU_DETAIL = {
+    m_salad: { course: 'Appetizer', menuWindow: 'lunch', dietaryTags: ['Vegetarian', 'Gluten-free'] },
+    m_wings: { course: 'Appetizer', menuWindow: 'dinner', spiceLevel: 'Medium', dietaryTags: ['Spicy'] },
+    m_soup: { course: 'Appetizer', menuWindow: 'lunch' },
+    m_burger: { course: 'Main', menuWindow: 'dinner', imageUrl: '/photos/burger.svg', allergens: ['Gluten', 'Dairy', 'Sesame'] },
+    m_salmon: { course: 'Main', menuWindow: 'dinner', imageUrl: '/photos/salmon.svg' },
+    m_chickenpasta: { course: 'Main', menuWindow: 'dinner' },
+    m_steak: { course: 'Main', menuWindow: 'dinner' },
+    m_fishchips: { course: 'Main', menuWindow: 'dinner' },
+    m_vegbowl: { course: 'Main', menuWindow: 'lunch', dietaryTags: ['Vegan', 'Dairy-free'] },
+    m_cake: { course: 'Dessert', menuWindow: 'dinner' },
+    m_icecream: { course: 'Dessert', menuWindow: 'dinner', dietaryTags: ['Vegetarian'] },
+    m_soda: { course: 'Drink', menuWindow: '', spiceLevel: '' },
+    m_coffee: { course: 'Drink', menuWindow: '' },
+  }
+
+  // ─── Suppliers ─────────────────────────────────────────────────
+  const suppliers = [
+    {
+      id: 'sup_meats', name: 'Prime Meats', contactName: 'Dana Whitfield', contactRole: 'Account manager',
+      email: 'orders@primemeats.example', phone: '+1 (503) 555-0110', website: 'primemeats.example',
+      addressLine1: '44 Industrial Way', city: 'Portland', state: 'OR', postalCode: '97210', country: 'United States',
+      taxId: 'EIN 91-2201843', paymentTerms: 'net_14', leadTimeDays: 1, minOrderValue: 150, currency: 'USD',
+      deliveryDays: ['TUE', 'THU', 'SAT'], categories: ['Proteins'], status: 'active', rating: 5,
+      accountNumber: 'PM-4471', notes: 'Best beef in town. Cut sheet confirmed every Thursday by 4pm.',
+      createdAt: minAgo(400 * 1440),
+    },
+    {
+      id: 'sup_produce', name: 'Fresh Farms', contactName: 'Luis Ortega', contactRole: 'Route driver lead',
+      email: 'route@freshfarms.example', phone: '+1 (503) 555-0142', website: 'freshfarms.example',
+      addressLine1: '18 Valley Road', city: 'Hillsboro', state: 'OR', postalCode: '97123', country: 'United States',
+      taxId: 'EIN 93-5510092', paymentTerms: 'net_7', leadTimeDays: 1, minOrderValue: 75, currency: 'USD',
+      deliveryDays: ['MON', 'WED', 'FRI'], categories: ['Produce'], status: 'active', rating: 4,
+      accountNumber: 'FF-1120', notes: 'Two-day max on leafy greens — order Monday for Wednesday.',
+      createdAt: minAgo(380 * 1440),
+    },
+    {
+      id: 'sup_dairy', name: 'Dairy Direct', contactName: 'Priya Nair', contactRole: 'Sales',
+      email: 'hello@dairydirect.example', phone: '+1 (503) 555-0177', website: 'dairydirect.example',
+      addressLine1: '9 Creamery Lane', city: 'Tillamook', state: 'OR', postalCode: '97141', country: 'United States',
+      taxId: '', paymentTerms: 'net_30', leadTimeDays: 2, minOrderValue: 100, currency: 'USD',
+      deliveryDays: ['WED'], categories: ['Dairy'], status: 'active', rating: 4,
+      accountNumber: 'DD-8842', notes: '', createdAt: minAgo(360 * 1440),
+    },
+    {
+      id: 'sup_fish', name: 'Harbor Fish', contactName: 'Kai Lund', contactRole: 'Owner',
+      email: 'kai@harborfish.example', phone: '+1 (503) 555-0198', website: 'harborfish.example',
+      addressLine1: 'Pier 5, Dock C', city: 'Astoria', state: 'OR', postalCode: '97103', country: 'United States',
+      taxId: 'EIN 95-7702311', paymentTerms: 'cod', leadTimeDays: 0, minOrderValue: 0, currency: 'USD',
+      deliveryDays: ['TUE', 'FRI'], categories: ['Proteins'], status: 'active', rating: 5,
+      accountNumber: 'HF-2201', notes: 'Call before 6am for same-day salmon. Quality decides the special.',
+      createdAt: minAgo(300 * 1440),
+    },
+    {
+      id: 'sup_dry', name: 'Dry Goods Co', contactName: 'Marco Bell', contactRole: 'Inside sales',
+      email: 'orders@drygoods.example', phone: '+1 (800) 555-0165', website: 'drygoods.example',
+      addressLine1: '2200 Warehouse Blvd', city: 'Portland', state: 'OR', postalCode: '97218', country: 'United States',
+      taxId: 'EIN 92-1188437', paymentTerms: 'net_30', leadTimeDays: 3, minOrderValue: 200, currency: 'USD',
+      deliveryDays: ['THU'], categories: ['Dry goods'], status: 'active', rating: 3,
+      accountNumber: 'DG-3310', notes: 'Free freight over $400. Two substitutions last quarter worth watching.',
+      createdAt: minAgo(290 * 1440),
+    },
+    {
+      id: 'sup_bev', name: 'BevCo', contactName: 'Sam Tran', contactRole: 'Territory rep',
+      email: 'sam@bevco.example', phone: '+1 (503) 555-0121', website: 'bevco.example',
+      addressLine1: '77 Bottling Row', city: 'Portland', state: 'OR', postalCode: '97209', country: 'United States',
+      taxId: '', paymentTerms: 'net_14', leadTimeDays: 2, minOrderValue: 120, currency: 'USD',
+      deliveryDays: ['FRI'], categories: ['Beverages'], status: 'active', rating: 4,
+      accountNumber: 'BC-5590', notes: 'Soda cases are deposit-return; count returns at delivery.',
+      createdAt: minAgo(240 * 1440),
+    },
+    {
+      id: 'sup_bakery', name: 'Bakery Co', contactName: 'Ines Duarte', contactRole: 'Head baker',
+      email: 'wholesale@bakeryco.example', phone: '+1 (503) 555-0154', website: 'bakeryco.example',
+      addressLine1: '5 Flour Street', city: 'Portland', state: 'OR', postalCode: '97214', country: 'United States',
+      taxId: '', paymentTerms: 'due_on_receipt', leadTimeDays: 1, minOrderValue: 40, currency: 'USD',
+      deliveryDays: ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'], categories: ['Bakery'], status: 'active', rating: 5,
+      accountNumber: 'BK-7781', notes: 'Daily 6:30am drop. Standing order: 60 buns, 14 cake slices.',
+      createdAt: minAgo(200 * 1440),
+    },
+  ]
+
+  // ─── Category trees (menu + inventory, with sub-categories) ─────
+  const categories = [
+    { id: 'cat_starters', kind: 'menu', name: 'Starters', parentId: null, description: 'First bites and shared plates.', station: 'pantry', color: '#f59e0b', sortOrder: 1, active: true },
+    { id: 'cat_starters_salads', kind: 'menu', name: 'Salads', parentId: 'cat_starters', description: '', station: 'pantry', color: '', sortOrder: 1, active: true },
+    { id: 'cat_starters_small', kind: 'menu', name: 'Small plates', parentId: 'cat_starters', description: 'Wings, soup, and daily bites.', station: 'grill', color: '', sortOrder: 2, active: true },
+    { id: 'cat_mains', kind: 'menu', name: 'Mains', parentId: null, description: 'Entrées fired from the grill and sauté.', station: 'grill', color: '#f36a21', sortOrder: 2, active: true },
+    { id: 'cat_mains_grill', kind: 'menu', name: 'Grill', parentId: 'cat_mains', description: '', station: 'grill', color: '', sortOrder: 1, active: true },
+    { id: 'cat_mains_saute', kind: 'menu', name: 'Sauté', parentId: 'cat_mains', description: '', station: 'saute', color: '', sortOrder: 2, active: true },
+    { id: 'cat_mains_bowls', kind: 'menu', name: 'Bowls', parentId: 'cat_mains', description: '', station: 'pantry', color: '', sortOrder: 3, active: true },
+    { id: 'cat_desserts', kind: 'menu', name: 'Desserts', parentId: null, description: '', station: 'dessert', color: '#a78bfa', sortOrder: 3, active: true },
+    { id: 'cat_desserts_sweets', kind: 'menu', name: 'Cakes & ice cream', parentId: 'cat_desserts', description: '', station: 'dessert', color: '', sortOrder: 1, active: true },
+    { id: 'cat_drinks', kind: 'menu', name: 'Drinks', parentId: null, description: '', station: 'pantry', color: '#38bdf8', sortOrder: 4, active: true },
+    { id: 'cat_drinks_cold', kind: 'menu', name: 'Cold', parentId: 'cat_drinks', description: '', station: 'pantry', color: '', sortOrder: 1, active: true },
+    { id: 'cat_drinks_hot', kind: 'menu', name: 'Hot', parentId: 'cat_drinks', description: '', station: 'pantry', color: '', sortOrder: 2, active: true },
+    { id: 'cat_inv_proteins', kind: 'inventory', name: 'Proteins', parentId: null, description: '', station: 'grill', color: '#ef4444', sortOrder: 1, active: true },
+    { id: 'cat_inv_seafood', kind: 'inventory', name: 'Seafood', parentId: 'cat_inv_proteins', description: 'Harbor Fish deliveries.', station: 'saute', color: '', sortOrder: 1, active: true },
+    { id: 'cat_inv_produce', kind: 'inventory', name: 'Produce', parentId: null, description: '', station: 'pantry', color: '#22c55e', sortOrder: 2, active: true },
+    { id: 'cat_inv_dairy', kind: 'inventory', name: 'Dairy', parentId: null, description: '', station: 'pantry', color: '#eab308', sortOrder: 3, active: true },
+    { id: 'cat_inv_dry', kind: 'inventory', name: 'Dry goods', parentId: null, description: '', station: 'pantry', color: '#94a3b8', sortOrder: 4, active: true },
+    { id: 'cat_inv_beverage', kind: 'inventory', name: 'Beverages', parentId: null, description: '', station: 'pantry', color: '#0ea5e9', sortOrder: 5, active: true },
+    { id: 'cat_inv_bakery', kind: 'inventory', name: 'Bakery', parentId: null, description: '', station: 'pantry', color: '#f97316', sortOrder: 6, active: true },
+  ]
+
+  // ─── Stock-management metadata per SKU ─────────────────────────
+  const SUPPLIER_BY_VENDOR = {
+    'Prime Meats': 'sup_meats', 'Fresh Farms': 'sup_produce', 'Dairy Direct': 'sup_dairy',
+    'Harbor Fish': 'sup_fish', 'Dry Goods Co': 'sup_dry', 'BevCo': 'sup_bev', 'Bakery Co': 'sup_bakery',
+  }
+  const INVENTORY_META = {
+    inv_bun: { sku: 'SKU-1001', category: 'Bakery', dailyUse: 45 },
+    inv_patty: { sku: 'SKU-1002', category: 'Proteins', dailyUse: 32 },
+    inv_tomato: { sku: 'SKU-1003', category: 'Produce', dailyUse: 20 },
+    inv_lettuce: { sku: 'SKU-1004', category: 'Produce', dailyUse: 18 },
+    inv_cheese: { sku: 'SKU-1005', category: 'Dairy', dailyUse: 40 },
+    inv_fries: { sku: 'SKU-1006', category: 'Produce', dailyUse: 26 },
+    inv_salmon: { sku: 'SKU-1007', category: 'Proteins', subCategory: 'Seafood', dailyUse: 9 },
+    inv_chicken: { sku: 'SKU-1008', category: 'Proteins', dailyUse: 16 },
+    inv_pasta: { sku: 'SKU-1009', category: 'Dry goods', dailyUse: 14 },
+    inv_cream: { sku: 'SKU-1010', category: 'Dairy', dailyUse: 10 },
+    inv_saladmix: { sku: 'SKU-1011', category: 'Produce', dailyUse: 14 },
+    inv_dressing: { sku: 'SKU-1012', category: 'Dry goods', dailyUse: 12 },
+    inv_wings: { sku: 'SKU-1013', category: 'Proteins', dailyUse: 12 },
+    inv_steak: { sku: 'SKU-1014', category: 'Proteins', dailyUse: 7 },
+    inv_cake: { sku: 'SKU-1015', category: 'Bakery', dailyUse: 8 },
+    inv_icecream: { sku: 'SKU-1016', category: 'Dairy', dailyUse: 14 },
+    inv_soda: { sku: 'SKU-1017', category: 'Beverages', dailyUse: 52 },
+    inv_coffee: { sku: 'SKU-1018', category: 'Beverages', dailyUse: 30 },
+  }
+  inventory.forEach((item, index) => {
+    const meta = INVENTORY_META[item.id] || {}
+    // avgCost drifts a cent or two off lastCost so the weighted-average
+    // valuation method shows a different (and honest) number.
+    const drift = ((index % 5) - 2) * 0.012
+    Object.assign(item, {
+      sku: meta.sku || `SKU-${2000 + index}`,
+      supplierId: SUPPLIER_BY_VENDOR[item.vendor] || null,
+      category: meta.category || 'Dry goods',
+      subCategory: meta.subCategory || '',
+      avgCost: Math.round(item.lastCost * (1 + drift) * 10000) / 10000,
+      reorderPoint: item.par,
+      dailyUse: meta.dailyUse || 4,
+      incoming: 0,
+      lot: null,
+      expiresOn: null,
+      countDueDays: 1 + (index % 7),
+      notes: '',
+      active: true,
+    })
+  })
 
   // ─── Menu + recipes ───────────────────────────────────────────
   const menu = [
@@ -103,6 +262,24 @@ export function buildSeed() {
       dietaryTags: [], allergens: [], imageUrl: '', sortOrder: 12, substituteId: null, modifiers: [],
     },
   ]
+
+  const MENU_SUBCATEGORY = {
+    m_salad: 'Salads', m_wings: 'Small plates', m_soup: 'Small plates',
+    m_burger: 'Grill', m_steak: 'Grill', m_fishchips: 'Grill',
+    m_salmon: 'Sauté', m_chickenpasta: 'Sauté', m_vegbowl: 'Bowls',
+    m_cake: 'Cakes & ice cream', m_icecream: 'Cakes & ice cream',
+    m_soda: 'Cold', m_coffee: 'Hot',
+  }
+  const MENU_SKU = {
+    m_salad: 'M-101', m_wings: 'M-102', m_soup: 'M-103', m_burger: 'M-104', m_salmon: 'M-105',
+    m_chickenpasta: 'M-106', m_steak: 'M-107', m_fishchips: 'M-108', m_vegbowl: 'M-109',
+    m_cake: 'M-110', m_icecream: 'M-111', m_soda: 'M-112', m_coffee: 'M-113',
+  }
+  menu.forEach((item) => {
+    item.subCategory = MENU_SUBCATEGORY[item.id] || ''
+    item.sku = MENU_SKU[item.id] || ''
+    item.auto86 = false
+  })
 
   const recipes = {
     m_salad: { id: 'r_salad', yieldPortions: 1, prepNotes: 'Toss to order', ingredients: [
@@ -259,6 +436,13 @@ export function buildSeed() {
       compTotal: 0,
       covers: p.covers,
       total: p.total,
+      payMethod: i % 4 === 3 ? 'cash' : 'card',
+      tip: Math.round(p.total * 0.18 * 100) / 100,
+      payments: [{
+        method: i % 4 === 3 ? 'cash' : 'card',
+        amount: Math.round(p.total * 1.18 * 100) / 100,
+        at: minAgo(p.min),
+      }],
       items: p.items.map(([menuItemId, qty], j) => ({
         id: `op${i}_${j}`, menuItemId, qty, modifiers: [],
         station: 'expo', status: 'bump', course: 'main', notes: '',
@@ -289,21 +473,167 @@ export function buildSeed() {
   const wasteLog = [
     { id: 'w_1', inventoryItemId: 'inv_lettuce', qty: 4, reason: 'spoil', at: minAgo(300), by: 'closer' },
   ]
+  // ── Buy side: purchases + the movement ledger they write to ───────
+  // Two deliveries already received, one order still with the vendor.
+  const purchases = [
+    {
+      id: 'po_seed_1',
+      number: `PO-${new Date(now()).getFullYear()}-0098`,
+      supplierId: 'sup_fish',
+      vendor: 'Harbor Fish',
+      reference: 'HF-2291',
+      status: 'received',
+      note: 'Friday delivery — salmon for the weekend specials.',
+      orderedAt: minAgo(3 * 1440),
+      expectedAt: minAgo(2 * 1440),
+      receivedAt: minAgo(2 * 1440),
+      createdBy: 'owner',
+      createdAt: minAgo(3 * 1440),
+      updatedAt: minAgo(2 * 1440),
+      lines: [
+        { id: 'po_seed_1_l1', inventoryItemId: 'inv_salmon', name: 'Salmon fillet', unit: 'each', qty: 12, unitCost: 5.8, receivedQty: 12 },
+      ],
+      tax: 0,
+      shipping: 0,
+      totals: { subtotal: 69.6, tax: 0, shipping: 0, total: 69.6 },
+    },
+    {
+      id: 'po_seed_2',
+      number: `PO-${new Date(now()).getFullYear()}-0099`,
+      supplierId: 'sup_meats',
+      vendor: 'Prime Meats',
+      reference: 'PM-88410',
+      status: 'received',
+      note: '',
+      orderedAt: minAgo(2 * 1440),
+      expectedAt: minAgo(2 * 1440),
+      receivedAt: minAgo(2 * 1440),
+      createdBy: 'owner',
+      createdAt: minAgo(2 * 1440),
+      updatedAt: minAgo(2 * 1440),
+      lines: [
+        { id: 'po_seed_2_l1', inventoryItemId: 'inv_steak', name: 'Ribeye steak', unit: 'each', qty: 10, unitCost: 8.5, receivedQty: 10 },
+        { id: 'po_seed_2_l2', inventoryItemId: 'inv_patty', name: 'Beef patty 6oz', unit: 'each', qty: 48, unitCost: 2.25, receivedQty: 48 },
+      ],
+      tax: 0,
+      shipping: 0,
+      totals: { subtotal: 193, tax: 0, shipping: 0, total: 193 },
+    },
+    {
+      id: 'po_seed_3',
+      number: `PO-${new Date(now()).getFullYear()}-0100`,
+      supplierId: 'sup_produce',
+      vendor: 'Fresh Farms',
+      reference: '',
+      status: 'ordered',
+      note: 'Tomorrow 7am — leaves room for the salad special.',
+      orderedAt: minAgo(120),
+      expectedAt: minAgo(-840),
+      receivedAt: null,
+      createdBy: 'owner',
+      createdAt: minAgo(140),
+      updatedAt: minAgo(120),
+      lines: [
+        { id: 'po_seed_3_l1', inventoryItemId: 'inv_lettuce', name: 'Lettuce portion', unit: 'case', qty: 4, unitCost: 8.1, receivedQty: 0, packSize: 6 },
+        { id: 'po_seed_3_l2', inventoryItemId: 'inv_tomato', name: 'Tomato', unit: 'each', qty: 10, unitCost: 2.4, receivedQty: 0, packSize: 1 },
+      ],
+      tax: 0,
+      shipping: 0,
+      totals: { subtotal: 56.4, tax: 0, shipping: 0, total: 56.4 },
+    },
+  ]
+
+  // The ledger: opening balances, the two receipts above, and the sales the
+  // seed orders represent. Signed quantity, costed at the time it moved.
+  const buyMovements = [
+    {
+      id: 'mv_seed_1', at: minAgo(2 * 1440), itemId: 'inv_salmon', name: 'Salmon fillet', unit: 'each',
+      kind: 'buy', qty: 12, unitCost: 5.8, value: 69.6, ref: 'po_seed_1', note: 'PO-0098', by: 'owner',
+    },
+    {
+      id: 'mv_seed_2', at: minAgo(2 * 1440), itemId: 'inv_steak', name: 'Ribeye steak', unit: 'each',
+      kind: 'buy', qty: 10, unitCost: 8.5, value: 85, ref: 'po_seed_2', note: 'PO-0099', by: 'owner',
+    },
+    {
+      id: 'mv_seed_3', at: minAgo(2 * 1440), itemId: 'inv_patty', name: 'Beef patty 6oz', unit: 'each',
+      kind: 'buy', qty: 48, unitCost: 2.25, value: 108, ref: 'po_seed_2', note: 'PO-0099', by: 'owner',
+    },
+  ]
+
+  // Waste the shift logged, mirrored into the ledger the same way the
+  // LOG_WASTE action does it: negative quantity, costed at the time.
+  const wasteMovements = wasteLog.map((entry, index) => {
+    const item = inventory.find((row) => row.id === entry.inventoryItemId)
+    const qty = Math.abs(Number(entry.qty) || 0)
+    const unitCost = Number(item?.lastCost) || 0
+    return {
+      id: `mv_waste_${index + 1}`,
+      at: entry.at,
+      itemId: entry.inventoryItemId,
+      name: item?.name || entry.inventoryItemId,
+      unit: item?.unit || '',
+      kind: 'waste',
+      qty: -qty,
+      unitCost,
+      value: -Math.round(qty * unitCost * 100) / 100,
+      ref: null,
+      note: entry.reason || 'waste',
+      by: entry.by || 'owner',
+    }
+  })
+
+  // Opening balances are back-filled from today's count minus what has
+  // moved since, so opening + in − out always equals on-hand.
+  const movements = reseatOpeningBalances(inventory, [...buyMovements, ...wasteMovements], { at: minAgo(7 * 1440), by: 'owner' })
+
   const invoiceLog = [
     { id: 'invlog_0', vendor: 'Harbor Fish', at: minAgo(7 * 1440), lines: [{ inventoryItemId: 'inv_salmon', qty: 12, unitCost: 5.18 }] },
-    { id: 'invlog_1', vendor: 'Harbor Fish', at: minAgo(1440), lines: [{ inventoryItemId: 'inv_salmon', qty: 12, unitCost: 5.8 }] },
-    { id: 'invlog_2', vendor: 'Prime Meats', at: minAgo(2 * 1440), lines: [{ inventoryItemId: 'inv_steak', qty: 10, unitCost: 8.5 }, { inventoryItemId: 'inv_patty', qty: 48, unitCost: 2.25 }] },
+    { id: 'invlog_1', vendor: 'Harbor Fish', supplierId: 'sup_fish', purchaseId: 'po_seed_1', reference: 'HF-2291', at: minAgo(2 * 1440), total: 69.6, lines: [{ inventoryItemId: 'inv_salmon', qty: 12, unitCost: 5.8 }] },
+    { id: 'invlog_2', vendor: 'Prime Meats', supplierId: 'sup_meats', purchaseId: 'po_seed_2', reference: 'PM-88410', at: minAgo(2 * 1440), total: 193, lines: [{ inventoryItemId: 'inv_steak', qty: 10, unitCost: 8.5 }, { inventoryItemId: 'inv_patty', qty: 48, unitCost: 2.25 }] },
   ]
+
+  const menuWithDetail = menu.map((item) => ({
+    course: 'Main',
+    menuWindow: '',
+    spiceLevel: '',
+    ...item,
+    ...(MENU_DETAIL[item.id] || {}),
+  }))
+
+  const settings = {
+    ...defaultSettings('Downtown'),
+    restaurantName: 'Restora · Demo House',
+    locationShort: 'DT',
+    targetTurnMinutes: 45,
+    ticketMinutes: 18,
+    foodCostCap: 0.32,
+    rushHour: 18,
+    taxPct: 0.0875,
+    servicePct: 0,
+  }
+
+  // Plate cost is recorded when a dish leaves the kitchen. Without this,
+  // tomorrow's delivery would silently rewrite yesterday's margins.
+  const inventoryById = Object.fromEntries(inventory.map((item) => [item.id, item]))
+  const frozenOrders = orders.map((order) => ({
+    ...order,
+    items: order.items.map((item) => {
+      if (item.recipeSnapshot) return item
+      const recipe = recipes[item.menuItemId]
+      if (!recipe) return item
+      return { ...item, recipeSnapshot: { ...recipe, plateCost: plateCostFor(recipe, inventoryById, settings) } }
+    }),
+  }))
 
   return {
     version: 1,
     tables,
     reservations,
     waitlist,
-    menu,
+    menu: menuWithDetail,
     recipes,
     inventory,
-    orders,
+    orders: frozenOrders,
     wasteLog,
     invoiceLog,
     turnHistory,
@@ -313,17 +643,80 @@ export function buildSeed() {
     pendingUndo: null,
     // recalls: { itemKey: expiresAt } for 60s KDS recall
     recalls: {},
-    settings: {
-      restaurantName: 'Restora · Demo House',
-      targetTurnMinutes: 45,
-      ticketMinutes: 18,
-      foodCostCap: 0.32,
-      rushHour: 18,
-      taxPct: 0.0875,
-      servicePct: 0,
-    },
+    categories,
+    suppliers,
+    // Issued documents (invoices, receipts, tickets, reports, purchase
+    // orders) — the printed-number registry, newest last.
+    documents: [],
+    // Buy side: purchase orders (draft → ordered → received) and the
+    // signed stock-movement ledger every report reads.
+    purchases,
+    movements,
+    settings,
     meta: { seededAt: new Date(now()).toISOString() },
   }
+}
+
+/**
+ * Opening balances are a derived baseline: today's on-hand minus every
+ * non-opening movement. That keeps `opening + in − out = on hand` true for
+ * any ledger, which is exactly the identity the stock reports check.
+ */
+export function reseatOpeningBalances(inventory, movements, options = {}) {
+  const openings = movements.filter((move) => move.kind === 'opening')
+  const rest = movements.filter((move) => move.kind !== 'opening')
+  const netByItem = rest.reduce((acc, move) => {
+    acc[move.itemId] = (acc[move.itemId] || 0) + (Number(move.qty) || 0)
+    return acc
+  }, {})
+  const at = options.at || openings[0]?.at || new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+  const by = options.by || openings[0]?.by || 'owner'
+  const rows = []
+  for (const item of inventory) {
+    const existing = openings.find((move) => move.itemId === item.id)
+    const net = netByItem[item.id] || 0
+    const back = Math.round((item.onHand - net) * 1000) / 1000
+    const unitCost = Number(item.lastCost) || 0
+    const openingQty = Math.max(0, back)
+    if (existing || openingQty > 0) {
+      rows.push({
+        id: existing?.id || `mv_open_${item.id}`,
+        at: existing?.at || at,
+        itemId: item.id,
+        name: item.name,
+        unit: item.unit,
+        kind: 'opening',
+        qty: openingQty,
+        unitCost,
+        value: Math.round(openingQty * unitCost * 100) / 100,
+        ref: null,
+        note: existing?.note || 'opening count',
+        by: existing?.by || by,
+      })
+    }
+    // More moved through this SKU than it could ever have held — the book
+    // opened after the stock was already gone. Record the shortfall as a
+    // baseline correction so the ledger still adds up to today's count.
+    if (back < 0) {
+      rows.push({
+        id: existing?.id ? `mv_base_${item.id}` : `mv_base_${item.id}`,
+        at: at,
+        itemId: item.id,
+        name: item.name,
+        unit: item.unit,
+        kind: 'adjust',
+        baseline: true,
+        qty: Math.round(back * 1000) / 1000,
+        unitCost,
+        value: Math.round(back * unitCost * 100) / 100,
+        ref: null,
+        note: 'opening book correction',
+        by,
+      })
+    }
+  }
+  const sortByTime = (a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()
+  return [...rows, ...rest].map((move) => ({ ...move })).sort(sortByTime)
 }
 
 // ─── Second store: Riverside ──────────────────────────────────────
@@ -363,7 +756,7 @@ export function buildSeedRiverside() {
     inventory,
     menu,
     salesHistory,
-    settings: { ...base.settings, restaurantName: 'Restora · Riverside' },
+    settings: { ...base.settings, restaurantName: 'Restora · Riverside', locationShort: 'RV' },
     meta: { seededAt: new Date(now()).toISOString() },
   }
 }

@@ -5,6 +5,7 @@
 // the floor composer and KDS instantly.
 
 import { useEffect, useMemo, useState } from 'react'
+import { PhotoField } from '../components/ItemPhotoField'
 import StatusPill from '../components/StatusPill'
 import { Field, Modal, btnPrimary, inputCls } from '../components/ui'
 import { MARGIN_BAND_META, STATIONS, STATION_META } from '../lib/constants'
@@ -19,9 +20,12 @@ function snapshotCount(state, menuItemId) {
 }
 
 function isSafeImageUrl(value) {
+  // Uploaded photos arrive as data URLs; the settings sanitizer already
+  // caps their size, this only rejects schemes we would never render.
   const url = String(value || '').trim()
   if (!url) return true
   if (url.startsWith('/') && !url.startsWith('//')) return true
+  if (url.startsWith('data:image/')) return true
   try {
     return ['https:', 'http:'].includes(new URL(url).protocol)
   } catch {
@@ -309,15 +313,12 @@ function Coster({ dishId, onDone }) {
         Demo allergen labels must be checked against your kitchen&apos;s recipes and cross-contact practices before use.
       </div>
 
-      <Field label="Optional food photo URL">
-        <input
-          type="url"
-          value={draft.imageUrl}
-          onChange={(e) => setDraft((d) => ({ ...d, imageUrl: e.target.value }))}
-          placeholder="https://… or /images/dish.jpg"
-          className={inputCls}
-        />
-      </Field>
+      <PhotoField
+        value={draft.imageUrl}
+        onChange={(value) => setDraft((d) => ({ ...d, imageUrl: value }))}
+        maxKb={state.settings.food.imageMaxKb}
+        hint="Shown on the menu screen and the guest QR menu when photos are switched on in Settings → Food & menu."
+      />
 
       {/* Ingredients */}
       <div>

@@ -109,8 +109,27 @@ export const ROLES = {
 }
 
 // Role-aware nav (spec §6). Owner sees all.
+// One icon per screen — the sidebar and the tab strip must never drift.
+export const SCREEN_ICONS = {
+  dashboard: 'dashboard',
+  floor: 'tables',
+  tickets: 'orders',
+  kitchen: 'kitchen',
+  inventory: 'inventory',
+  menu: 'menu',
+  catalog: 'catalog',
+  suppliers: 'supplier',
+  purchases: 'cart',
+  reports: 'reports',
+  costing: 'costing',
+  settings: 'settings',
+  system: 'layers',
+  movements: 'swap',
+  telegram: 'send',
+}
+
 export const ROLE_NAV = {
-  owner: ['dashboard', 'floor', 'tickets', 'kitchen', 'menu', 'inventory', 'reports', 'costing', 'system'],
+  owner: ['dashboard', 'floor', 'tickets', 'kitchen', 'menu', 'catalog', 'inventory', 'movements', 'suppliers', 'purchases', 'reports', 'costing', 'settings', 'system', 'telegram'],
   server: ['floor', 'tickets'],
   kitchen: ['kitchen'],
   host: ['floor', 'dashboard'],
@@ -132,7 +151,11 @@ export const NAV_SECTIONS = [
     label: 'Control',
     items: [
       { id: 'menu', label: 'Menu & Recipes', step: 7 },
+      { id: 'catalog', label: 'Catalog', step: 9 },
       { id: 'inventory', label: 'Inventory', step: 5 },
+      { id: 'movements', label: 'Stock movements', step: 5 },
+      { id: 'purchases', label: 'Purchases', step: 9 },
+      { id: 'suppliers', label: 'Suppliers', step: 9 },
     ],
   },
   {
@@ -146,7 +169,11 @@ export const NAV_SECTIONS = [
   {
     id: 'settings',
     label: 'Settings',
-    items: [{ id: 'system', label: 'System & Model', step: 1 }],
+    items: [
+      { id: 'settings', label: 'Settings & Documents', step: 9 },
+      { id: 'telegram', label: 'Telegram & Mini App', step: 9 },
+      { id: 'system', label: 'System & Model', step: 1 },
+    ],
   },
 ]
 

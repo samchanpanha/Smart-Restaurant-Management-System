@@ -6,20 +6,15 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import StatusPill from './StatusPill'
 import TabStrip from './TabStrip'
 import { Icon } from './Icon'
-import { ROLES, ROLE_NAV, screenForAlert } from '../lib/constants'
+import { NAV_SECTIONS, ROLES, ROLE_NAV, SCREEN_ICONS, screenForAlert } from '../lib/constants'
 import { getAlerts, LOCATIONS, useNow, useRestora } from '../lib/store'
 
-const NAV_ITEMS = [
-  { id: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
-  { id: 'tickets', label: 'Orders', icon: 'orders' },
-  { id: 'floor', label: 'Tables', icon: 'tables' },
-  { id: 'kitchen', label: 'Kitchen', icon: 'kitchen' },
-  { id: 'inventory', label: 'Inventory', icon: 'inventory' },
-  { id: 'menu', label: 'Menu & Recipes', icon: 'menu' },
-  { id: 'costing', label: 'Food Cost & Profit', icon: 'costing' },
-  { id: 'reports', label: 'Reports', icon: 'reports' },
-  { id: 'system', label: 'Settings', icon: 'settings' },
-]
+// One label per screen, everywhere: the sidebar, the tab strip and the
+// restricted-screen panel all read the same source, so a screen is never
+// called two different things.
+const NAV_ITEMS = NAV_SECTIONS
+  .flatMap((section) => section.items)
+  .map((item) => ({ id: item.id, label: item.label, icon: SCREEN_ICONS[item.id] || 'dashboard' }))
 
 function displayOrderId(id) {
   const suffix = String(id || '').replace(/\D/g, '').slice(-4)
@@ -29,6 +24,7 @@ function displayOrderId(id) {
 export default function AppShell({ children }) {
   const {
     state, dispatch, role, setRole, screen, setScreen, link, resync, notice, locId, setLocId,
+    openScreenInTab,
     tabs, activeTabId, saveTabScroll, setSelectedTableId, setSelectedDishId, setSelectedOrderId,
   } = useRestora()
   const now = useNow(30000)
@@ -105,12 +101,13 @@ export default function AppShell({ children }) {
     setSearchOpen(false)
   }
 
+  // Switching role never rewrites the workspace: each tab keeps the screen
+  // it was opened with, and the router locks the ones this role cannot see.
   function changeRole(nextRole) {
     setRole(nextRole)
-    const allowedForRole = ROLE_NAV[nextRole] || ROLE_NAV.owner
-    if (!allowedForRole.includes(screen)) setScreen(allowedForRole[0])
     setProfileOpen(false)
   }
+
 
   const linkPill = link.status === 'live'
     ? { tone: 'ok', label: 'Live · server' }
@@ -141,11 +138,24 @@ export default function AppShell({ children }) {
           <div className="space-y-1">
             {NAV_ITEMS.filter((item) => allowed.includes(item.id)).map((item) => {
               const active = screen === item.id
+              // Chrome semantics on the rail: a plain click edits the tab you
+              // are on, Ctrl/⌘-click opens (or jumps to) its own tab, and a
+              // middle-click opens it in the background.
               return (
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() => setScreen(item.id)}
+                  onClick={(event) => {
+                    if (event.ctrlKey || event.metaKey) openScreenInTab(item.id)
+                    else setScreen(item.id)
+                  }}
+                  onAuxClick={(event) => {
+                    if (event.button === 1) {
+                      event.preventDefault()
+                      openScreenInTab(item.id, { activate: false })
+                    }
+                  }}
+                  title={`${item.label} · Ctrl/⌘+click for a new tab`}
                   aria-current={active ? 'page' : undefined}
                   className={`group flex min-h-[46px] w-full items-center gap-3 rounded-xl px-3.5 text-left text-sm transition-colors ${
                     active

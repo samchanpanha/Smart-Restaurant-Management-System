@@ -16,6 +16,7 @@ import {
   canTableTransition,
   canTicketTransition,
   nextTableStatuses,
+  reorderPointFor,
   stockStatusFor,
 } from '../lib/models'
 import { getAlerts, useRestora } from '../lib/store'
@@ -111,7 +112,7 @@ export default function SystemScreen() {
   const { state } = useRestora()
   const alerts = getAlerts(state)
   const openOrders = state.orders.filter((o) => !['paid', 'void'].includes(o.status))
-  const outItems = state.inventory.filter((i) => stockStatusFor(i) !== 'ok')
+  const outItems = state.inventory.filter((i) => stockStatusFor(i, state.settings) !== 'ok')
   const eightSix = state.menu.filter((m) => !m.available)
 
   const census = [
@@ -250,8 +251,8 @@ export default function SystemScreen() {
               {outItems.map((i) => (
                 <li key={i.id} className="flex items-center justify-between gap-2">
                   <span className="text-zinc-200">{i.name}</span>
-                  <StatusPill tone={stockStatusFor(i) === 'out' ? 'bad' : 'warn'} size="sm">
-                    {stockStatusFor(i)} · {i.onHand}/{i.par}
+                  <StatusPill tone={stockStatusFor(i, state.settings) === 'out' ? 'bad' : 'warn'} size="sm">
+                    {stockStatusFor(i, state.settings)} · {i.onHand}/{reorderPointFor(i, state.settings)}
                   </StatusPill>
                 </li>
               ))}

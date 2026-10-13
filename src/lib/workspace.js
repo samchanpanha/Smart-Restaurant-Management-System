@@ -26,7 +26,7 @@ export function createWorkspace(screen, locId, tabId) {
 // Tolerates workspaces persisted by older builds (no `closed` stack, no ctx).
 export function normalizeWorkspace(workspace) {
   const tabs = Array.isArray(workspace?.tabs) && workspace.tabs.length
-    ? workspace.tabs.map((tab) => makeTab(tab.id, tab.screen, tab.locId, tab))
+    ? workspace.tabs.map((tab) => makeTab(tab.id, tab.screen ?? null, tab.locId, tab))
     : null
   if (!tabs) return null
   const activeTabId = tabs.some((tab) => tab.id === workspace.activeTabId)
@@ -38,6 +38,11 @@ export function normalizeWorkspace(workspace) {
 
 export function activeWorkspaceTab(workspace) {
   return workspace.tabs.find((tab) => tab.id === workspace.activeTabId) || workspace.tabs[0]
+}
+
+export function tabIdForScreen(workspace, screen) {
+  const tab = workspace.tabs.find((item) => item.screen === screen)
+  return tab?.id || null
 }
 
 export function pinnedCount(workspace) {
@@ -55,10 +60,18 @@ export function workspaceReducer(workspace, action) {
       if (workspace.tabs.length >= MAX_TABS) return workspace
       const current = activeWorkspaceTab(workspace)
       const pinned = pinnedCount(workspace)
-      const tab = makeTab(action.id, action.screen || 'floor', action.locId || current?.locId || 'downtown')
+      // A tab opened without a screen shows the new-tab picker instead of
+      // silently cloning the screen that is already in front of the
+      // operator — that is what made "+" feel like it did nothing.
+      const tab = makeTab(action.id, action.screen ?? null, action.locId || current?.locId || 'downtown')
+      const tabs = workspace.tabs.slice()
+      // Background tabs (middle-click) land at the end and leave focus alone.
+      if (action.activate === false) {
+        tabs.push(tab)
+        return { ...workspace, tabs }
+      }
       const atIndex = workspace.tabs.findIndex((item) => item.id === workspace.activeTabId)
       const insertAt = Math.min(Math.max(atIndex + 1, pinned), workspace.tabs.length)
-      const tabs = workspace.tabs.slice()
       tabs.splice(insertAt, 0, tab)
       return { ...workspace, tabs, activeTabId: tab.id }
     }
@@ -185,9 +198,16 @@ export function workspaceReducer(workspace, action) {
       if (!removed.length) return workspace
       const firstRemoved = workspace.tabs.indexOf(removed[0])
       const ids = new Set(removed.map((tab) => tab.id))
+      const tabs = workspace.tabs.filter((tab) => !ids.has(tab.id))
+      // The kept tab is the only survivor besides pinned ones — if the
+      // active tab was closed, focus has to land somewhere real.
+      const activeTabId = tabs.some((tab) => tab.id === workspace.activeTabId)
+        ? workspace.activeTabId
+        : action.tabId
       return {
         ...workspace,
-        tabs: workspace.tabs.filter((tab) => !ids.has(tab.id)),
+        tabs,
+        activeTabId,
         closed: withClosed(workspace, removed, firstRemoved),
       }
     }
@@ -205,6 +225,7 @@ export function workspaceReducer(workspace, action) {
 
     case 'REOPEN_TAB': {
       if (!workspace.closed.length) return workspace
+      if (workspace.tabs.length >= MAX_TABS) return workspace
       const closed = workspace.closed.slice()
       const entry = closed.pop()
       const pinned = pinnedCount(workspace)
