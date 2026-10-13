@@ -11,7 +11,7 @@
 import { CURRENCY_CODES, currencyMeta } from './currency.js'
 import { STATIONS } from './constants.js'
 
-export const DOC_KINDS = ['invoice', 'receipt', 'ticket', 'report']
+export const DOC_KINDS = ['invoice', 'receipt', 'ticket', 'report', 'purchase']
 
 export const DOC_KIND_META = {
   invoice: {
@@ -37,6 +37,12 @@ export const DOC_KIND_META = {
     short: 'RPT',
     audience: 'Owner / accountant',
     blurb: 'Shift report: sales, service, voids, variance and P&L-lite on one page.',
+  },
+  purchase: {
+    label: 'Purchase order',
+    short: 'PO',
+    audience: 'Supplier / receiving',
+    blurb: 'What you are buying, at what cost, delivered when — the document you send a vendor and check the delivery against.',
   },
 }
 
@@ -207,6 +213,36 @@ export function defaultTemplates() {
       signatureLabel: 'Reviewed by',
       copies: 1,
     },
+    purchase: {
+      name: 'Supplier purchase order',
+      paper: 'a4',
+      title: 'PURCHASE ORDER',
+      accent: '#0f766e',
+      fontScale: 1,
+      currency: 'base',
+      showLogo: true,
+      showCompany: true,
+      showCustomer: true,
+      showSku: true,
+      showDescription: true,
+      showUnitPrice: true,
+      showModifiers: false,
+      showTaxBreakdown: true,
+      showServiceCharge: false,
+      showDiscount: false,
+      showPaymentTerms: true,
+      showBankDetails: false,
+      showSignature: true,
+      showQr: false,
+      showNotes: true,
+      headerText: '',
+      footerText: 'Please confirm availability and delivery date. Quote the PO number on all paperwork.',
+      termsText: 'Deliver to the address above during receiving hours. Short or substituted lines must be noted on the delivery note.',
+      thankYou: '',
+      bankDetails: '',
+      signatureLabel: 'Approved by',
+      copies: 1,
+    },
   }
 }
 
@@ -283,6 +319,7 @@ export function defaultSettings(locationLabel = 'Downtown') {
       receipt: { prefix: 'RCT', next: 5820, pad: 5, includeYear: true, includeLocation: false },
       ticket: { prefix: 'TKT', next: 1, pad: 4, includeYear: false, includeLocation: true },
       report: { prefix: 'RPT', next: 218, pad: 4, includeYear: true, includeLocation: false },
+      purchase: { prefix: 'PO', next: 101, pad: 4, includeYear: true, includeLocation: false },
     },
 
     // Stock policy

@@ -5,6 +5,7 @@
 // Salmon 86'd mid-service.
 
 import { defaultSettings } from './settings.js'
+import { plateCostFor } from './models.js'
 
 const now = () => Date.now()
 const minAgo = (m) => new Date(now() - m * 60000).toISOString()
@@ -452,11 +453,149 @@ export function buildSeed() {
   const wasteLog = [
     { id: 'w_1', inventoryItemId: 'inv_lettuce', qty: 4, reason: 'spoil', at: minAgo(300), by: 'closer' },
   ]
+  // ── Buy side: purchases + the movement ledger they write to ───────
+  // Two deliveries already received, one order still with the vendor.
+  const purchases = [
+    {
+      id: 'po_seed_1',
+      number: `PO-${new Date(now()).getFullYear()}-0098`,
+      supplierId: 'sup_fish',
+      vendor: 'Harbor Fish',
+      reference: 'HF-2291',
+      status: 'received',
+      note: 'Friday delivery — salmon for the weekend specials.',
+      orderedAt: minAgo(3 * 1440),
+      expectedAt: minAgo(2 * 1440),
+      receivedAt: minAgo(2 * 1440),
+      createdBy: 'owner',
+      createdAt: minAgo(3 * 1440),
+      updatedAt: minAgo(2 * 1440),
+      lines: [
+        { id: 'po_seed_1_l1', inventoryItemId: 'inv_salmon', name: 'Salmon fillet', unit: 'each', qty: 12, unitCost: 5.8, receivedQty: 12 },
+      ],
+      tax: 0,
+      shipping: 0,
+      totals: { subtotal: 69.6, tax: 0, shipping: 0, total: 69.6 },
+    },
+    {
+      id: 'po_seed_2',
+      number: `PO-${new Date(now()).getFullYear()}-0099`,
+      supplierId: 'sup_meats',
+      vendor: 'Prime Meats',
+      reference: 'PM-88410',
+      status: 'received',
+      note: '',
+      orderedAt: minAgo(2 * 1440),
+      expectedAt: minAgo(2 * 1440),
+      receivedAt: minAgo(2 * 1440),
+      createdBy: 'owner',
+      createdAt: minAgo(2 * 1440),
+      updatedAt: minAgo(2 * 1440),
+      lines: [
+        { id: 'po_seed_2_l1', inventoryItemId: 'inv_steak', name: 'Ribeye steak', unit: 'each', qty: 10, unitCost: 8.5, receivedQty: 10 },
+        { id: 'po_seed_2_l2', inventoryItemId: 'inv_patty', name: 'Beef patty 6oz', unit: 'each', qty: 48, unitCost: 2.25, receivedQty: 48 },
+      ],
+      tax: 0,
+      shipping: 0,
+      totals: { subtotal: 193, tax: 0, shipping: 0, total: 193 },
+    },
+    {
+      id: 'po_seed_3',
+      number: `PO-${new Date(now()).getFullYear()}-0100`,
+      supplierId: 'sup_produce',
+      vendor: 'Fresh Farms',
+      reference: '',
+      status: 'ordered',
+      note: 'Tomorrow 7am — leaves room for the salad special.',
+      orderedAt: minAgo(120),
+      expectedAt: minAgo(-840),
+      receivedAt: null,
+      createdBy: 'owner',
+      createdAt: minAgo(140),
+      updatedAt: minAgo(120),
+      lines: [
+        { id: 'po_seed_3_l1', inventoryItemId: 'inv_lettuce', name: 'Romaine lettuce', unit: 'head', qty: 24, unitCost: 1.35, receivedQty: 0 },
+        { id: 'po_seed_3_l2', inventoryItemId: 'inv_tomato', name: 'Tomato', unit: 'kg', qty: 10, unitCost: 2.4, receivedQty: 0 },
+      ],
+      tax: 0,
+      shipping: 0,
+      totals: { subtotal: 56.4, tax: 0, shipping: 0, total: 56.4 },
+    },
+  ]
+
+  // The ledger: opening balances, the two receipts above, and the sales the
+  // seed orders represent. Signed quantity, costed at the time it moved.
+  const buyMovements = [
+    {
+      id: 'mv_seed_1', at: minAgo(2 * 1440), itemId: 'inv_salmon', name: 'Salmon fillet', unit: 'each',
+      kind: 'buy', qty: 12, unitCost: 5.8, value: 69.6, ref: 'po_seed_1', note: 'PO-0098', by: 'owner',
+    },
+    {
+      id: 'mv_seed_2', at: minAgo(2 * 1440), itemId: 'inv_steak', name: 'Ribeye steak', unit: 'each',
+      kind: 'buy', qty: 10, unitCost: 8.5, value: 85, ref: 'po_seed_2', note: 'PO-0099', by: 'owner',
+    },
+    {
+      id: 'mv_seed_3', at: minAgo(2 * 1440), itemId: 'inv_patty', name: 'Beef patty 6oz', unit: 'each',
+      kind: 'buy', qty: 48, unitCost: 2.25, value: 108, ref: 'po_seed_2', note: 'PO-0099', by: 'owner',
+    },
+  ]
+
+  // Waste the shift logged, mirrored into the ledger the same way the
+  // LOG_WASTE action does it: negative quantity, costed at the time.
+  const wasteMovements = wasteLog.map((entry, index) => {
+    const item = inventory.find((row) => row.id === entry.inventoryItemId)
+    const qty = Math.abs(Number(entry.qty) || 0)
+    const unitCost = Number(item?.lastCost) || 0
+    return {
+      id: `mv_waste_${index + 1}`,
+      at: entry.at,
+      itemId: entry.inventoryItemId,
+      name: item?.name || entry.inventoryItemId,
+      unit: item?.unit || '',
+      kind: 'waste',
+      qty: -qty,
+      unitCost,
+      value: -Math.round(qty * unitCost * 100) / 100,
+      ref: null,
+      note: entry.reason || 'waste',
+      by: entry.by || 'owner',
+    }
+  })
+
+  // Opening balances are back-filled from today's count minus what has
+  // moved since, so opening + in − out always equals on-hand.
+  const movements = reseatOpeningBalances(inventory, [...buyMovements, ...wasteMovements], { at: minAgo(7 * 1440), by: 'owner' })
+
   const invoiceLog = [
     { id: 'invlog_0', vendor: 'Harbor Fish', at: minAgo(7 * 1440), lines: [{ inventoryItemId: 'inv_salmon', qty: 12, unitCost: 5.18 }] },
-    { id: 'invlog_1', vendor: 'Harbor Fish', at: minAgo(1440), lines: [{ inventoryItemId: 'inv_salmon', qty: 12, unitCost: 5.8 }] },
-    { id: 'invlog_2', vendor: 'Prime Meats', at: minAgo(2 * 1440), lines: [{ inventoryItemId: 'inv_steak', qty: 10, unitCost: 8.5 }, { inventoryItemId: 'inv_patty', qty: 48, unitCost: 2.25 }] },
+    { id: 'invlog_1', vendor: 'Harbor Fish', supplierId: 'sup_fish', purchaseId: 'po_seed_1', reference: 'HF-2291', at: minAgo(2 * 1440), total: 69.6, lines: [{ inventoryItemId: 'inv_salmon', qty: 12, unitCost: 5.8 }] },
+    { id: 'invlog_2', vendor: 'Prime Meats', supplierId: 'sup_meats', purchaseId: 'po_seed_2', reference: 'PM-88410', at: minAgo(2 * 1440), total: 193, lines: [{ inventoryItemId: 'inv_steak', qty: 10, unitCost: 8.5 }, { inventoryItemId: 'inv_patty', qty: 48, unitCost: 2.25 }] },
   ]
+
+  const settings = {
+    ...defaultSettings('Downtown'),
+    restaurantName: 'Restora · Demo House',
+    locationShort: 'DT',
+    targetTurnMinutes: 45,
+    ticketMinutes: 18,
+    foodCostCap: 0.32,
+    rushHour: 18,
+    taxPct: 0.0875,
+    servicePct: 0,
+  }
+
+  // Plate cost is recorded when a dish leaves the kitchen. Without this,
+  // tomorrow's delivery would silently rewrite yesterday's margins.
+  const inventoryById = Object.fromEntries(inventory.map((item) => [item.id, item]))
+  const frozenOrders = orders.map((order) => ({
+    ...order,
+    items: order.items.map((item) => {
+      if (item.recipeSnapshot) return item
+      const recipe = recipes[item.menuItemId]
+      if (!recipe) return item
+      return { ...item, recipeSnapshot: { ...recipe, plateCost: plateCostFor(recipe, inventoryById, settings) } }
+    }),
+  }))
 
   return {
     version: 1,
@@ -466,7 +605,7 @@ export function buildSeed() {
     menu,
     recipes,
     inventory,
-    orders,
+    orders: frozenOrders,
     wasteLog,
     invoiceLog,
     turnHistory,
@@ -478,22 +617,78 @@ export function buildSeed() {
     recalls: {},
     categories,
     suppliers,
-    // Issued documents (invoices, receipts, tickets, reports) — the
-    // printed-number registry, newest last.
+    // Issued documents (invoices, receipts, tickets, reports, purchase
+    // orders) — the printed-number registry, newest last.
     documents: [],
-    settings: {
-      ...defaultSettings('Downtown'),
-      restaurantName: 'Restora · Demo House',
-      locationShort: 'DT',
-      targetTurnMinutes: 45,
-      ticketMinutes: 18,
-      foodCostCap: 0.32,
-      rushHour: 18,
-      taxPct: 0.0875,
-      servicePct: 0,
-    },
+    // Buy side: purchase orders (draft → ordered → received) and the
+    // signed stock-movement ledger every report reads.
+    purchases,
+    movements,
+    settings,
     meta: { seededAt: new Date(now()).toISOString() },
   }
+}
+
+/**
+ * Opening balances are a derived baseline: today's on-hand minus every
+ * non-opening movement. That keeps `opening + in − out = on hand` true for
+ * any ledger, which is exactly the identity the stock reports check.
+ */
+export function reseatOpeningBalances(inventory, movements, options = {}) {
+  const openings = movements.filter((move) => move.kind === 'opening')
+  const rest = movements.filter((move) => move.kind !== 'opening')
+  const netByItem = rest.reduce((acc, move) => {
+    acc[move.itemId] = (acc[move.itemId] || 0) + (Number(move.qty) || 0)
+    return acc
+  }, {})
+  const at = options.at || openings[0]?.at || new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+  const by = options.by || openings[0]?.by || 'owner'
+  const rows = []
+  for (const item of inventory) {
+    const existing = openings.find((move) => move.itemId === item.id)
+    const net = netByItem[item.id] || 0
+    const back = Math.round((item.onHand - net) * 1000) / 1000
+    const unitCost = Number(item.lastCost) || 0
+    const openingQty = Math.max(0, back)
+    if (existing || openingQty > 0) {
+      rows.push({
+        id: existing?.id || `mv_open_${item.id}`,
+        at: existing?.at || at,
+        itemId: item.id,
+        name: item.name,
+        unit: item.unit,
+        kind: 'opening',
+        qty: openingQty,
+        unitCost,
+        value: Math.round(openingQty * unitCost * 100) / 100,
+        ref: null,
+        note: existing?.note || 'opening count',
+        by: existing?.by || by,
+      })
+    }
+    // More moved through this SKU than it could ever have held — the book
+    // opened after the stock was already gone. Record the shortfall as a
+    // baseline correction so the ledger still adds up to today's count.
+    if (back < 0) {
+      rows.push({
+        id: existing?.id ? `mv_base_${item.id}` : `mv_base_${item.id}`,
+        at: at,
+        itemId: item.id,
+        name: item.name,
+        unit: item.unit,
+        kind: 'adjust',
+        baseline: true,
+        qty: Math.round(back * 1000) / 1000,
+        unitCost,
+        value: Math.round(back * unitCost * 100) / 100,
+        ref: null,
+        note: 'opening book correction',
+        by,
+      })
+    }
+  }
+  const sortByTime = (a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()
+  return [...rows, ...rest].map((move) => ({ ...move })).sort(sortByTime)
 }
 
 // ─── Second store: Riverside ──────────────────────────────────────

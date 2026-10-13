@@ -257,7 +257,17 @@ function withShopDefaults(shop, locationLabel = 'Downtown') {
       : { ...item, supplierId: supplierByName.get(item.vendor.toLowerCase()) || null }
   ))
   const documents = (Array.isArray(shop.documents) ? shop.documents : []).slice(-300)
-  return { ...shop, menu, inventory: linkedInventory, categories, suppliers, documents, settings }
+  const purchases = (Array.isArray(shop.purchases) ? shop.purchases : [])
+    .map((purchase) => normalizePurchase(purchase, purchase, purchase?.id || uid('po')))
+    .filter(Boolean)
+    .slice(-400)
+  const movements = (Array.isArray(shop.movements) ? shop.movements : [])
+    .filter((movement) => movement && movement.itemId && Number.isFinite(Number(movement.qty)))
+    .slice(-MAX_MOVEMENTS)
+  return {
+    ...shop, menu, inventory: linkedInventory, categories, suppliers, documents,
+    purchases, movements, settings,
+  }
 }
 
 /** Rebuild the category tree defaults when a legacy snapshot had none. */
@@ -269,6 +279,195 @@ function seedCategoriesIfEmpty(shop) {
 function uniqueMenuName(menu, itemId, name) {
   const normalized = String(name ?? '').trim().toLocaleLowerCase()
   return normalized && !menu.some((item) => item.id !== itemId && item.name.toLocaleLowerCase() === normalized)
+}
+
+// ─── Stock movements: one ledger for every in/out ───────────────────
+// Sales, waste, counts, deliveries and purchases all land here, signed,
+// so the in/out report and the per-item history read one array.
+
+const MAX_MOVEMENTS = 4000
+
+export const MOVEMENT_KINDS = [
+  { id: 'buy', label: 'Purchase', direction: 'in', icon: 'cart' },
+  { id: 'opening', label: 'Opening stock', direction: 'in', icon: 'inventory' },
+  { id: 'return', label: 'Return to vendor', direction: 'out', icon: 'swap' },
+  { id: 'sale', label: 'Sold', direction: 'out', icon: 'orders' },
+  { id: 'waste', label: 'Waste', direction: 'out', icon: 'trash' },
+  { id: 'count', label: 'Count variance', direction: 'adjust', icon: 'check' },
+  { id: 'adjust', label: 'Manual adjust', direction: 'adjust', icon: 'settings' },
+]
+
+const MOVEMENT_LABEL = Object.fromEntries(MOVEMENT_KINDS.map((kind) => [kind.id, kind.label]))
+
+/**
+ * Apply signed stock deltas and record the matching movements.
+ * `lines` = [{ inventoryItemId, qty (signed), unitCost, kind, ref, note }]
+ */
+function applyStockLines(state, lines, meta = {}) {
+  const precision = Math.trunc(Number(state.settings?.stock?.autoReceiveThousandths) || 2)
+  const at = meta.at || new Date().toISOString()
+  const by = meta.by || 'system'
+  const allowNegative = meta.allowNegative === true
+  const byId = Object.fromEntries(state.inventory.map((item) => [item.id, item]))
+  const movements = []
+
+  const inventory = state.inventory.map((item) => {
+    const hits = lines.filter((line) => line.inventoryItemId === item.id && Number(line.qty))
+    if (!hits.length) return item
+    let next = item
+    for (const hit of hits) {
+      const qty = roundQty(hit.qty, precision)
+      if (!qty) continue
+      const onHand = roundQty(next.onHand + qty, precision)
+      if (!allowNegative && onHand < 0 && qty < 0) {
+        // Policy: never let a decrement invent negative stock.
+        const capped = roundQty(-next.onHand, precision)
+        if (!capped) continue
+        movements.push(movementEntry(next, { ...hit, qty: capped }, at, by))
+        next = { ...next, onHand: 0 }
+        continue
+      }
+      movements.push(movementEntry(next, { ...hit, qty }, at, by, byId))
+      if (!allowNegative && onHand < 0) next = { ...next, onHand: 0 }
+      else next = { ...next, onHand }
+      if (qty > 0 && hit.unitCost != null) {
+        const unitCost = Number(hit.unitCost)
+        const prevQty = Math.max(0, Number(item.onHand) || 0)
+        const prevAvg = Number(item.avgCost) || Number(item.lastCost) || 0
+        const newQty = next.onHand
+        next = {
+          ...next,
+          lastCost: Number.isFinite(unitCost) ? Math.round(unitCost * 10000) / 10000 : next.lastCost,
+          avgCost: newQty > 0
+            ? Math.round((((prevQty * prevAvg) + (qty * (Number.isFinite(unitCost) ? unitCost : prevAvg))) / newQty) * 10000) / 10000
+            : next.avgCost,
+        }
+      }
+    }
+    return next
+  })
+
+  if (!movements.length) return null
+  return { inventory, movements }
+}
+
+function movementEntry(item, hit, at, by, byId) {
+  const unitCost = Number.isFinite(Number(hit.unitCost))
+    ? Number(hit.unitCost)
+    : Number(byId?.[item.id]?.lastCost) || Number(item.lastCost) || 0
+  return {
+    id: uid('mv'),
+    at,
+    itemId: item.id,
+    name: hit.name || item.name,
+    unit: item.unit,
+    kind: hit.kind || 'adjust',
+    qty: hit.qty,
+    unitCost: Math.round(unitCost * 10000) / 10000,
+    value: Math.round(hit.qty * unitCost * 100) / 100,
+    ref: hit.ref || null,
+    note: hit.note || '',
+    by,
+  }
+}
+
+function pushMovements(state, movements) {
+  return [...(state.movements || []), ...movements].slice(-MAX_MOVEMENTS)
+}
+
+/** Stock deltas that come from a sale: theoretical recipe usage, costed. */
+function saleMovements(shop, decMap, meta) {
+  return Object.entries(decMap)
+    .filter(([, qty]) => Number(qty) > 0)
+    .map(([inventoryItemId, qty]) => ({
+      inventoryItemId,
+      qty: -roundQty(qty, 3),
+      kind: 'sale',
+      ref: meta.ref,
+      note: meta.note,
+    }))
+}
+
+// ─── Purchase orders ────────────────────────────────────────────────
+
+export const PURCHASE_STATUSES = ['draft', 'ordered', 'received', 'cancelled']
+
+const PURCHASE_STATUS_META = {
+  draft: { label: 'Draft', tone: 'muted' },
+  ordered: { label: 'Ordered', tone: 'info' },
+  received: { label: 'Received', tone: 'ok' },
+  cancelled: { label: 'Cancelled', tone: 'bad' },
+}
+
+export { PURCHASE_STATUS_META }
+
+/** Advance the purchase number sequence past a number we just handed out. */
+function bumpPurchaseNumber(settings, number) {
+  const match = String(number || '').match(/(\d+)\s*$/)
+  if (!match || !settings?.numbering?.purchase) return settings
+  const used = Number(match[1])
+  if (!Number.isFinite(used) || used < settings.numbering.purchase.next) return settings
+  return {
+    ...settings,
+    numbering: {
+      ...settings.numbering,
+      purchase: { ...settings.numbering.purchase, next: used + 1 },
+    },
+  }
+}
+
+/** Keep a purchase small, valid, and printable. */
+function normalizePurchase(raw, existing, fallbackId) {
+  if (!raw || typeof raw !== 'object') return null
+  const lines = (Array.isArray(raw.lines) ? raw.lines : [])
+    .map((line) => {
+      const qty = Math.max(0, Math.round((Number(line?.qty) || 0) * 1000) / 1000)
+      const unitCost = Math.max(0, Math.round((Number(line?.unitCost) || 0) * 10000) / 10000)
+      const receivedQty = Math.max(0, Math.round((Number(line?.receivedQty) || 0) * 1000) / 1000)
+      if (!line?.inventoryItemId || (!qty && !receivedQty)) return null
+      return {
+        id: String(line.id || uid('pline')).slice(0, 40),
+        inventoryItemId: String(line.inventoryItemId).slice(0, 60),
+        name: String(line.name || '').slice(0, 80),
+        unit: String(line.unit || '').slice(0, 12),
+        qty,
+        unitCost,
+        receivedQty,
+      }
+    })
+    .filter(Boolean)
+    .slice(0, 60)
+  if (!lines.length) return null
+
+  const status = PURCHASE_STATUSES.includes(raw.status) ? raw.status : 'draft'
+  const tax = Math.max(0, Math.round((Number(raw.tax) || 0) * 100) / 100)
+  const shipping = Math.max(0, Math.round((Number(raw.shipping) || 0) * 100) / 100)
+  const subtotal = Math.round(lines.reduce((sum, line) => sum + line.qty * line.unitCost, 0) * 100) / 100
+  const nowIso = new Date().toISOString()
+  return {
+    id: String(raw.id || fallbackId).slice(0, 60),
+    number: String(raw.number || existing?.number || '').slice(0, 40),
+    supplierId: raw.supplierId ? String(raw.supplierId).slice(0, 60) : null,
+    vendor: String(raw.vendor || '').slice(0, 80),
+    reference: String(raw.reference || '').slice(0, 60),
+    status,
+    note: String(raw.note || '').slice(0, 400),
+    orderedAt: raw.orderedAt ? String(raw.orderedAt).slice(0, 40) : status === 'ordered' ? nowIso : null,
+    expectedAt: raw.expectedAt ? String(raw.expectedAt).slice(0, 40) : null,
+    receivedAt: raw.receivedAt ? String(raw.receivedAt).slice(0, 40) : existing?.receivedAt || null,
+    createdBy: String(raw.createdBy || existing?.createdBy || 'owner').slice(0, 40),
+    createdAt: existing?.createdAt || nowIso,
+    updatedAt: nowIso,
+    lines,
+    tax,
+    shipping,
+    totals: {
+      subtotal,
+      tax,
+      shipping,
+      total: Math.round((subtotal + tax + shipping) * 100) / 100,
+    },
+  }
 }
 
 /** Re-label menu + inventory items when a category is renamed or merged. */
@@ -466,7 +665,11 @@ function shopReducerBase(state, action) {
         const status = o.status === 'open' ? 'sent' : o.status === 'sent' ? 'in_prep' : o.status
         return { ...o, items, status, sentAt: o.sentAt || nowIso }
       })
-      const inventory = decrementInventory(state.inventory, totalDec, -1)
+      const sale = applyStockLines(state, saleMovements(state, totalDec, {
+        ref: orderId,
+        note: `fired ${heldItems.reduce((sum, item) => sum + item.qty, 0)} line(s)`,
+      }), { at: nowIso, by: order.serverId || 'server' })
+      const inventory = sale ? sale.inventory : state.inventory
       // Floor follows the ticket: first send moves seated -> ordered
       let tables = state.tables
       const table = state.tables.find((t) => t.id === order.tableId)
@@ -486,7 +689,14 @@ function shopReducerBase(state, action) {
         itemIds: [...firedIds],
         restore: totalDec,
       }
-      return { ...state, orders, inventory, tables, pendingUndo }
+      return {
+        ...state,
+        orders,
+        inventory,
+        movements: sale ? pushMovements(state, sale.movements) : state.movements,
+        tables,
+        pendingUndo,
+      }
     }
 
     case 'GUEST_SEND': {
@@ -535,7 +745,11 @@ function shopReducerBase(state, action) {
           ? { ...o, items: [...o.items, ...newLines], status: o.status === 'open' ? 'sent' : o.status === 'sent' ? 'in_prep' : o.status, sentAt: o.sentAt || nowIso }
           : o,
       )
-      const inventory = decrementInventory(state.inventory, totalDec, -1)
+      const sale = applyStockLines(state, saleMovements(state, totalDec, {
+        ref: order.id,
+        note: `${newLines.reduce((sum, line) => sum + line.qty, 0)} line(s) from the QR menu`,
+      }), { at: nowIso, by: 'guest' })
+      const inventory = sale ? sale.inventory : state.inventory
       if (table.status === 'seated') {
         tables = tables.map((t) =>
           t.id === tableId ? { ...t, status: 'ordered', currentCheckId: order.id } : t,
@@ -546,7 +760,14 @@ function shopReducerBase(state, action) {
         expiresAt: Date.now() + TARGETS.undoSendSeconds * 1000,
         itemIds: newLines.map((l) => l.id), restore: totalDec,
       }
-      return { ...state, orders, inventory, tables, pendingUndo }
+      return {
+        ...state,
+        orders,
+        inventory,
+        movements: sale ? pushMovements(state, sale.movements) : state.movements,
+        tables,
+        pendingUndo,
+      }
     }
 
     case 'UNDO_SEND': {
@@ -562,7 +783,28 @@ function shopReducerBase(state, action) {
         const anyFired = items.some((i) => i.status === 'fired')
         return { ...o, items, status: anyFired ? o.status : 'open', sentAt: anyFired ? o.sentAt : null }
       })
-      const inventory = decrementInventory(state.inventory, pu.restore, +1)
+      // The fire never happened: put the stock back and drop the sale rows
+      // it wrote, so the in/out report never counts a sale that was undone.
+      const restored = applyStockLines(state, Object.entries(pu.restore || {})
+        .filter(([, qty]) => Number(qty) > 0)
+        .map(([inventoryItemId, qty]) => ({
+          inventoryItemId,
+          qty: roundQty(qty, 3),
+          kind: 'adjust',
+          ref: orderId,
+          note: 'undo send',
+          unitCost: 0,
+        })), { by: 'server' })
+      const movements = (state.movements || []).filter(
+        (movement) => !(movement.ref === orderId && movement.kind === 'sale'),
+      )
+      const inventory = restored
+        ? restored.inventory.map((item) => {
+          // Undo restores quantity, never re-writes what a purchase cost.
+          const before = state.inventory.find((entry) => entry.id === item.id)
+          return { ...item, lastCost: before?.lastCost, avgCost: before?.avgCost }
+        })
+        : state.inventory
       // If nothing fired anymore, table drops back ordered -> seated (undo path)
       let tables = state.tables
       const order = state.orders.find((o) => o.id === orderId)
@@ -574,7 +816,7 @@ function shopReducerBase(state, action) {
           t.id === order.tableId && t.status === 'ordered' ? { ...t, status: 'seated' } : t,
         )
       }
-      return { ...state, orders, inventory, tables, pendingUndo: null }
+      return { ...state, orders, inventory, movements, tables, pendingUndo: null }
     }
 
     case 'EXPIRE_UNDO':
@@ -768,53 +1010,222 @@ function shopReducerBase(state, action) {
 
     // ── Inventory ──────────────────────────────────────────
     case 'RECEIVE_INVOICE': {
-      // lines: [{inventoryItemId, qty, unitCost}] · supplierId links the
-      // delivery to a vendor row so spend and reorder lists stay honest.
+      // Quick delivery without a purchase order. lines:
+      // [{inventoryItemId, qty, unitCost}] · supplierId links the delivery
+      // to a vendor row so spend and reorder lists stay honest.
       const { vendor, lines = [], supplierId = null } = action
       const precision = Math.trunc(Number(state.settings?.stock?.autoReceiveThousandths) || 2)
-      const received = []
-      const inventory = state.inventory.map((item) => {
-        const line = lines.find((l) => l.inventoryItemId === item.id)
+      const received = lines
+        .map((line) => {
+          const item = state.inventory.find((entry) => entry.id === line.inventoryItemId)
+          const qty = roundQty(line.qty, precision)
+          if (!item || !(qty > 0)) return null
+          const unitCost = Number.isFinite(Number(line.unitCost)) && Number(line.unitCost) >= 0
+            ? Number(line.unitCost)
+            : Number(item.lastCost) || 0
+          return { inventoryItemId: item.id, qty, unitCost, name: item.name }
+        })
+        .filter(Boolean)
+      if (!received.length) return state
+
+      const at = new Date().toISOString()
+      const supplier = state.suppliers.find((entry) => entry.id === supplierId)
+      const intake = applyStockLines(
+        state,
+        received.map((line) => ({
+          inventoryItemId: line.inventoryItemId,
+          qty: line.qty,
+          unitCost: line.unitCost,
+          kind: 'buy',
+          ref: action.purchaseId || null,
+          note: vendor || supplier?.name || 'delivery',
+          name: line.name,
+        })),
+        { at, by: action.by || 'staff', allowNegative: true },
+      )
+      const inventory = intake.inventory.map((item) => {
+        const line = received.find((entry) => entry.inventoryItemId === item.id)
         if (!line) return item
-        const qty = roundQty(line.qty, precision)
-        if (!(qty > 0)) return item
-        const unitCost = Number.isFinite(Number(line.unitCost)) && Number(line.unitCost) >= 0
-          ? Number(line.unitCost)
-          : Number(item.lastCost) || 0
-        const prevQty = Math.max(0, Number(item.onHand) || 0)
-        const prevAvg = Number(item.avgCost) || Number(item.lastCost) || 0
-        const nextQty = roundQty(prevQty + qty, precision)
-        // Weighted average moves on every receipt; last cost follows the invoice.
-        const avgCost = nextQty > 0
-          ? Math.round((((prevQty * prevAvg) + (qty * unitCost)) / nextQty) * 10000) / 10000
-          : unitCost
-        received.push({ inventoryItemId: item.id, qty, unitCost })
         return {
           ...item,
-          onHand: nextQty,
-          lastCost: Math.round(unitCost * 10000) / 10000,
-          avgCost,
           vendor: vendor || item.vendor,
           supplierId: supplierId || item.supplierId,
-          incoming: Math.max(0, roundQty((Number(item.incoming) || 0) - qty, precision)),
+          incoming: Math.max(0, roundQty((Number(item.incoming) || 0) - line.qty, precision)),
         }
       })
-      if (!received.length) return state
-      const supplier = state.suppliers.find((entry) => entry.id === supplierId)
+      const total = Math.round(received.reduce((sum, line) => sum + line.qty * line.unitCost, 0) * 100) / 100
       const invoiceLog = [
         ...state.invoiceLog,
         {
           id: uid('invlog'),
           vendor: vendor || supplier?.name || 'Vendor',
           supplierId: supplierId || null,
-          at: new Date().toISOString(),
-          lines: received,
-          total: Math.round(received.reduce((sum, line) => sum + line.qty * line.unitCost, 0) * 100) / 100,
+          at,
+          lines: received.map(({ inventoryItemId, qty, unitCost }) => ({ inventoryItemId, qty, unitCost })),
+          total,
         },
       ]
       // Auto-86 is re-evaluated by the shopReducer wrapper right after this
       // case runs; manual 86 flags stay put until a manager clears them.
-      return { ...state, inventory, invoiceLog }
+      return {
+        ...state,
+        inventory,
+        movements: pushMovements(state, intake.movements),
+        invoiceLog,
+      }
+    }
+
+    // ── Purchases: buy items into stock ───────────────────────────────
+    case 'UPSERT_PURCHASE': {
+      const draft = normalizePurchase(
+        action.purchase,
+        state.purchases?.find((entry) => entry.id === action.purchase?.id),
+        uid('po'),
+      )
+      if (!draft) return state
+      if (draft.supplierId && !state.suppliers.some((entry) => entry.id === draft.supplierId)) {
+        draft.supplierId = null
+      }
+      // A received or cancelled purchase is history — only status changes
+      // and deletion are allowed from here on.
+      const existing = state.purchases?.find((entry) => entry.id === draft.id)
+      if (existing && ['received', 'cancelled'].includes(existing.status) && draft.status === existing.status) {
+        return state
+      }
+      const supplier = state.suppliers.find((entry) => entry.id === draft.supplierId)
+      draft.vendor = draft.vendor || supplier?.name || 'Vendor'
+      if (!draft.number) {
+        const counter = state.settings?.numbering?.purchase
+        draft.number = documentNumber(
+          state.settings,
+          'purchase',
+          counter?.next || 1,
+        )
+      }
+      const purchases = existing
+        ? state.purchases.map((entry) => (entry.id === draft.id ? draft : entry))
+        : [...(state.purchases || []), draft]
+      // The number sequence only advances for purchases that were really filed.
+      const settings = existing
+        ? state.settings
+        : bumpPurchaseNumber(state.settings, draft.number)
+      return { ...state, purchases, settings }
+    }
+
+    case 'SET_PURCHASE_STATUS': {
+      const purchase = state.purchases?.find((entry) => entry.id === action.purchaseId)
+      if (!purchase) return state
+      const status = PURCHASE_STATUSES.includes(action.status) ? action.status : null
+      if (!status || status === 'received' || purchase.status === 'received') return state
+      const nowIso = new Date().toISOString()
+      const purchases = state.purchases.map((entry) => (
+        entry.id === purchase.id
+          ? {
+            ...entry,
+            status,
+            updatedAt: nowIso,
+            orderedAt: status === 'ordered' ? (entry.orderedAt || nowIso) : entry.orderedAt,
+          }
+          : entry
+      ))
+      return { ...state, purchases }
+    }
+
+    case 'RECEIVE_PURCHASE': {
+      const purchase = state.purchases?.find((entry) => entry.id === action.purchaseId)
+      if (!purchase || purchase.status === 'received' || purchase.status === 'cancelled') return state
+      const precision = Math.trunc(Number(state.settings?.stock?.autoReceiveThousandths) || 2)
+      // Receiving may be partial: only lines flagged received (or all of them).
+      const wanted = Array.isArray(action.lines) && action.lines.length
+        ? action.lines
+        : purchase.lines
+      const received = wanted
+        .map((line) => {
+          const source = purchase.lines.find((entry) => entry.id === line.id)
+            || purchase.lines.find((entry) => entry.inventoryItemId === line.inventoryItemId)
+          const item = state.inventory.find((entry) => entry.id === source?.inventoryItemId)
+          const qty = roundQty(line.qty ?? source?.qty, precision)
+          if (!item || !(qty > 0)) return null
+          const unitCost = Number.isFinite(Number(line.unitCost)) && Number(line.unitCost) >= 0
+            ? Number(line.unitCost)
+            : Number(source?.unitCost) || Number(item.lastCost) || 0
+          return { inventoryItemId: item.id, qty, unitCost, name: item.name, source }
+        })
+        .filter(Boolean)
+      if (!received.length) return state
+
+      const at = new Date().toISOString()
+      const by = action.by || 'staff'
+      const supplier = state.suppliers.find((entry) => entry.id === purchase.supplierId)
+      const intake = applyStockLines(
+        state,
+        received.map((line) => ({
+          inventoryItemId: line.inventoryItemId,
+          qty: line.qty,
+          unitCost: line.unitCost,
+          kind: 'buy',
+          ref: purchase.id,
+          note: purchase.number,
+          name: line.name,
+        })),
+        { at, by, allowNegative: true },
+      )
+      const inventory = intake.inventory.map((item) => {
+        const line = received.find((entry) => entry.inventoryItemId === item.id)
+        if (!line) return item
+        return {
+          ...item,
+          vendor: purchase.vendor || supplier?.name || item.vendor,
+          supplierId: purchase.supplierId || item.supplierId,
+          incoming: Math.max(0, roundQty((Number(item.incoming) || 0) - line.qty, precision)),
+        }
+      })
+
+      const lines = purchase.lines.map((line) => {
+        const hit = received.find((entry) => entry.source?.id === line.id)
+        if (!hit) return line
+        return {
+          ...line,
+          unitCost: hit.unitCost,
+          receivedQty: roundQty((Number(line.receivedQty) || 0) + hit.qty, precision),
+        }
+      })
+      const fullyReceived = lines.every((line) => line.receivedQty >= line.qty)
+      const nextPurchase = {
+        ...purchase,
+        lines,
+        status: fullyReceived ? 'received' : 'ordered',
+        receivedAt: at,
+        updatedAt: at,
+      }
+      const receivedTotal = Math.round(received.reduce((sum, line) => sum + line.qty * line.unitCost, 0) * 100) / 100
+      const invoiceLog = [
+        ...state.invoiceLog,
+        {
+          id: uid('invlog'),
+          vendor: purchase.vendor || supplier?.name || 'Vendor',
+          supplierId: purchase.supplierId || null,
+          at,
+          purchaseId: purchase.id,
+          reference: purchase.reference || purchase.number,
+          lines: received.map(({ inventoryItemId, qty, unitCost }) => ({ inventoryItemId, qty, unitCost })),
+          total: receivedTotal,
+        },
+      ]
+      return {
+        ...state,
+        inventory,
+        purchases: state.purchases.map((entry) => (entry.id === purchase.id ? nextPurchase : entry)),
+        movements: pushMovements(state, intake.movements),
+        invoiceLog,
+      }
+    }
+
+    case 'DELETE_PURCHASE': {
+      const purchase = state.purchases?.find((entry) => entry.id === action.purchaseId)
+      // Received purchases are stock history — cancel, never delete.
+      if (!purchase || (purchase.status === 'received' && !action.force)) return state
+      return { ...state, purchases: state.purchases.filter((entry) => entry.id !== purchase.id) }
     }
 
     case 'LOG_WASTE': {
@@ -828,28 +1239,58 @@ function shopReducerBase(state, action) {
       const allowNegative = state.settings?.stock?.allowNegativeStock === true
       const qty = allowNegative ? requested : Math.min(requested, Number(item.onHand) || 0)
       if (!(qty > 0)) return state
-      const inventory = state.inventory.map((i) =>
-        i.id === inventoryItemId ? { ...i, onHand: roundQty(i.onHand - qty, precision) } : i,
-      )
+      const at = new Date().toISOString()
+      const waste = applyStockLines(state, [{
+        inventoryItemId,
+        qty: -qty,
+        kind: 'waste',
+        ref: null,
+        note: reason || '',
+      }], { at, by: action.by || 'staff', allowNegative })
+      const inventory = waste ? waste.inventory : state.inventory
       const wasteLog = [
         ...state.wasteLog,
         {
           id: uid('w'), inventoryItemId, qty, reason,
-          at: new Date().toISOString(),
+          at,
           by: action.by || 'staff',
           value: Math.round(qty * (Number(item.lastCost) || 0) * 100) / 100,
         },
       ]
-      return { ...state, inventory, wasteLog }
+      return {
+        ...state,
+        inventory,
+        movements: waste ? pushMovements(state, waste.movements) : state.movements,
+        wasteLog,
+      }
     }
 
     case 'COUNT_STOCK': {
-      // Close count sets counted on-hand directly (variance is derived)
+      // Close count sets counted on-hand directly; the difference against
+      // the book becomes a signed count movement so shrinkage is visible.
       const { counts } = action // { inventoryItemId: qty }
-      const inventory = state.inventory.map((i) =>
-        counts[i.id] != null ? { ...i, onHand: Number(counts[i.id]) } : i,
-      )
-      return { ...state, inventory }
+      const lines = state.inventory
+        .filter((item) => counts?.[item.id] != null)
+        .map((item) => ({
+          inventoryItemId: item.id,
+          qty: roundQty(Number(counts[item.id]) - Number(item.onHand), 3),
+          kind: 'count',
+          note: action.note || '',
+        }))
+        .filter((line) => line.qty !== 0)
+      const counted = applyStockLines(state, lines, { by: action.by || 'staff', allowNegative: true })
+      const inventory = counted
+        ? counted.inventory.map((item) => {
+          // A count corrects quantity — it never re-prices the item.
+          const before = state.inventory.find((entry) => entry.id === item.id)
+          return before ? { ...item, lastCost: before.lastCost, avgCost: before.avgCost } : item
+        })
+        : state.inventory
+      return {
+        ...state,
+        inventory,
+        movements: counted ? pushMovements(state, counted.movements) : state.movements,
+      }
     }
 
     // ── Menu / costing ─────────────────────────────────────
@@ -1175,7 +1616,8 @@ function shopReducerBase(state, action) {
 // out stops selling everywhere at once; receiving brings it back.
 const STOCK_ACTIONS = new Set([
   'SEND_ORDER', 'GUEST_SEND', 'UNDO_SEND', 'LOG_WASTE', 'COUNT_STOCK',
-  'RECEIVE_INVOICE', 'ADD_INVENTORY_ITEM', 'UPDATE_INVENTORY_ITEM', 'DELETE_INVENTORY_ITEM',
+  'RECEIVE_INVOICE', 'RECEIVE_PURCHASE',
+  'ADD_INVENTORY_ITEM', 'UPDATE_INVENTORY_ITEM', 'DELETE_INVENTORY_ITEM',
 ])
 
 function shopReducer(state, action) {
@@ -1189,7 +1631,7 @@ function shopReducer(state, action) {
 // Every shop action travels wrapped: { type: 'LOC', locId, action: inner }.
 // RESET_ALL reseeds the whole empire; HYDRATE swaps it (bootstrap only).
 
-export const STATE_VERSION = 3
+export const STATE_VERSION = 4
 
 export function buildEmpire() {
   const downtown = buildSeed()
@@ -1205,7 +1647,7 @@ const LOCATION_LABELS = { downtown: 'Downtown', riverside: 'Riverside' }
 
 export function migrateToEmpire(old) {
   if (!old) return null
-  if (old.locations && (old.version === 2 || old.version === STATE_VERSION)) {
+  if (old.locations && old.version >= 2 && old.version <= STATE_VERSION) {
     return {
       version: STATE_VERSION,
       ...old,
