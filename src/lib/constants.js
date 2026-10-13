@@ -157,3 +157,17 @@ export const TONE_CLASSES = {
   info: 'bg-sky-500/15 text-sky-300 ring-sky-500/40',
   muted: 'bg-zinc-500/15 text-zinc-300 ring-zinc-500/40',
 }
+
+// Which screen owns each alert — drives the notification jump and the
+// live badge on each workspace tab.
+export function screenForAlert(alert) {
+  if (alert.type === 'late_ticket') return 'kitchen'
+  if (alert.type === 'long_turn' || alert.type === 'call_server') return 'floor'
+  if (alert.type === 'low_stock') return 'inventory'
+  if (alert.type === 'negative_margin') return 'costing'
+  if (alert.type === 'bill_request') return 'tickets'
+  return alert.type === '86' && alert.key.startsWith('out_') ? 'inventory' : 'kitchen'
+}
+
+// Alerts that mean "act now" render red on the tab badge; the rest amber.
+export const CRITICAL_ALERTS = new Set(['late_ticket', 'bill_request', 'call_server'])

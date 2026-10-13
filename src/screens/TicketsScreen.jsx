@@ -4,7 +4,7 @@
 // kitchen owns the item. 86 blocked with substitute. Required mods
 // enforced. Theoretical stock drops on fire (store), not on draft.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import StatusPill from '../components/StatusPill'
 import { Field, Modal, Stepper, btnGhost, btnPrimary, inputCls } from '../components/ui'
 import { TICKET_STATUS_META } from '../lib/constants'
@@ -946,11 +946,11 @@ function NewCheckModal({ onClose, onCreated }) {
 // ─── Screen ─────────────────────────────────────────────────────
 
 export default function TicketsScreen() {
-  const { state, dispatch, selectedTableId, setSelectedTableId, selectedOrderId, setSelectedOrderId } = useRestora()
+  const { state, dispatch, selectedTableId, setSelectedTableId, selectedOrderId, setSelectedOrderId, tabCtx, setTabCtx } = useRestora()
   const [tab, setTab] = useState('active')
   const [tableFilter, setTableFilter] = useState('')
   const [serverFilter, setServerFilter] = useState('')
-  const [selectedId, setSelectedId] = useState(null)
+  const [selectedId, setSelectedId] = useState(tabCtx.ticketOrder || null)
   const [newOpen, setNewOpen] = useState(false)
   const [pendingTable, setPendingTable] = useState(null)
   const [banner, setBanner] = useState(null)
@@ -961,12 +961,18 @@ export default function TicketsScreen() {
     flash._t = window.setTimeout(() => setBanner(null), 4200)
   }
 
+  // The open check lives on the tab, so switching tabs and back keeps it.
+  const selectOrder = useCallback((id) => {
+    setSelectedId(id)
+    setTabCtx({ ticketOrder: id || null })
+  }, [setTabCtx])
+
   // Search/Floor handoff opens the exact order or starts a check for a selected table.
   useEffect(() => {
     if (selectedOrderId) {
       const order = state.orders.find((item) => item.id === selectedOrderId)
       if (order) {
-        setSelectedId(order.id)
+        selectOrder(order.id)
         setTab(TABS.find((item) => item.match(order.status))?.id || 'active')
       }
       setSelectedOrderId(null)
@@ -977,7 +983,7 @@ export default function TicketsScreen() {
     if (!table) return
     const existing = openOrderForTable(state.orders, selectedTableId)
     if (existing) {
-      setSelectedId(existing.id)
+      selectOrder(existing.id)
       setTab(TABS.find((item) => item.match(existing.status))?.id || 'active')
     } else if (table.status === 'seated' || table.status === 'ordered') {
       setPendingTable(selectedTableId)
@@ -992,16 +998,16 @@ export default function TicketsScreen() {
     if (!pendingTable) return
     const created = openOrderForTable(state.orders, pendingTable)
     if (created) {
-      setSelectedId(created.id)
+      selectOrder(created.id)
       setTab('active')
       setPendingTable(null)
     }
-  }, [state.orders, pendingTable])
+  }, [state.orders, pendingTable, selectOrder])
 
   // Keep selection valid as tickets pay/void
   useEffect(() => {
-    if (selectedId && !state.orders.some((o) => o.id === selectedId)) setSelectedId(null)
-  }, [state.orders, selectedId])
+    if (selectedId && !state.orders.some((o) => o.id === selectedId)) selectOrder(null)
+  }, [state.orders, selectedId, selectOrder])
 
   const activeOrders = state.orders.filter((order) => ['open', 'sent', 'in_prep'].includes(order.status)).length
   const readyOrders = state.orders.filter((order) => ['ready', 'served'].includes(order.status)).length
@@ -1041,7 +1047,7 @@ export default function TicketsScreen() {
           serverFilter={serverFilter}
           setServerFilter={setServerFilter}
           selectedId={selectedId}
-          onSelect={setSelectedId}
+          onSelect={selectOrder}
           onNew={() => setNewOpen(true)}
         />
         <div className="xl:col-span-2">

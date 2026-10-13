@@ -169,9 +169,58 @@ body {
   color: #202328;
 }
 
- .restora-theme .app-tabs {
-  border-bottom-color: #eceef0;
-  background: #fff;
+.restora-theme .app-tabs {
+  border-bottom: 1px solid #dfe3e8;
+  background: #eceef0;
+}
+
+/* Chrome-style tabs: the active tab rises out of the strip and merges
+   with the content surface below it. */
+.restora-theme .tab-list {
+  scrollbar-width: none;
+  cursor: default;
+}
+.restora-theme .tab-list::-webkit-scrollbar {
+  display: none;
+}
+.restora-theme .restora-tab {
+  cursor: grab;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.restora-theme .restora-tab-active {
+  margin-bottom: -1px;
+  box-shadow: 0 -1px 3px rgba(22, 30, 40, 0.05);
+}
+.restora-theme .tab-accent {
+  position: absolute;
+  top: 0;
+  left: 9px;
+  right: 9px;
+  height: 2px;
+  border-radius: 2px;
+  background: #f36a21;
+}
+.restora-theme .restora-tab-dragging {
+  z-index: 20;
+  cursor: grabbing;
+  opacity: 0.97;
+  box-shadow: 0 10px 24px rgba(22, 30, 40, 0.22);
+}
+.restora-theme .tab-drop {
+  align-self: flex-end;
+  flex-shrink: 0;
+  width: 2px;
+  height: 26px;
+  margin: 0 -1px 5px;
+  border-radius: 2px;
+  background: #f36a21;
+}
+@keyframes tab-pulse {
+  70% { box-shadow: 0 0 0 5px rgba(239, 68, 68, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+.restora-theme .tab-badge.bg-red-500 {
+  animation: tab-pulse 1.6s ease-out infinite;
 }
 
 .restora-theme .app-workspace {

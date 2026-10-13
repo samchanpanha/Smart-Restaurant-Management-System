@@ -686,8 +686,8 @@ function FloorMap({ tables, onOpen }) {
 // ─── Screen ─────────────────────────────────────────────────────
 
 export default function FloorScreen() {
-  const { state, selectedTableId, setSelectedTableId } = useRestora()
-  const [detailTableId, setDetailTableId] = useState(null)
+  const { state, selectedTableId, setSelectedTableId, tabCtx, setTabCtx } = useRestora()
+  const [detailTableId, setDetailTableId] = useState(tabCtx.floorTable || null)
   const [seatCtx, setSeatCtx] = useState(null) // { tableId, party, name, reservationId, waitlistId }
   const [banner, setBanner] = useState(null)
   const [view, setView] = useState('map')
@@ -710,6 +710,7 @@ export default function FloorScreen() {
       setSeatCtx({ tableId: table.id, party: Math.min(table.seats, 4), name: '' })
     } else {
       setDetailTableId(table.id)
+      setTabCtx({ floorTable: table.id })
     }
   }
 
@@ -771,7 +772,7 @@ export default function FloorScreen() {
       {detailTable && (
         <TableDetail
           table={detailTable}
-          onClose={() => { setDetailTableId(null); setSelectedTableId(null) }}
+          onClose={() => { setDetailTableId(null); setSelectedTableId(null); setTabCtx({ floorTable: null }) }}
           onSeat={(id) => setSeatCtx({ tableId: id, party: 2, name: '' })}
           onError={flash}
         />

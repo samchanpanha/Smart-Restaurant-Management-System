@@ -1,10 +1,12 @@
 // ─── Restora application shell ──────────────────────────────────────
 // Warm orange / white operations UI with a charcoal navigation rail.
-// Workspace tabs remain available above each stateful app screen.
+// The Chrome-style tab strip lives in TabStrip.jsx above each screen.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import StatusPill from './StatusPill'
-import { NAV_SECTIONS, ROLES, ROLE_NAV } from '../lib/constants'
+import TabStrip from './TabStrip'
+import { Icon } from './Icon'
+import { ROLES, ROLE_NAV, screenForAlert } from '../lib/constants'
 import { getAlerts, LOCATIONS, useNow, useRestora } from '../lib/store'
 
 const NAV_ITEMS = [
@@ -19,60 +21,6 @@ const NAV_ITEMS = [
   { id: 'system', label: 'Settings', icon: 'settings' },
 ]
 
-const TAB_LABELS = Object.fromEntries(NAV_SECTIONS.flatMap((section) => section.items.map((item) => [item.id, item.label])))
-const TAB_GLYPHS = {
-  dashboard: '◫', floor: '▦', tickets: '▤', kitchen: '♨',
-  inventory: '▧', menu: '☷', reports: '▥', costing: '◈', system: '⚙',
-}
-
-const ICONS = {
-  dashboard: <><rect x="3" y="3" width="8" height="8" rx="1.5" /><rect x="13" y="3" width="8" height="5" rx="1.5" /><rect x="13" y="10" width="8" height="11" rx="1.5" /><rect x="3" y="13" width="8" height="8" rx="1.5" /></>,
-  orders: <><path d="M7 3.75h8l4 4V20a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 20V5.25a1.5 1.5 0 0 1 1.5-1.5Z" /><path d="M15 4v4h4M8 12h8M8 16h8" /></>,
-  tables: <><path d="M4 7h16M6 7v10m12-10v10M4 17h16M9 7v4h6V7M9 17v3m6-3v3" /><circle cx="6" cy="5" r="1.5" /><circle cx="18" cy="5" r="1.5" /></>,
-  kitchen: <><path d="M6 12a6 6 0 1 1 12 0v7H6v-7Z" /><path d="M9 19v2m6-2v2M12 2v3m-5-1 2 2m8-2-2 2M3 12h3m12 0h3" /></>,
-  inventory: <><path d="m12 2.8 8 4.3v9.8l-8 4.3-8-4.3V7.1l8-4.3Z" /><path d="m4.5 7.3 7.5 4.1 7.5-4.1M12 11.4v9.4M8 5l8 4.3" /></>,
-  menu: <><path d="M5 5h14M5 10h14M5 15h9M5 20h7" /><circle cx="18" cy="17" r="3" /></>,
-  costing: <><circle cx="12" cy="12" r="9" /><path d="M15.5 8.5c-.7-.7-1.6-1-2.7-1-1.4 0-2.3.7-2.3 1.8 0 2.7 5.1 1.2 5.1 4 0 1.2-1.1 2.1-2.7 2.1-1.2 0-2.2-.4-3-1.2M12 5.5v13" /></>,
-  reports: <><path d="M4 20V10m5 10V4m5 16v-7m5 7V7" /><path d="M2.5 20.5h19" /></>,
-  settings: <><circle cx="12" cy="12" r="3" /><path d="m19.4 15 .1.1 1.1 1.9-1.7 2.9-2.2-.5-.2.1-1.2 1.3h-3.4l-1.2-1.3-.2-.1-2.2.5-1.7-2.9 1.1-1.9.1-.2-.1-2.2-.1-.2-1.1-1.9 1.7-2.9 2.2.5.2-.1L11.8 7h3.4l1.2 1.3.2.1 2.2-.5 1.7 2.9-1.1 1.9-.1.2.1 2.1Z" transform="translate(-1 -1) scale(1.08)" /></>,
-  search: <><circle cx="10.8" cy="10.8" r="6.8" /><path d="m16 16 4.5 4.5" /></>,
-  bell: <><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4" /></>,
-  chevron: <path d="m7 10 5 5 5-5" />,
-  plus: <path d="M12 5v14m-7-7h14" />,
-}
-
-function Icon({ name, size = 20, className = '' }) {
-  return (
-    <svg
-      aria-hidden="true"
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      {ICONS[name] || ICONS.dashboard}
-    </svg>
-  )
-}
-
-function tabLabel(screen) {
-  return TAB_LABELS[screen] || 'New tab'
-}
-
-function screenForAlert(alert) {
-  if (alert.type === 'late_ticket') return 'kitchen'
-  if (alert.type === 'long_turn' || alert.type === 'call_server') return 'floor'
-  if (alert.type === 'low_stock') return 'inventory'
-  if (alert.type === 'negative_margin') return 'costing'
-  if (alert.type === 'bill_request') return 'tickets'
-  return alert.type === '86' && alert.key.startsWith('out_') ? 'inventory' : 'kitchen'
-}
-
 function displayOrderId(id) {
   const suffix = String(id || '').replace(/\D/g, '').slice(-4)
   return `#${suffix || String(id).slice(-4).toUpperCase()}`
@@ -81,7 +29,7 @@ function displayOrderId(id) {
 export default function AppShell({ children }) {
   const {
     state, dispatch, role, setRole, screen, setScreen, link, resync, notice, locId, setLocId,
-    tabs, activeTabId, openTab, activateTab, closeTab, setSelectedTableId, setSelectedDishId, setSelectedOrderId,
+    tabs, activeTabId, saveTabScroll, setSelectedTableId, setSelectedDishId, setSelectedOrderId,
   } = useRestora()
   const now = useNow(30000)
   const [search, setSearch] = useState('')
@@ -90,9 +38,7 @@ export default function AppShell({ children }) {
   const [profileOpen, setProfileOpen] = useState(false)
   const [locationOpen, setLocationOpen] = useState(false)
   const allowed = ROLE_NAV[role] || ROLE_NAV.owner
-  const visibleTabs = useMemo(() => tabs.filter((tab) => allowed.includes(tab.screen)), [allowed, tabs])
-  const newTabScreen = ROLE_NAV[role]?.[0] || 'floor'
-  const fallbackScreen = allowed.includes('floor') ? 'floor' : newTabScreen
+  const fallbackScreen = allowed.includes('floor') ? 'floor' : allowed[0]
   const alerts = useMemo(() => getAlerts(state), [state])
   const location = LOCATIONS.find((item) => item.id === locId) || LOCATIONS[0]
   const displayName = role === 'owner' ? 'Maya Chen' : ROLES[role]?.name || 'Restaurant team'
@@ -134,27 +80,21 @@ export default function AppShell({ children }) {
     return () => document.removeEventListener('pointerdown', closeMenusOnOutsideClick)
   }, [])
 
+  // Each tab keeps its own scroll offset, like a browser tab does.
+  const panelRef = useRef(null)
+  const prevTabRef = useRef(activeTabId)
+  const tabsRef = useRef(tabs)
+  tabsRef.current = tabs
   useEffect(() => {
-    function handleShortcut(event) {
-      if (!(event.ctrlKey || event.metaKey) || event.altKey) return
-      const key = event.key.toLowerCase()
-      if (key === 't' && !event.shiftKey) {
-        event.preventDefault()
-        openTab(newTabScreen)
-      } else if (key === 'w' && !event.shiftKey) {
-        event.preventDefault()
-        closeTab(activeTabId, fallbackScreen)
-      } else if (event.key === 'Tab') {
-        event.preventDefault()
-        const index = visibleTabs.findIndex((tab) => tab.id === activeTabId)
-        const step = event.shiftKey ? -1 : 1
-        const next = visibleTabs[(index + step + visibleTabs.length) % visibleTabs.length]
-        if (next) activateTab(next.id)
-      }
-    }
-    window.addEventListener('keydown', handleShortcut)
-    return () => window.removeEventListener('keydown', handleShortcut)
-  }, [activeTabId, activateTab, closeTab, fallbackScreen, newTabScreen, openTab, visibleTabs])
+    const panel = panelRef.current
+    if (!panel) return undefined
+    const previous = prevTabRef.current
+    if (previous && previous !== activeTabId) saveTabScroll(previous, panel.scrollTop)
+    prevTabRef.current = activeTabId
+    const target = tabsRef.current.find((tab) => tab.id === activeTabId)?.scroll || 0
+    const frame = requestAnimationFrame(() => { panel.scrollTop = target })
+    return () => cancelAnimationFrame(frame)
+  }, [activeTabId, saveTabScroll])
 
   function selectSearchResult(result) {
     if (result.orderId) { setSelectedTableId(null); setSelectedOrderId(result.orderId) }
@@ -355,25 +295,9 @@ export default function AppShell({ children }) {
           </div>
         </header>
 
-        <div className="app-tabs flex h-11 shrink-0 items-end gap-1 border-b border-[var(--color-ink-700)] px-3 pt-1">
-          <div className="flex min-w-0 flex-1 items-end gap-1 overflow-x-auto" role="tablist" aria-label="Workspace tabs">
-            {visibleTabs.map((tab) => {
-              const selected = tab.id === activeTabId
-              const label = tabLabel(tab.screen)
-              return (
-                <div key={tab.id} className={`group flex h-9 min-w-32 max-w-56 shrink-0 items-center rounded-t-lg border border-b-0 ${selected ? 'border-[var(--color-ink-700)] bg-[var(--color-ink-950)] text-zinc-900' : 'border-transparent bg-zinc-50 text-zinc-500 hover:bg-zinc-100'}`}>
-                  <button id={`workspace-tab-${tab.id}`} type="button" role="tab" aria-selected={selected} aria-controls="workspace-panel" onClick={() => activateTab(tab.id)} className="flex h-full min-w-0 flex-1 items-center gap-2 rounded-tl-lg px-3 text-left text-xs font-semibold" title={`${label} · ${LOCATIONS.find((item) => item.id === tab.locId)?.short || tab.locId}`}>
-                    <span className="shrink-0 text-[13px] text-orange-500" aria-hidden="true">{TAB_GLYPHS[tab.screen] || '◧'}</span><span className="truncate">{label}</span>
-                  </button>
-                  <button type="button" aria-label={`Close ${label} tab`} title="Close tab (Ctrl/⌘+W)" onClick={() => closeTab(tab.id, fallbackScreen)} className="mr-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-sm text-zinc-400 hover:bg-zinc-200 hover:text-zinc-800">×</button>
-                </div>
-              )
-            })}
-          </div>
-          <button type="button" aria-label="Open a new tab" title="New tab (Ctrl/⌘+T)" onClick={() => openTab(newTabScreen)} className="mb-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900"><Icon name="plus" size={19} /></button>
-        </div>
+        <TabStrip fallbackScreen={fallbackScreen} />
 
-        <div id="workspace-panel" role="tabpanel" aria-labelledby={`workspace-tab-${activeTabId}`} className="app-workspace min-h-0 flex-1 overflow-y-auto">
+        <div ref={panelRef} id="workspace-panel" role="tabpanel" aria-labelledby={`workspace-tab-${activeTabId}`} className="app-workspace min-h-0 flex-1 overflow-y-auto">
           <div className="app-page">
             {notice && <div className="animate-status-in mb-4 rounded-xl bg-sky-500/10 px-4 py-2.5 text-sm text-sky-800 ring-1 ring-inset ring-sky-500/30" role="status">{notice}</div>}
             {children}

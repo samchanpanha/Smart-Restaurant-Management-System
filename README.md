@@ -19,14 +19,27 @@ No backend needed for the demo: state persists to `localStorage`; **Reset demo d
 
 ## Workspace tabs
 
-The app includes a Chrome-style tab strip above the active screen. Use **+** to
-open a tab, select a tab to switch screens, and **×** to close one. Each tab
-keeps its own screen and store location; restaurant data remains shared. The
-last remaining tab closes back to the current role's default screen (Floor when
-available). Keyboard shortcuts: **Ctrl/⌘+T** opens
-a tab, **Ctrl/⌘+W** closes the active tab, and **Ctrl/⌘+Tab** switches tabs
-(**Ctrl/⌘+Shift+Tab** goes backward). Tabs are session-only and reset to one
-tab when the app reloads.
+A Chrome-style tab strip sits above the active screen. Each tab keeps its own
+screen, store location, open drawer (table / check / dish), and scroll
+position — restaurant data stays shared. The last remaining tab closes back to
+the current role's default screen (Floor when available). Up to 12 tabs; the
+10 most recently closed can be brought back.
+
+- **+** or **Ctrl/⌘+T** — new tab, opened next to the active one
+- click to switch · **×** or middle-click or **Ctrl/⌘+W** — close
+- drag a tab to reorder · double-click — rename · right-click — tab menu
+  (duplicate, rename, pin, close, close others, close tabs to the right)
+- **Pin** keeps a screen icon-only at the left, always open
+- **Ctrl/⌘+Tab** / **Ctrl/⌘+Shift+Tab** cycle · **Ctrl/⌘+1…9** jump (9 = last)
+- **Ctrl/⌘+Shift+T** reopens the last closed tab
+- Live alert badges: a tab whose screen needs attention carries a count —
+  red and pulsing for act-now alerts (late tickets, bill/call-server),
+  amber otherwise
+- A colored dot on each tab marks its store (Downtown / Riverside)
+
+Tabs survive a reload on the same terminal (session storage); kiosk URLs
+(`?role=…`) always boot a fresh single tab so shared devices never inherit
+the last operator's workspace.
 
 ## Two terminals, one truth (backend)
 

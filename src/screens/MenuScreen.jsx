@@ -483,13 +483,10 @@ export default function MenuScreen() {
   const [banner, setBanner] = useState(null)
   const [newItemOpen, setNewItemOpen] = useState(false)
 
-  // Costing → Menu handoff
-  useEffect(() => {
-    if (selectedDishId) {
-      setDishId(selectedDishId)
-      setSelectedDishId(null)
-    }
-  }, [selectedDishId, setSelectedDishId])
+  function pickDish(id) {
+    setDishId(id)
+    setSelectedDishId(id)
+  }
 
   function flash(msg) {
     setBanner(msg)
@@ -554,7 +551,7 @@ export default function MenuScreen() {
             {list.map(({ m, c }) => (
               <li key={m.id}>
                 <button
-                  type="button" onClick={() => setDishId(m.id)} aria-current={dishId === m.id}
+                  type="button" onClick={() => pickDish(m.id)} aria-current={dishId === m.id}
                   className={`w-full rounded-xl border p-3 text-left ${dishId === m.id ? 'border-amber-500/60 bg-[var(--color-ink-850)] ring-1 ring-amber-500/40' : 'border-[var(--color-ink-700)] bg-[var(--color-ink-900)] hover:border-[var(--color-ink-600)]'}`}
                 >
                   <div className="flex items-center justify-between gap-2">
@@ -584,7 +581,7 @@ export default function MenuScreen() {
           onClose={() => setNewItemOpen(false)}
           onCreate={(item) => {
             dispatch({ type: 'ADD_MENU_ITEM', item })
-            setDishId(item.id)
+            pickDish(item.id)
             setCat('All')
             setQuery('')
             setNewItemOpen(false)

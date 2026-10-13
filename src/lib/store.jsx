@@ -11,7 +11,9 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useReducer,
 import { ROLE_NAV } from './constants'
 import { uid } from './models'
 import { buildEmpire, migrateToEmpire, reducer } from './reducer'
-import { activeWorkspaceTab, createWorkspace, workspaceReducer } from './workspace'
+import {
+  MAX_TABS, activeWorkspaceTab, createWorkspace, normalizeWorkspace, workspaceReducer,
+} from './workspace'
 
 // Re-exported so screens keep importing from one place.
 export { getAlerts, getDashboard, quoteWait, tableName } from './reducer'
@@ -22,10 +24,13 @@ export const LOCATIONS = [
 ]
 
 const STORAGE_KEY = 'restora-v1'
+const WORKSPACE_KEY = 'restora-workspace-v1'
+const VALID_SCREENS = new Set(Object.values(ROLE_NAV).flat())
 const LOCAL_ONLY = new Set(['HYDRATE', 'EXPIRE_UNDO', 'DISMISS_ALERT'])
 const BOOT_TIMEOUT_MS = 2500
 
 const RestoraContext = createContext(null)
+const EMPTY_CTX = {}
 
 function loadPersisted() {
   try {
@@ -82,6 +87,25 @@ function initialScreen(kiosk) {
   return kiosk.screen || (kiosk.role ? ROLE_NAV[kiosk.role][0] : 'floor')
 }
 
+// Tabs survive a reload (session-only storage); kiosk terminals always boot
+// fresh so a shared tablet never inherits the last operator's workspace.
+function loadWorkspace(kiosk) {
+  if (kiosk.role) return null
+  try {
+    const raw = sessionStorage.getItem(WORKSPACE_KEY)
+    if (!raw) return null
+    const restored = normalizeWorkspace(JSON.parse(raw))
+    if (!restored) return null
+    const tabs = restored.tabs
+      .filter((tab) => VALID_SCREENS.has(tab.screen))
+      .map((tab) => (LOCATIONS.some((l) => l.id === tab.locId) ? tab : { ...tab, locId: 'downtown' }))
+    if (!tabs.length) return null
+    return { ...restored, tabs }
+  } catch {
+    return null
+  }
+}
+
 async function fetchState(signal) {
   const res = await fetch('/api/state', { signal })
   if (!res.ok) throw new Error(`state ${res.status}`)
@@ -98,7 +122,7 @@ export function RestoraProvider({ children }) {
   const [workspace, workspaceDispatch] = useReducer(
     workspaceReducer,
     null,
-    () => createWorkspace(
+    () => loadWorkspace(kiosk) || createWorkspace(
       initialScreen(kiosk),
       locOfTable(empireInit, kiosk.guest) || kiosk.loc || 'downtown',
       uid('tab'),
@@ -108,6 +132,8 @@ export function RestoraProvider({ children }) {
   const { tabs, activeTabId } = workspace
   const locId = activeTab?.locId || 'downtown'
   const screen = activeTab?.screen || 'floor'
+  const activeTabIdRef = useRef(activeTabId)
+  activeTabIdRef.current = activeTabId
   const setScreen = useCallback((nextScreen) => {
     workspaceDispatch({ type: 'SET_SCREEN', screen: nextScreen })
   }, [])
@@ -115,8 +141,12 @@ export function RestoraProvider({ children }) {
     workspaceDispatch({ type: 'SET_LOCATION', locId: nextLocId })
   }, [])
   const openTab = useCallback((nextScreen = 'floor') => {
+    if (tabs.length >= MAX_TABS) {
+      flashNotice(`Tab limit reached (${MAX_TABS}) — close a tab to open another.`)
+      return
+    }
     workspaceDispatch({ type: 'OPEN_TAB', id: uid('tab'), screen: nextScreen })
-  }, [])
+  }, [tabs.length])
   const activateTab = useCallback((tabId) => {
     workspaceDispatch({ type: 'ACTIVATE_TAB', tabId })
   }, [])
@@ -128,10 +158,46 @@ export function RestoraProvider({ children }) {
       fallbackScreen,
     })
   }, [])
+  const reorderTab = useCallback((tabId, beforeTabId) => {
+    workspaceDispatch({ type: 'REORDER_TAB', tabId, beforeTabId })
+  }, [])
+  const renameTab = useCallback((tabId, title) => {
+    workspaceDispatch({ type: 'RENAME_TAB', tabId, title })
+  }, [])
+  const togglePinTab = useCallback((tabId) => {
+    workspaceDispatch({ type: 'TOGGLE_PIN', tabId })
+  }, [])
+  const duplicateTab = useCallback((tabId) => {
+    if (tabs.length >= MAX_TABS) {
+      flashNotice(`Tab limit reached (${MAX_TABS}) — close a tab to duplicate.`)
+      return
+    }
+    workspaceDispatch({ type: 'DUPLICATE_TAB', tabId, id: uid('tab') })
+  }, [tabs.length])
+  const closeOtherTabs = useCallback((tabId) => {
+    workspaceDispatch({ type: 'CLOSE_OTHERS', tabId })
+  }, [])
+  const closeRightTabs = useCallback((tabId) => {
+    workspaceDispatch({ type: 'CLOSE_RIGHT', tabId })
+  }, [])
+  const reopenClosedTab = useCallback(() => {
+    workspaceDispatch({ type: 'REOPEN_TAB' })
+  }, [])
+  const saveTabScroll = useCallback((tabId, scroll) => {
+    workspaceDispatch({ type: 'SET_TAB_SCROLL', tabId, scroll })
+  }, [])
+  const setTabContext = useCallback((patch) => {
+    workspaceDispatch({ type: 'SET_TAB_CONTEXT', tabId: activeTabIdRef.current, patch })
+  }, [])
   const [role, setRole] = useState(kiosk.role || 'owner')
-  const [selectedTableId, setSelectedTableId] = useState(null)
-  const [selectedDishId, setSelectedDishId] = useState(null)
-  const [selectedOrderId, setSelectedOrderId] = useState(null)
+  // View context lives on the tab, so two Floor tabs keep their own table.
+  const activeCtx = activeTab?.ctx || EMPTY_CTX
+  const selectedTableId = activeCtx.tableId ?? null
+  const selectedDishId = activeCtx.dishId ?? null
+  const selectedOrderId = activeCtx.orderId ?? null
+  const setSelectedTableId = useCallback((tableId) => setTabContext({ tableId }), [setTabContext])
+  const setSelectedDishId = useCallback((dishId) => setTabContext({ dishId }), [setTabContext])
+  const setSelectedOrderId = useCallback((orderId) => setTabContext({ orderId }), [setTabContext])
 
   const state = useMemo(
     () => empire.locations[locId] || empire.locations.downtown,
@@ -339,6 +405,14 @@ export function RestoraProvider({ children }) {
     }
   }, [empire])
 
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(WORKSPACE_KEY, JSON.stringify(workspace))
+    } catch {
+      /* private mode — tabs simply reset on reload */
+    }
+  }, [workspace])
+
   // Expire the 15s undo window without user action (local-only, this shop)
   const pendingUndo = state.pendingUndo
   useEffect(() => {
@@ -359,10 +433,13 @@ export function RestoraProvider({ children }) {
     () => ({
       state, empire, dispatch, role, setRole, screen, setScreen,
       tabs, activeTabId, openTab, activateTab, closeTab,
+      reorderTab, renameTab, togglePinTab, duplicateTab, closeOtherTabs, closeRightTabs,
+      reopenClosedTab, canReopenClosed: workspace.closed.length > 0, saveTabScroll,
+      tabCtx: activeCtx, setTabCtx: setTabContext,
       selectedTableId, setSelectedTableId, selectedDishId, setSelectedDishId,
       selectedOrderId, setSelectedOrderId, locId, setLocId, link, resync, notice,
     }),
-    [state, empire, dispatch, role, screen, setScreen, tabs, activeTabId, openTab, activateTab, closeTab, selectedTableId, selectedDishId, selectedOrderId, locId, setLocId, link, resync, notice],
+    [state, empire, dispatch, role, screen, setScreen, tabs, activeTabId, openTab, activateTab, closeTab, reorderTab, renameTab, togglePinTab, duplicateTab, closeOtherTabs, closeRightTabs, reopenClosedTab, workspace.closed.length, saveTabScroll, activeCtx, setTabContext, selectedTableId, setSelectedTableId, selectedDishId, setSelectedDishId, selectedOrderId, setSelectedOrderId, locId, setLocId, link, resync, notice],
   )
 
   if (link.status === 'starting') {
