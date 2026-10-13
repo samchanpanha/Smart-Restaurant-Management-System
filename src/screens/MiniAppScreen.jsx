@@ -19,6 +19,12 @@ export default function MiniAppScreen({ tableId }) {
   const { state } = useRestora()
   const [inTelegram, setInTelegram] = useState(Boolean(telegramWebApp()))
   const [toast, setToast] = useState('')
+  // Opened from the chat rather than a table QR: start on a table that is
+  // already in service, and let the guest pick their own if they want to.
+  const [picked, setPicked] = useState(() => tableId
+    || state.tables.find((table) => table.status === 'seated' || table.status === 'ordered')?.id
+    || state.tables[0]?.id
+    || '')
 
   useEffect(() => {
     const app = telegramWebApp()
@@ -56,7 +62,7 @@ export default function MiniAppScreen({ tableId }) {
     return () => window.removeEventListener('restora:order-sent', onSent)
   }, [])
 
-  const table = state.tables.find((entry) => entry.id === tableId)
+  const table = state.tables.find((entry) => entry.id === picked)
 
   return (
     <div className="min-h-screen bg-[#f2efe9]">
@@ -71,6 +77,22 @@ export default function MiniAppScreen({ tableId }) {
               {table ? `${table.name} · ${table.zone}` : 'Table not found'} · Telegram mini app
             </div>
           </div>
+          {!tableId && state.tables.length > 1 && (
+            <label className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-white/60">
+              <span className="sr-only">Table</span>
+              <select
+                value={picked}
+                onChange={(event) => setPicked(event.target.value)}
+                className="rounded-lg border border-white/15 bg-white/10 px-2 py-1.5 text-[11px] font-semibold text-white outline-none"
+              >
+                {state.tables.map((entry) => (
+                  <option key={entry.id} value={entry.id} className="text-zinc-900">
+                    {entry.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           {inTelegram
             ? <span className="rounded-full bg-emerald-500/15 px-2 py-1 text-[10px] font-bold text-emerald-300">In Telegram</span>
             : <span className="rounded-full bg-amber-500/15 px-2 py-1 text-[10px] font-bold text-amber-300">Web preview</span>}
@@ -91,7 +113,7 @@ export default function MiniAppScreen({ tableId }) {
       )}
 
       <main className="mx-auto max-w-md">
-        <GuestScreen tableId={tableId} />
+        <GuestScreen tableId={picked} />
       </main>
     </div>
   )

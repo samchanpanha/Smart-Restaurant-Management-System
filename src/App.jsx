@@ -43,11 +43,12 @@ const SCREEN_LABELS = Object.fromEntries(
   NAV_SECTIONS.flatMap((section) => section.items.map((item) => [item.id, item.label])),
 )
 
-/** The mini app falls back to the first table when the link has no table. */
+/**
+ * The mini app picks its own table when the link came from the chat rather
+ * than a table QR: MiniAppScreen prefers a table already in service.
+ */
 function MiniAppFrame({ tableId }) {
-  const { state } = useRestora()
-  const resolved = tableId || state.tables[0]?.id || ''
-  return <MiniAppScreen tableId={resolved} />
+  return <MiniAppScreen tableId={tableId || ''} />
 }
 
 /**
