@@ -140,8 +140,6 @@ export function sanitizeLabelList(value, max = 24, maxLength = 40) {
   return out
 }
 
-export const UNIT_OPTIONS = ['each', 'portion', 'slice', 'cup', 'oz', 'lb', 'g', 'kg', 'ml', 'l', 'bottle', 'can', 'case', 'scoop', 'sheet']
-
 // ─── Document design templates ─────────────────────────────────────
 
 export function defaultTemplates() {

@@ -25,6 +25,26 @@ const draft = (overrides = {}) => ({
   ...overrides,
 })
 
+test('a stock unit is frozen once stock has moved, and free before that', () => {
+  const empire = buildEmpire()
+  // inv_lettuce has movements from the seed: the count unit cannot be rewritten
+  const frozen = act(empire, 'downtown', {
+    type: 'UPDATE_INVENTORY_ITEM', inventoryItemId: 'inv_lettuce', patch: { unit: 'kg', par: 30 },
+  })
+  const lettuce = shopOf(frozen).inventory.find((item) => item.id === 'inv_lettuce')
+  assert.equal(lettuce.unit, 'portion')
+  assert.equal(lettuce.par, 30) // the rest of the edit still lands
+
+  // A brand new item has no history, so its unit is still the operator's call
+  const created = act(empire, 'downtown', {
+    type: 'ADD_INVENTORY_ITEM', item: { id: 'inv_miso_freeze', name: 'Miso paste', unit: 'each', onHand: 4 },
+  })
+  const free = act(created, 'downtown', {
+    type: 'UPDATE_INVENTORY_ITEM', inventoryItemId: 'inv_miso_freeze', patch: { unit: 'kg' },
+  })
+  assert.equal(shopOf(free).inventory.find((item) => item.id === 'inv_miso_freeze').unit, 'kg')
+})
+
 test('state version 4 carries purchases and the movement ledger', () => {
   assert.equal(STATE_VERSION, 4)
   const shop = shopOf(buildEmpire())

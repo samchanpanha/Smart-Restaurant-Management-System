@@ -33,7 +33,7 @@ function local(empire, action) {
 
 // An item bought in bottles of 750 ml, cased 12 at a time.
 const DRESSING = {
-  id: 'inv_dressing',
+  id: 'inv_house_dressing',
   name: 'House dressing',
   unit: 'ml',
   onHand: 0,
@@ -45,6 +45,13 @@ const DRESSING = {
   ],
   purchaseUnit: 'case',
 }
+
+// Seeded items all have history, and history freezes the stock unit — so the
+// tests that change a unit add their own item first.
+const freshDressing = (empire, overrides = {}) => local(empire, {
+  type: 'ADD_INVENTORY_ITEM',
+  item: { supplierId: 'sup_dry', location: 'dry', ...DRESSING, ...overrides },
+})
 
 test('the unit vocabulary is data and survives hand-edited input', () => {
   const list = sanitizeUnitList([
@@ -151,32 +158,43 @@ test('the audit asks for units and packaging', () => {
 })
 
 test('a stock item keeps its packaging through add and update', () => {
-  let empire = buildEmpire()
-  empire = local(empire, { type: 'UPDATE_INVENTORY_ITEM', inventoryItemId: 'inv_soda', patch: DRESSING })
-  const item = itemOf(empire, 'inv_soda')
+  let empire = freshDressing(buildEmpire())
+  const item = itemOf(empire, 'inv_house_dressing')
   assert.equal(item.unit, 'ml')
   assert.deepEqual(item.packs, sanitizePackList(DRESSING.packs))
   assert.equal(item.purchaseUnit, 'case')
 
-  empire = local(empire, { type: 'UPDATE_INVENTORY_ITEM', inventoryItemId: 'inv_soda', patch: { packs: [{ name: 'Tray', qty: 24 }], purchaseUnit: 'Tray' } })
-  const retray = itemOf(empire, 'inv_soda')
+  empire = local(empire, { type: 'UPDATE_INVENTORY_ITEM', inventoryItemId: 'inv_house_dressing', patch: { packs: [{ name: 'Tray', qty: 24 }], purchaseUnit: 'Tray' } })
+  const retray = itemOf(empire, 'inv_house_dressing')
   assert.deepEqual(retray.packs, [{ id: 'tray', name: 'Tray', qty: 24, of: null }])
   assert.equal(retray.purchaseUnit, 'tray')
 
-  empire = local(empire, { type: 'UPDATE_INVENTORY_ITEM', inventoryItemId: 'inv_soda', patch: { packs: 'junk' } })
-  assert.deepEqual(itemOf(empire, 'inv_soda').packs, [])
+  empire = local(empire, { type: 'UPDATE_INVENTORY_ITEM', inventoryItemId: 'inv_house_dressing', patch: { packs: 'junk' } })
+  assert.deepEqual(itemOf(empire, 'inv_house_dressing').packs, [])
+
+  // Once stock has moved, the count unit is a promise the item cannot break:
+  // every movement and purchase line is counted in it.
+  empire = local(empire, {
+    type: 'RECEIVE_INVOICE',
+    vendor: 'Dry Goods Co',
+    supplierId: 'sup_dry',
+    lines: [{ inventoryItemId: 'inv_house_dressing', qty: 2000, unitCost: 0.002 }],
+  })
+  const frozen = local(empire, { type: 'UPDATE_INVENTORY_ITEM', inventoryItemId: 'inv_house_dressing', patch: { unit: 'each', par: 12 } })
+  const moved = itemOf(frozen, 'inv_house_dressing')
+  assert.equal(moved.unit, 'ml', 'existing movements keep their meaning')
+  assert.equal(moved.par, 12, 'the rest of the edit still lands')
 })
 
 test('an order placed in cases receives stock units', () => {
-  let empire = buildEmpire()
-  empire = local(empire, { type: 'UPDATE_INVENTORY_ITEM', inventoryItemId: 'inv_soda', patch: DRESSING })
+  let empire = freshDressing(buildEmpire())
   empire = local(empire, {
     type: 'UPSERT_PURCHASE',
     purchase: {
       id: 'po_units_1',
       supplierId: 'sup_beverage',
       status: 'ordered',
-      lines: [{ id: 'l1', inventoryItemId: 'inv_soda', name: 'House dressing', unit: 'case', qty: 2, unitCost: 18 }],
+      lines: [{ id: 'l1', inventoryItemId: 'inv_house_dressing', name: 'House dressing', unit: 'case', qty: 2, unitCost: 18 }],
     },
   })
   const draft = shopOf(empire).purchases.find((entry) => entry.id === 'po_units_1')
@@ -184,7 +202,7 @@ test('an order placed in cases receives stock units', () => {
   assert.equal(draft.totals.subtotal, 36)
 
   empire = local(empire, { type: 'RECEIVE_PURCHASE', purchaseId: 'po_units_1' })
-  const item = itemOf(empire, 'inv_soda')
+  const item = itemOf(empire, 'inv_house_dressing')
   assert.equal(item.onHand, 18000, '2 cases of 12 × 750 ml')
   assert.equal(item.lastCost, 0.002, 'cost per stock unit')
   assert.equal(item.purchaseUnit, 'case')
@@ -211,15 +229,14 @@ test('an order placed in cases receives stock units', () => {
 })
 
 test('a partial case delivery lands only what arrived', () => {
-  let empire = buildEmpire()
-  empire = local(empire, { type: 'UPDATE_INVENTORY_ITEM', inventoryItemId: 'inv_soda', patch: { ...DRESSING, onHand: 3000 } })
+  let empire = freshDressing(buildEmpire(), { onHand: 3000 })
   empire = local(empire, {
     type: 'UPSERT_PURCHASE',
     purchase: {
       id: 'po_units_2',
       supplierId: 'sup_beverage',
       status: 'ordered',
-      lines: [{ id: 'l1', inventoryItemId: 'inv_soda', name: 'House dressing', unit: 'case', qty: 3, unitCost: 18 }],
+      lines: [{ id: 'l1', inventoryItemId: 'inv_house_dressing', name: 'House dressing', unit: 'case', qty: 3, unitCost: 18 }],
     },
   })
   empire = local(empire, {
@@ -227,7 +244,7 @@ test('a partial case delivery lands only what arrived', () => {
     purchaseId: 'po_units_2',
     lines: [{ id: 'l1', qty: 1, unitCost: 18 }],
   })
-  const item = itemOf(empire, 'inv_soda')
+  const item = itemOf(empire, 'inv_house_dressing')
   assert.equal(item.onHand, 3000 + 9000, 'one of the three cases arrived')
   const purchase = shopOf(empire).purchases.find((entry) => entry.id === 'po_units_2')
   assert.equal(purchase.status, 'ordered', 'still open — two cases outstanding')

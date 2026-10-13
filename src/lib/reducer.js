@@ -1552,7 +1552,12 @@ function shopReducerBase(state, action) {
       const current = state.inventory.find((item) => item.id === action.inventoryItemId)
       if (!current || !action.patch || typeof action.patch !== 'object') return state
       const precision = Math.trunc(Number(state.settings?.stock?.autoReceiveThousandths) || 2)
-      const next = normalizeInventoryItem({ ...current, ...action.patch, id: current.id }, 0)
+      // A base unit is a promise: every movement, purchase line, and recipe
+      // line is counted in it. Once stock has moved the unit is frozen — a
+      // different count unit is a different item (add one and transfer).
+      const moved = (state.movements || []).some((movement) => movement.itemId === current.id)
+      const patch = moved && action.patch.unit != null ? { ...action.patch, unit: current.unit } : action.patch
+      const next = normalizeInventoryItem({ ...current, ...patch, id: current.id }, 0)
       if (!next.name) return state
       if (!state.settings?.stock?.allowNegativeStock && Number(next.onHand) < 0) {
         next.onHand = 0

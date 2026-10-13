@@ -684,6 +684,10 @@ function IngredientModal({ item, onClose, onSave }) {
   const units = state.settings?.units || { list: [], packNames: [] }
   const packNames = units.packNames || []
   const stockShort = (units.list || []).find((unit) => unit.id === draft.unit)?.short || draft.unit
+  // The book is counted in this unit: movements freeze it (the reducer
+  // refuses the change too, so the screen never lies about what it saved).
+  const movements = (state.movements || []).filter((movement) => movement.itemId === item?.id).length
+  const frozenUnit = movements > 0
 
   function patchPack(index, patch) {
     setDraft((current) => ({
@@ -740,8 +744,18 @@ function IngredientModal({ item, onClose, onSave }) {
             {subs.map((option) => <option key={option.id} value={option.name}>{option.name}</option>)}
           </select>
         </Field>
-        <Field label="Stock unit" hint="Every quantity in the book is counted in this unit.">
-          <select value={draft.unit} onChange={(e) => setDraft((d) => ({ ...d, unit: e.target.value }))} className={smallInput}>
+        <Field
+          label="Stock unit"
+          hint={frozenUnit
+            ? `Frozen at ${draft.unit} — ${movements} movement${movements === 1 ? '' : 's'} and every purchase line are counted in it. Add a new item if you need a different unit.`
+            : 'Every quantity in the book is counted in this unit.'}
+        >
+          <select
+            value={draft.unit}
+            disabled={frozenUnit}
+            onChange={(e) => setDraft((d) => ({ ...d, unit: e.target.value }))}
+            className={`${smallInput}${frozenUnit ? ' bg-zinc-100 text-zinc-500' : ''}`}
+          >
             {(units.list || []).map((unit) => <option key={unit.id} value={unit.id}>{unit.label} ({unit.short})</option>)}
           </select>
         </Field>
