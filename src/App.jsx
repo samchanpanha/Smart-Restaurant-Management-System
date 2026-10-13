@@ -1,4 +1,6 @@
 import AppShell from './components/AppShell'
+import { Icon } from './components/Icon'
+import { NAV_SECTIONS, ROLE_NAV } from './lib/constants'
 import { RestoraProvider, useRestora } from './lib/store'
 import CatalogScreen from './screens/CatalogScreen'
 import ComingSoon from './screens/ComingSoon'
@@ -23,8 +25,45 @@ function guestTableId() {
   }
 }
 
-function Router() {
-  const { screen } = useRestora()
+const SCREEN_LABELS = Object.fromEntries(
+  NAV_SECTIONS.flatMap((section) => section.items.map((item) => [item.id, item.label])),
+)
+
+/**
+ * A tab keeps the screen it was opened with, but a role that cannot open
+ * that screen must not see it. The tab stays on the strip — closed by the
+ * operator or unlocked by switching role — and the panel says why.
+ */
+function RestrictedScreen({ screen, role }) {
+  const { setRole } = useRestora()
+  return (
+    <div className="mx-auto max-w-xl rounded-2xl border border-amber-200 bg-amber-50/70 p-8 text-center">
+      <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/15 text-amber-700">
+        <Icon name="lock" size={22} />
+      </span>
+      <h2 className="mt-4 text-xl font-bold tracking-tight text-zinc-900">
+        {SCREEN_LABELS[screen] || screen} is not part of the {role} workspace
+      </h2>
+      <p className="mt-2 text-sm text-zinc-600">
+        The tab is still here — this role just cannot open that screen. Close the tab, or switch
+        back to a role that can.
+      </p>
+      <button
+        type="button"
+        onClick={() => setRole('owner')}
+        className="mt-5 min-h-10 rounded-xl bg-orange-500 px-4 text-sm font-bold text-white hover:bg-orange-600"
+      >
+        Switch to owner (demo)
+      </button>
+    </div>
+  )
+}
+
+// Exported so tests can mount the real router inside the real shell.
+export function Router() {
+  const { screen, role } = useRestora()
+  const allowed = ROLE_NAV[role] || ROLE_NAV.owner
+  if (!allowed.includes(screen)) return <RestrictedScreen screen={screen} role={role} />
   if (screen === 'system') return <SystemScreen />
   if (screen === 'dashboard') return <DashboardScreen />
   if (screen === 'floor') return <FloorScreen />

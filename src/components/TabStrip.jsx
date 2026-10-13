@@ -4,21 +4,10 @@
 // live alert badge so the strip doubles as an at-a-glance ops board.
 
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
-import { CRITICAL_ALERTS, NAV_SECTIONS, ROLE_NAV, screenForAlert } from '../lib/constants'
+import { CRITICAL_ALERTS, NAV_SECTIONS, ROLE_NAV, SCREEN_ICONS, screenForAlert } from '../lib/constants'
 import { LOCATIONS, getAlerts, useRestora } from '../lib/store'
 import { Icon } from './Icon'
 
-const SCREEN_ICONS = {
-  dashboard: 'dashboard',
-  tickets: 'orders',
-  floor: 'tables',
-  kitchen: 'kitchen',
-  inventory: 'inventory',
-  menu: 'menu',
-  costing: 'costing',
-  reports: 'reports',
-  system: 'settings',
-}
 const TAB_LABELS = Object.fromEntries(NAV_SECTIONS.flatMap((s) => s.items.map((i) => [i.id, i.label])))
 const LOC_DOTS = ['bg-orange-500', 'bg-teal-500', 'bg-violet-500', 'bg-sky-500']
 const DRAG_THRESHOLD_PX = 5
@@ -38,9 +27,12 @@ export default function TabStrip({ fallbackScreen }) {
     togglePinTab, duplicateTab, closeOtherTabs, closeRightTabs, reopenClosedTab, canReopenClosed,
   } = useRestora()
   const allowed = ROLE_NAV[role] || ROLE_NAV.owner
-  const visibleTabs = useMemo(() => tabs.filter((tab) => allowed.includes(tab.screen)), [allowed, tabs])
+  // Every tab of the workspace is shown, whatever the current role: a role
+  // switch is a change of who is driving, not a reason to hide the road.
+  // The role only gates which screens can be *opened* from here.
+  const visibleTabs = tabs
   const newTabScreen = allowed[0] || 'floor'
-  const pinnedVisible = visibleTabs.filter((tab) => tab.pinned).length
+  const pinnedVisible = tabs.filter((tab) => tab.pinned).length
 
   const badges = useMemo(() => {
     const counts = {}
@@ -168,30 +160,55 @@ export default function TabStrip({ fallbackScreen }) {
   }, [])
 
   // ── keyboard shortcuts ────────────────────────────────────────────
+  // Ctrl/Cmd+1…9 and Ctrl+Tab are claimed by the browser itself and never
+  // reach the page, so the workspace also listens on chords browsers leave
+  // alone: Alt+1…9 to jump and Ctrl/⌘+PageUp/PageDown to cycle.
   useEffect(() => {
     function handleShortcut(event) {
-      if (!(event.ctrlKey || event.metaKey) || event.altKey) return
       const target = event.target
       if (target instanceof HTMLElement
         && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)) return
-      const key = event.key.toLowerCase()
-      if (key === 't') {
+      const mod = event.ctrlKey || event.metaKey
+      const list = visibleTabs
+      const jump = (digit) => {
+        const index = digit === '9' ? list.length - 1 : Number(digit) - 1
+        if (list[index]) activateTab(list[index].id)
+      }
+      const cycle = (step) => {
+        const index = list.findIndex((tab) => tab.id === activeTabId)
+        const next = list[((index < 0 ? 0 : index) + step + list.length) % list.length]
+        if (next) activateTab(next.id)
+      }
+      const key = event.key
+      const lower = key.toLowerCase()
+
+      if (event.altKey && !mod && /^[1-9]$/.test(key)) {
+        event.preventDefault()
+        jump(key)
+        return
+      }
+      if (mod && /^[1-9]$/.test(key)) {
+        event.preventDefault()
+        jump(key)
+        return
+      }
+      if (mod && (key === 'PageDown' || key === 'PageUp')) {
+        event.preventDefault()
+        const forward = key === 'PageDown'
+        cycle((event.shiftKey ? !forward : forward) ? 1 : -1)
+        return
+      }
+      if (!mod) return
+      if (lower === 't') {
         event.preventDefault()
         if (event.shiftKey) reopenClosedTab()
         else openTab(newTabScreen)
-      } else if (key === 'w' && !event.shiftKey) {
+      } else if (lower === 'w' && !event.shiftKey) {
         event.preventDefault()
         closeTab(activeTabId, fallbackScreen)
-      } else if (event.key === 'Tab') {
+      } else if (key === 'Tab') {
         event.preventDefault()
-        const index = visibleTabs.findIndex((tab) => tab.id === activeTabId)
-        const step = event.shiftKey ? -1 : 1
-        const next = visibleTabs[(index + step + visibleTabs.length) % visibleTabs.length]
-        if (next) activateTab(next.id)
-      } else if (/^[1-9]$/.test(event.key)) {
-        event.preventDefault()
-        const index = event.key === '9' ? visibleTabs.length - 1 : Number(event.key) - 1
-        if (visibleTabs[index]) activateTab(visibleTabs[index].id)
+        cycle(event.shiftKey ? -1 : 1)
       }
     }
     window.addEventListener('keydown', handleShortcut)
@@ -248,9 +265,23 @@ export default function TabStrip({ fallbackScreen }) {
       {fade.left && <div aria-hidden="true" className="tab-fade pointer-events-none absolute bottom-0 left-0 top-0 z-10 w-8" style={{ background: 'linear-gradient(to right, #eceef0, rgba(236,238,240,0))' }} />}
       {fade.right && <div aria-hidden="true" className="tab-fade pointer-events-none absolute bottom-0 right-12 top-0 z-10 w-8" style={{ background: 'linear-gradient(to left, #eceef0, rgba(236,238,240,0))' }} />}
 
-      <div ref={listRef} className="tab-list relative flex min-w-0 flex-1 items-end gap-1 overflow-x-auto overscroll-x-contain" role="tablist" aria-label="Workspace tabs" onScroll={updateFade} onContextMenu={(event) => { if (event.target === event.currentTarget) openMenu(event, null) }}>
+      <div
+        ref={listRef}
+        className="tab-list relative flex min-w-0 flex-1 items-end gap-1 overflow-x-auto overscroll-x-contain"
+        role="tablist"
+        aria-label="Workspace tabs"
+        onScroll={updateFade}
+        onContextMenu={(event) => { if (event.target === event.currentTarget) openMenu(event, null) }}
+        onAuxClick={(event) => {
+          if (event.button === 1 && event.target === event.currentTarget) {
+            event.preventDefault()
+            openTab(newTabScreen)
+          }
+        }}
+      >
         {visibleTabs.map((tab, index) => {
           const selected = tab.id === activeTabId
+          const locked = !allowed.includes(tab.screen)
           const badge = badges[tab.screen]
           const label = tabLabel(tab)
           const locShort = LOCATIONS.find((item) => item.id === tab.locId)?.short || tab.locId
@@ -302,14 +333,18 @@ export default function TabStrip({ fallbackScreen }) {
                     aria-selected={selected}
                     aria-controls="workspace-panel"
                     onClick={() => activateTab(tab.id)}
-                    title={`${label} · ${locShort}${tab.pinned ? ' · pinned' : ''}`}
+                    title={`${label} · ${locShort}${tab.pinned ? ' · pinned' : ''}${locked ? ` · not available to ${role}` : ''}`}
                     className={`flex h-full min-w-0 flex-1 items-center gap-2 rounded-tl-lg text-left text-xs font-semibold ${tab.pinned ? 'justify-center px-0' : 'px-3'}`}
                   >
                     <span className="relative shrink-0">
-                      <Icon name={SCREEN_ICONS[tab.screen] || 'dashboard'} size={15} className={selected ? 'text-orange-600' : 'text-zinc-400'} />
+                      <Icon
+                        name={locked ? 'lock' : (SCREEN_ICONS[tab.screen] || 'dashboard')}
+                        size={15}
+                        className={locked ? 'text-amber-500' : selected ? 'text-orange-600' : 'text-zinc-400'}
+                      />
                       <span aria-hidden="true" className={`absolute -right-1 -top-0.5 h-1.5 w-1.5 rounded-full ${locDot(tab.locId)}`} />
                     </span>
-                    {!tab.pinned && <span className="truncate">{label}</span>}
+                    {!tab.pinned && <span className={`truncate ${locked ? 'text-amber-700/80' : ''}`}>{label}</span>}
                     {badge && (
                       <span
                         title={`${badge.count} alert${badge.count > 1 ? 's' : ''} need attention`}

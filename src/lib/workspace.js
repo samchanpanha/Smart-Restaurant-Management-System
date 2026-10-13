@@ -185,9 +185,16 @@ export function workspaceReducer(workspace, action) {
       if (!removed.length) return workspace
       const firstRemoved = workspace.tabs.indexOf(removed[0])
       const ids = new Set(removed.map((tab) => tab.id))
+      const tabs = workspace.tabs.filter((tab) => !ids.has(tab.id))
+      // The kept tab is the only survivor besides pinned ones — if the
+      // active tab was closed, focus has to land somewhere real.
+      const activeTabId = tabs.some((tab) => tab.id === workspace.activeTabId)
+        ? workspace.activeTabId
+        : action.tabId
       return {
         ...workspace,
-        tabs: workspace.tabs.filter((tab) => !ids.has(tab.id)),
+        tabs,
+        activeTabId,
         closed: withClosed(workspace, removed, firstRemoved),
       }
     }
@@ -205,6 +212,7 @@ export function workspaceReducer(workspace, action) {
 
     case 'REOPEN_TAB': {
       if (!workspace.closed.length) return workspace
+      if (workspace.tabs.length >= MAX_TABS) return workspace
       const closed = workspace.closed.slice()
       const entry = closed.pop()
       const pinned = pinnedCount(workspace)

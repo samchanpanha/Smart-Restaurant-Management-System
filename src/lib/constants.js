@@ -109,6 +109,25 @@ export const ROLES = {
 }
 
 // Role-aware nav (spec §6). Owner sees all.
+// One icon per screen — the sidebar and the tab strip must never drift.
+export const SCREEN_ICONS = {
+  dashboard: 'dashboard',
+  floor: 'tables',
+  tickets: 'orders',
+  kitchen: 'kitchen',
+  inventory: 'inventory',
+  menu: 'menu',
+  catalog: 'catalog',
+  suppliers: 'supplier',
+  purchases: 'cart',
+  reports: 'reports',
+  costing: 'costing',
+  settings: 'settings',
+  system: 'layers',
+  movements: 'swap',
+  telegram: 'send',
+}
+
 export const ROLE_NAV = {
   owner: ['dashboard', 'floor', 'tickets', 'kitchen', 'menu', 'catalog', 'inventory', 'suppliers', 'reports', 'costing', 'settings', 'system'],
   server: ['floor', 'tickets'],

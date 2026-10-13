@@ -6,23 +6,30 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import StatusPill from './StatusPill'
 import TabStrip from './TabStrip'
 import { Icon } from './Icon'
-import { ROLES, ROLE_NAV, screenForAlert } from '../lib/constants'
+import { NAV_SECTIONS, ROLES, ROLE_NAV, SCREEN_ICONS, screenForAlert } from '../lib/constants'
 import { getAlerts, LOCATIONS, useNow, useRestora } from '../lib/store'
 
-const NAV_ITEMS = [
-  { id: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
-  { id: 'tickets', label: 'Orders', icon: 'orders' },
-  { id: 'floor', label: 'Tables', icon: 'tables' },
-  { id: 'kitchen', label: 'Kitchen', icon: 'kitchen' },
-  { id: 'inventory', label: 'Inventory', icon: 'inventory' },
-  { id: 'menu', label: 'Menu & Recipes', icon: 'menu' },
-  { id: 'catalog', label: 'Catalog', icon: 'catalog' },
-  { id: 'suppliers', label: 'Suppliers', icon: 'supplier' },
-  { id: 'costing', label: 'Food Cost & Profit', icon: 'costing' },
-  { id: 'reports', label: 'Reports', icon: 'reports' },
-  { id: 'settings', label: 'Settings', icon: 'settings' },
-  { id: 'system', label: 'System & Model', icon: 'layers' },
-]
+const NAV_LABELS = {
+  dashboard: 'Dashboard',
+  floor: 'Tables',
+  tickets: 'Orders',
+  kitchen: 'Kitchen',
+  inventory: 'Inventory',
+  menu: 'Menu & Recipes',
+  catalog: 'Catalog',
+  suppliers: 'Suppliers',
+  purchases: 'Purchases',
+  costing: 'Food Cost & Profit',
+  reports: 'Reports',
+  settings: 'Settings',
+  system: 'System & Model',
+}
+
+// Sidebar order follows the nav sections; icons come from the shared map.
+const NAV_ITEMS = NAV_SECTIONS
+  .flatMap((section) => section.items.map((item) => item.id))
+  .filter((id) => NAV_LABELS[id])
+  .map((id) => ({ id, label: NAV_LABELS[id], icon: SCREEN_ICONS[id] || 'dashboard' }))
 
 function displayOrderId(id) {
   const suffix = String(id || '').replace(/\D/g, '').slice(-4)
@@ -108,10 +115,10 @@ export default function AppShell({ children }) {
     setSearchOpen(false)
   }
 
+  // Switching role never rewrites the workspace: each tab keeps the screen
+  // it was opened with, and the router locks the ones this role cannot see.
   function changeRole(nextRole) {
     setRole(nextRole)
-    const allowedForRole = ROLE_NAV[nextRole] || ROLE_NAV.owner
-    if (!allowedForRole.includes(screen)) setScreen(allowedForRole[0])
     setProfileOpen(false)
   }
 
