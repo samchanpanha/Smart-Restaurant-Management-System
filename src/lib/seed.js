@@ -16,10 +16,11 @@ export function buildSeed() {
     { id: 'inv_bun', name: 'Brioche bun', unit: 'each', onHand: 64, par: 40, lastCost: 0.35, vendor: 'Bakery Co', location: 'dry' },
     { id: 'inv_patty', name: 'Beef patty 6oz', unit: 'each', onHand: 48, par: 36, lastCost: 2.25, vendor: 'Prime Meats', location: 'walk_in' },
     { id: 'inv_tomato', name: 'Tomato', unit: 'each', onHand: 30, par: 20, lastCost: 0.4, vendor: 'Fresh Farms', location: 'walk_in' },
-    { id: 'inv_lettuce', name: 'Lettuce portion', unit: 'portion', onHand: 40, par: 24, lastCost: 0.25, vendor: 'Fresh Farms', location: 'walk_in' },
+    // Packs describe how the item is bought; `unit` is how it is counted.
+    { id: 'inv_lettuce', name: 'Lettuce portion', unit: 'portion', onHand: 40, par: 24, lastCost: 0.25, vendor: 'Fresh Farms', location: 'walk_in', packs: [{ id: 'case', name: 'Case', qty: 6 }], purchaseUnit: 'case' },
     { id: 'inv_cheese', name: 'Cheddar slice', unit: 'slice', onHand: 72, par: 48, lastCost: 0.45, vendor: 'Dairy Direct', location: 'walk_in' },
     { id: 'inv_fries', name: 'Fries portion', unit: 'portion', onHand: 36, par: 30, lastCost: 0.6, vendor: 'Fresh Farms', location: 'dry' },
-    { id: 'inv_salmon', name: 'Salmon fillet', unit: 'each', onHand: 0, par: 12, lastCost: 5.8, vendor: 'Harbor Fish', location: 'walk_in' },
+    { id: 'inv_salmon', name: 'Salmon fillet', unit: 'each', onHand: 0, par: 12, lastCost: 5.8, vendor: 'Harbor Fish', location: 'walk_in', packs: [{ id: 'case', name: 'Case', qty: 12 }], purchaseUnit: 'case' },
     { id: 'inv_chicken', name: 'Chicken breast', unit: 'each', onHand: 22, par: 18, lastCost: 2.9, vendor: 'Prime Meats', location: 'walk_in' },
     { id: 'inv_pasta', name: 'Pasta portion', unit: 'portion', onHand: 40, par: 20, lastCost: 0.8, vendor: 'Dry Goods Co', location: 'dry' },
     { id: 'inv_cream', name: 'Cream cup', unit: 'cup', onHand: 18, par: 12, lastCost: 0.9, vendor: 'Dairy Direct', location: 'walk_in' },
@@ -29,8 +30,8 @@ export function buildSeed() {
     { id: 'inv_steak', name: 'Ribeye 10oz', unit: 'each', onHand: 10, par: 8, lastCost: 8.5, vendor: 'Prime Meats', location: 'walk_in' },
     { id: 'inv_cake', name: 'Chocolate cake slice', unit: 'slice', onHand: 12, par: 8, lastCost: 2.1, vendor: 'Bakery Co', location: 'dry' },
     { id: 'inv_icecream', name: 'Ice cream scoops', unit: 'scoop', onHand: 40, par: 24, lastCost: 0.75, vendor: 'Dairy Direct', location: 'walk_in' },
-    { id: 'inv_soda', name: 'Soda can', unit: 'can', onHand: 96, par: 48, lastCost: 0.45, vendor: 'BevCo', location: 'dry' },
-    { id: 'inv_coffee', name: 'Coffee portion', unit: 'portion', onHand: 60, par: 30, lastCost: 0.55, vendor: 'BevCo', location: 'dry' },
+    { id: 'inv_soda', name: 'Soda can', unit: 'can', onHand: 96, par: 48, lastCost: 0.45, vendor: 'BevCo', location: 'dry', packs: [{ id: 'case', name: 'Case', qty: 24 }], purchaseUnit: 'case' },
+    { id: 'inv_coffee', name: 'Coffee portion', unit: 'portion', onHand: 60, par: 30, lastCost: 0.55, vendor: 'BevCo', location: 'dry', packs: [{ id: 'case', name: 'Case', qty: 20 }], purchaseUnit: 'case' },
   ]
 
   // Food detail per dish: the course it belongs to, when it sells, how hot
@@ -533,8 +534,8 @@ export function buildSeed() {
       createdAt: minAgo(140),
       updatedAt: minAgo(120),
       lines: [
-        { id: 'po_seed_3_l1', inventoryItemId: 'inv_lettuce', name: 'Romaine lettuce', unit: 'head', qty: 24, unitCost: 1.35, receivedQty: 0 },
-        { id: 'po_seed_3_l2', inventoryItemId: 'inv_tomato', name: 'Tomato', unit: 'kg', qty: 10, unitCost: 2.4, receivedQty: 0 },
+        { id: 'po_seed_3_l1', inventoryItemId: 'inv_lettuce', name: 'Lettuce portion', unit: 'case', qty: 4, unitCost: 8.1, receivedQty: 0, packSize: 6 },
+        { id: 'po_seed_3_l2', inventoryItemId: 'inv_tomato', name: 'Tomato', unit: 'each', qty: 10, unitCost: 2.4, receivedQty: 0, packSize: 1 },
       ],
       tax: 0,
       shipping: 0,

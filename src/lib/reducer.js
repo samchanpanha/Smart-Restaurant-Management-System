@@ -4,6 +4,7 @@
 // The ticket stays the system of record on every terminal.
 
 import { STATIONS, TARGETS } from './constants.js'
+import { itemPacks, packFactor, sanitizePackList, slugUnitId } from './units.js'
 import {
   applyAuto86,
   assertTableTransition,
@@ -161,6 +162,11 @@ function slugify(value) {
 }
 
 /** Stock-management fields every SKU carries, backfilled on migration. */
+function packPriceFromItem(item, packSize) {
+  const size = Number(packSize) > 0 ? Number(packSize) : 1
+  return Math.round(((Number(item?.lastCost) || 0) * size) * 10000) / 10000
+}
+
 function normalizeInventoryItem(item, index = 0) {
   const par = Number.isFinite(Number(item?.par)) ? Number(item.par) : 0
   const lastCost = Number.isFinite(Number(item?.lastCost)) ? Number(item.lastCost) : 0
@@ -168,7 +174,11 @@ function normalizeInventoryItem(item, index = 0) {
     ...item,
     id: String(item?.id ?? '').trim() || `inv_${index}`,
     name: String(item?.name ?? 'Stock item').trim().slice(0, 60) || 'Stock item',
-    unit: String(item?.unit ?? 'each').trim().slice(0, 16) || 'each',
+    // `unit` is the stock unit: every qty in the book (on hand, par, recipes,
+    // movements) is counted in it. Packs only describe how it is bought.
+    unit: slugUnitId(item?.unit) || 'each',
+    packs: sanitizePackList(item?.packs),
+    purchaseUnit: slugUnitId(item?.purchaseUnit) || null,
     onHand: Number.isFinite(Number(item?.onHand)) ? Number(item.onHand) : 0,
     par,
     lastCost,
@@ -424,14 +434,18 @@ function normalizePurchase(raw, existing, fallbackId) {
       const unitCost = Math.max(0, Math.round((Number(line?.unitCost) || 0) * 10000) / 10000)
       const receivedQty = Math.max(0, Math.round((Number(line?.receivedQty) || 0) * 1000) / 1000)
       if (!line?.inventoryItemId || (!qty && !receivedQty)) return null
+      const packSize = Math.round((Number(line.packSize) || 0) * 1000) / 1000
       return {
         id: String(line.id || uid('pline')).slice(0, 40),
         inventoryItemId: String(line.inventoryItemId).slice(0, 60),
         name: String(line.name || '').slice(0, 80),
-        unit: String(line.unit || '').slice(0, 12),
+        // `qty` and `unitCost` are in this line's unit (a case, a bottle, …);
+        // `packSize` is how many stock units one of them holds.
+        unit: slugUnitId(line.unit) || '',
         qty,
         unitCost,
         receivedQty,
+        packSize: packSize > 0 ? packSize : 1,
       }
     })
     .filter(Boolean)
@@ -1093,6 +1107,12 @@ function shopReducerBase(state, action) {
       }
       const supplier = state.suppliers.find((entry) => entry.id === draft.supplierId)
       draft.vendor = draft.vendor || supplier?.name || 'Vendor'
+      // Freeze what one line unit holds *now*, so a later packaging edit never
+      // rewrites the meaning of an order that was already placed.
+      draft.lines = draft.lines.map((line) => {
+        const item = state.inventory.find((entry) => entry.id === line.inventoryItemId)
+        return { ...line, packSize: item ? packFactor(item, line.unit) : line.packSize || 1 }
+      })
       if (!draft.number) {
         const counter = state.settings?.numbering?.purchase
         draft.number = documentNumber(
@@ -1143,12 +1163,31 @@ function shopReducerBase(state, action) {
           const source = purchase.lines.find((entry) => entry.id === line.id)
             || purchase.lines.find((entry) => entry.inventoryItemId === line.inventoryItemId)
           const item = state.inventory.find((entry) => entry.id === source?.inventoryItemId)
-          const qty = roundQty(line.qty ?? source?.qty, precision)
-          if (!item || !(qty > 0)) return null
-          const unitCost = Number.isFinite(Number(line.unitCost)) && Number(line.unitCost) >= 0
+          const orderedQty = roundQty(line.qty ?? source?.qty, precision)
+          if (!item || !(orderedQty > 0)) return null
+          const unit = line.unit ?? source?.unit
+          // One case of salmon is not one salmon: convert the ordered line
+          // into stock units before it touches on-hand or the ledger.
+          const packSize = Number(line.packSize ?? source?.packSize) > 0
+            ? Number(line.packSize ?? source?.packSize)
+            : packFactor(item, unit)
+          const qty = roundQty(orderedQty * packSize, precision)
+          if (!(qty > 0)) return null
+          const orderedCost = Number.isFinite(Number(line.unitCost)) && Number(line.unitCost) >= 0
             ? Number(line.unitCost)
-            : Number(source?.unitCost) || Number(item.lastCost) || 0
-          return { inventoryItemId: item.id, qty, unitCost, name: item.name, source }
+            : Number(source?.unitCost) || packPriceFromItem(item, packSize)
+          const unitCost = Math.round((orderedCost / packSize) * 10000) / 10000
+          return {
+            inventoryItemId: item.id,
+            qty,
+            orderedQty,
+            unitCost,
+            orderedCost,
+            packSize,
+            unit: slugUnitId(unit) || item.unit,
+            name: item.name,
+            source,
+          }
         })
         .filter(Boolean)
       if (!received.length) return state
@@ -1164,7 +1203,9 @@ function shopReducerBase(state, action) {
           unitCost: line.unitCost,
           kind: 'buy',
           ref: purchase.id,
-          note: purchase.number,
+          note: line.packSize > 1
+            ? `${purchase.number} · ${line.orderedQty} ${line.unit} @ ${line.packSize}/unit`
+            : purchase.number,
           name: line.name,
         })),
         { at, by, allowNegative: true },
@@ -1177,16 +1218,23 @@ function shopReducerBase(state, action) {
           vendor: purchase.vendor || supplier?.name || item.vendor,
           supplierId: purchase.supplierId || item.supplierId,
           incoming: Math.max(0, roundQty((Number(item.incoming) || 0) - line.qty, precision)),
+          // The book now knows how this item arrives: keep the pack the last
+          // delivery used as the item's default purchase unit.
+          purchaseUnit: line.unit || item.purchaseUnit || null,
         }
       })
 
       const lines = purchase.lines.map((line) => {
         const hit = received.find((entry) => entry.source?.id === line.id)
         if (!hit) return line
+        // Received quantities stay in the unit that was ordered — the
+        // purchase reads "6 of 10 cases", while stock took 72 stock units.
         return {
           ...line,
-          unitCost: hit.unitCost,
-          receivedQty: roundQty((Number(line.receivedQty) || 0) + hit.qty, precision),
+          packSize: hit.packSize,
+          unitCost: hit.orderedCost,
+          receivedQty: roundQty((Number(line.receivedQty) || 0) + hit.orderedQty, precision),
+          receivedBaseQty: roundQty((Number(line.receivedBaseQty) || 0) + hit.qty, precision),
         }
       })
       const fullyReceived = lines.every((line) => line.receivedQty >= line.qty)
@@ -1197,7 +1245,7 @@ function shopReducerBase(state, action) {
         receivedAt: at,
         updatedAt: at,
       }
-      const receivedTotal = Math.round(received.reduce((sum, line) => sum + line.qty * line.unitCost, 0) * 100) / 100
+      const receivedTotal = Math.round(received.reduce((sum, line) => sum + line.orderedQty * line.orderedCost, 0) * 100) / 100
       const invoiceLog = [
         ...state.invoiceLog,
         {
@@ -1207,7 +1255,19 @@ function shopReducerBase(state, action) {
           at,
           purchaseId: purchase.id,
           reference: purchase.reference || purchase.number,
-          lines: received.map(({ inventoryItemId, qty, unitCost }) => ({ inventoryItemId, qty, unitCost })),
+          // `qty` / `unitCost` are stock units (what the ledger used); the
+          // ordered pair keeps the invoice readable in the unit the vendor
+          // actually billed.
+          lines: received.map(({ inventoryItemId, qty, orderedQty, unit, packSize, unitCost, orderedCost }) => ({
+            inventoryItemId,
+            qty,
+            orderedQty,
+            unit,
+            packSize,
+            unitCost,
+            orderedCost,
+            orderedTotal: Math.round(orderedQty * orderedCost * 100) / 100,
+          })),
           total: receivedTotal,
         },
       ]

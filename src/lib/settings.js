@@ -10,6 +10,7 @@
 
 import { CURRENCY_CODES, currencyMeta } from './currency.js'
 import { STATIONS } from './constants.js'
+import { DEFAULT_PACK_NAMES, DEFAULT_UNITS, sanitizePackNames, sanitizeUnitList, slugUnitId } from './units.js'
 
 export const DOC_KINDS = ['invoice', 'receipt', 'ticket', 'report', 'purchase']
 
@@ -411,6 +412,18 @@ export function defaultSettings(locationLabel = 'Downtown') {
       printerKitchen: '',
     },
 
+    // Units of measure: the vocabulary the owner maintains (label, short
+    // label, family, factor) plus the pack labels offered when packaging an
+    // item, so "package / bottle / size" are data rather than code.
+    units: {
+      list: DEFAULT_UNITS.map((unit) => ({ ...unit })),
+      packNames: DEFAULT_PACK_NAMES.slice(),
+      defaultStockUnit: 'each',
+      defaultPurchaseUnit: 'case',
+      convertOnReceive: true,
+      showPackBreakdown: true,
+    },
+
     // Food: what the menu is made of and how it is sold. Lists are
     // editable in Settings; items reference them by name.
     food: {
@@ -595,6 +608,12 @@ export function sanitizeSettings(raw, locationLabel = 'Downtown') {
     base.stock.storageLocations,
   )
 
+  // Units are the vocabulary every other unit field points at, so they are
+  // resolved before stock, packaging, and the item sanitizers.
+  const unitList = sanitizeUnitList(source.units?.list)
+  const unitIds = unitList.map((unit) => unit.id)
+  const pickUnit = (value, fallback) => (unitIds.includes(slugUnitId(value)) ? slugUnitId(value) : fallback)
+
   return {
     ...base,
     restaurantName: clampText(source.restaurantName, 80) || base.restaurantName,
@@ -652,10 +671,24 @@ export function sanitizeSettings(raw, locationLabel = 'Downtown') {
       cycleCountDays: Math.trunc(clampNumber(source.stock?.cycleCountDays, 1, 90, base.stock.cycleCountDays)),
       wasteApprovalAbove: clampNumber(source.stock?.wasteApprovalAbove, 0, 100000, base.stock.wasteApprovalAbove),
       expiryWarnDays: Math.trunc(clampNumber(source.stock?.expiryWarnDays, 0, 60, base.stock.expiryWarnDays)),
-      defaultUnit: UNIT_OPTIONS.includes(source.stock?.defaultUnit) ? source.stock.defaultUnit : base.stock.defaultUnit,
+      // An explicit stock default wins; otherwise the stock unit follows the
+      // vocabulary's own default so the two never disagree.
+      defaultUnit: pickUnit(
+        source.stock?.defaultUnit || source.units?.defaultStockUnit || base.units.defaultStockUnit,
+        unitIds[0],
+      ),
       storageLocations: storageSpaces,
       requireCountReason: source.stock?.requireCountReason !== false,
       autoReceiveThousandths: Math.trunc(clampNumber(source.stock?.autoReceiveThousandths, 0, 4, base.stock.autoReceiveThousandths)),
+    },
+
+    units: {
+      list: unitList,
+      packNames: sanitizePackNames(source.units?.packNames),
+      defaultStockUnit: pickUnit(source.units?.defaultStockUnit, unitIds[0]),
+      defaultPurchaseUnit: slugUnitId(source.units?.defaultPurchaseUnit) || base.units.defaultPurchaseUnit,
+      convertOnReceive: source.units?.convertOnReceive !== false,
+      showPackBreakdown: source.units?.showPackBreakdown !== false,
     },
 
     food: {
@@ -906,6 +939,28 @@ export function configurationAudit(shop) {
       label: 'Stock policy chosen (valuation + reorder)',
       ok: Boolean(settings.stock?.valuationMethod && settings.stock?.reorderPolicy),
       fix: 'Pick how plate cost is valued and when reorder alerts fire.',
+      section: 'stock',
+    },
+    {
+      id: 'units',
+      label: 'Units of measure defined and used by every stock item',
+      ok: (settings.units?.list || []).length >= 3
+        && (settings.units?.list || []).some((unit) => unit.family === 'weight' || unit.family === 'volume')
+        && (shop?.inventory || []).every((item) => (settings.units?.list || []).some((unit) => unit.id === item.unit)),
+      fix: 'Add the units you buy in (kg, ml, bottle, …) and give every stock item one of them.',
+      section: 'stock',
+    },
+    {
+      id: 'packaging',
+      label: 'Packaging set on the items bought in packs',
+      ok: (() => {
+        const packed = (shop?.inventory || []).filter((item) => item.purchaseUnit || (item.packs || []).length)
+        return packed.length > 0
+          && packed.every((item) => (item.packs || []).length
+            && (item.packs || []).every((pack) => Number(pack.qty) > 0)
+            && (!item.purchaseUnit || (item.packs || []).some((pack) => pack.id === item.purchaseUnit)))
+      })(),
+      fix: 'Tell the app what a case or a bottle holds, so a purchase becomes the right amount of stock.',
       section: 'stock',
     },
     {
