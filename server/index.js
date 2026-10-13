@@ -13,6 +13,9 @@
 //   GET  /api/documents     → issued invoice/receipt/ticket/report registry (loc)
 //   POST /api/actions       → { seq } | 409 (illegal transition)
 //   GET  /api/events?since=N → SSE stream (replay + live)
+//   POST /api/telegram/webhook  → Telegram update → bot reply (+ actions)
+//   POST /api/telegram/simulate → run a bot command without changing state
+//   GET  /api/telegram/status   → token/chat wiring and command list
 //
 // Serves ../dist when built, so `npm run build && npm run server`
 // runs the whole restaurant on one port.
@@ -20,6 +23,7 @@
 import express from 'express'
 import fs from 'node:fs'
 import path from 'node:path'
+import { createTelegramRouter } from './telegram.js'
 import { STATE_VERSION, buildEmpire, migrateToEmpire, reducer } from '../src/lib/reducer.js'
 import { DOC_KINDS } from '../src/lib/settings.js'
 import {
@@ -185,6 +189,29 @@ app.post('/api/actions', (req, res) => {
   broadcast({ seq, action, clientId: clientId || 'anon' })
   res.json({ seq })
 })
+
+// ─── Telegram bot ───────────────────────────────────────────────
+// The bot runs the SAME reducer as the terminals: a /86 from a phone is
+// committed, logged, and broadcast exactly like a tap on the KDS.
+
+function applyActionServer(action, locId = 'downtown') {
+  if (!action || typeof action.type !== 'string' || REJECTED.has(action.type)) return false
+  const wrapped = action.type === 'LOC' ? action : { type: 'LOC', locId, action }
+  const next = reducer(state, wrapped)
+  if (next === state) return false
+  const nextSeq = commitAction('telegram', wrapped, next)
+  state = next
+  seq = nextSeq
+  broadcast({ seq, action: wrapped, clientId: 'telegram' })
+  return true
+}
+
+const telegram = createTelegramRouter({
+  getState: () => state,
+  applyAction: applyActionServer,
+  publicUrl: process.env.RESTORA_PUBLIC_URL || '',
+})
+app.use(telegram.router)
 
 // ─── SSE fan-out ────────────────────────────────────────────────
 
