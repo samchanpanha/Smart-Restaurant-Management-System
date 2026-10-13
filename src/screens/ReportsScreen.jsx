@@ -591,12 +591,11 @@ export default function ReportsScreen() {
 
   return (
     <div className="space-y-4">
-      <header className="flex flex-wrap items-end justify-between gap-3">
+      <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <div className="text-[11px] font-semibold uppercase tracking-widest text-amber-300">
-            Insight · step 8 · owner: Maya
-          </div>
-          <h1 className="mt-1 text-3xl font-bold tracking-tight">Reports</h1>
+          <div className="mb-1 text-xs font-semibold text-orange-600">Business overview</div>
+          <h1 className="text-3xl font-bold tracking-tight text-zinc-900">Reports &amp; Analytics</h1>
+          <p className="mt-1 text-sm text-zinc-500">Turn sales, service, and cost signals into the next best action.</p>
         </div>
         <div className="flex gap-1 rounded-xl bg-[var(--color-ink-900)] p-1 ring-1 ring-inset ring-[var(--color-ink-700)]" role="tablist" aria-label="Date range">
           {RANGES.map((r) => (

@@ -640,13 +640,57 @@ function WaitlistPanel({ onSeatWl, onError }) {
   )
 }
 
+function FloorMap({ tables, onOpen }) {
+  const statusStyles = {
+    free: 'bg-emerald-500 text-white shadow-emerald-900/10',
+    reserved: 'bg-violet-500 text-white shadow-violet-900/10',
+    seated: 'bg-orange-400 text-white shadow-orange-900/10',
+    ordered: 'bg-orange-500 text-white shadow-orange-900/10',
+    billed: 'bg-amber-100 text-amber-800 shadow-amber-900/5',
+    dirty: 'bg-zinc-200 text-zinc-600 shadow-zinc-900/5',
+  }
+  return (
+    <section className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 px-5 py-4">
+        <div><h2 className="text-base font-bold text-zinc-900">Restaurant floor</h2><p className="mt-0.5 text-xs text-zinc-500">Live table status · tap a table for actions</p></div>
+        <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700"><span className="h-2 w-2 rounded-full bg-emerald-500" />Live view</span>
+      </div>
+      <div className="relative overflow-hidden bg-[#fffdf9] p-5 sm:p-7">
+        <div className="pointer-events-none absolute inset-4 rounded-[28px] border-2 border-[#e8e2d8] sm:inset-6" />
+        <div className="pointer-events-none absolute left-7 top-7 rounded-xl border border-zinc-200 bg-white/90 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-zinc-500 shadow-sm">Kitchen</div>
+        <div className="pointer-events-none absolute right-8 top-7 rounded-xl border border-zinc-200 bg-white/90 px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-zinc-500 shadow-sm">Bar</div>
+        <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 bg-[#fffdf9] px-3 text-[10px] font-semibold text-zinc-500">Entrance</div>
+        <div className="relative grid min-h-[350px] grid-cols-3 items-center gap-x-4 gap-y-8 px-2 pb-5 pt-14 sm:min-h-[400px] sm:grid-cols-4 sm:gap-x-8 sm:gap-y-10 sm:px-8">
+          {tables.map((table) => {
+            const shape = table.seats >= 6 ? 'rounded-2xl' : table.seats === 2 ? 'rounded-full' : 'rounded-xl'
+            return (
+              <button key={table.id} type="button" onClick={() => onOpen(table)} aria-label={`${table.name}, ${TABLE_STATUS_META[table.status].label}, ${table.seats} seats`} title={`${table.name} · ${TABLE_STATUS_META[table.status].label}`} className="group mx-auto flex w-full max-w-[120px] flex-col items-center gap-1 transition-transform hover:-translate-y-0.5">
+                <span className={`relative flex h-14 w-full items-center justify-center ${shape} text-base font-bold shadow-md ring-4 ring-white/80 transition group-hover:scale-105 ${statusStyles[table.status] || statusStyles.free}`}>
+                  <span className="absolute -top-2 left-1/2 h-2 w-5 -translate-x-1/2 rounded-t-full bg-current opacity-30" />
+                  <span className="absolute -bottom-2 left-1/2 h-2 w-5 -translate-x-1/2 rounded-b-full bg-current opacity-30" />
+                  {table.name.replace('Table ', '')}
+                </span>
+                <span className="rounded-full bg-white/90 px-2 py-0.5 text-[9px] font-semibold text-zinc-500 shadow-sm">{table.seats} seats</span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-x-5 gap-y-2 border-t border-zinc-100 px-5 py-3 text-[11px] text-zinc-600">
+        {[['bg-emerald-500', 'Available'], ['bg-orange-500', 'Occupied'], ['bg-violet-500', 'Reserved'], ['bg-zinc-300', 'Needs cleaning']].map(([color, label]) => <span key={label} className="inline-flex items-center gap-2"><i className={`h-2.5 w-2.5 rounded-full ${color}`} />{label}</span>)}
+      </div>
+    </section>
+  )
+}
+
 // ─── Screen ─────────────────────────────────────────────────────
 
 export default function FloorScreen() {
-  const { state } = useRestora()
+  const { state, selectedTableId, setSelectedTableId } = useRestora()
   const [detailTableId, setDetailTableId] = useState(null)
   const [seatCtx, setSeatCtx] = useState(null) // { tableId, party, name, reservationId, waitlistId }
   const [banner, setBanner] = useState(null)
+  const [view, setView] = useState('map')
 
   function flash(msg) {
     setBanner(msg)
@@ -657,7 +701,8 @@ export default function FloorScreen() {
   const occupied = state.tables.filter((t) => ['seated', 'ordered', 'billed'].includes(t.status)).length
   const freeCount = state.tables.filter((t) => t.status === 'free').length
   const dirtyCount = state.tables.filter((t) => t.status === 'dirty').length
-  const detailTable = detailTableId ? state.tables.find((t) => t.id === detailTableId) : null
+  const activeDetailId = detailTableId || selectedTableId
+  const detailTable = activeDetailId ? state.tables.find((t) => t.id === activeDetailId) : null
 
   function openTable(table) {
     if (table.status === 'free') {
@@ -670,17 +715,17 @@ export default function FloorScreen() {
 
   return (
     <div className="space-y-5">
-      <header className="flex flex-wrap items-end justify-between gap-3">
+      <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <div className="text-[11px] font-semibold uppercase tracking-widest text-amber-300">
-            Live · step 2 · host: Alex
-          </div>
-          <h1 className="mt-1 text-3xl font-bold tracking-tight">Floor</h1>
+          <div className="mb-1 text-xs font-semibold text-orange-600">Floor operations</div>
+          <h1 className="text-3xl font-bold tracking-tight text-zinc-900">Tables</h1>
+          <p className="mt-1 text-sm text-zinc-500">Manage table status, guests, and the live floor.</p>
         </div>
-        <div className="flex gap-2">
-          <StatusPill tone="ok">Free · {freeCount}</StatusPill>
-          <StatusPill tone="info">Occupied · {occupied}</StatusPill>
-          <StatusPill tone={dirtyCount ? 'bad' : 'muted'}>Dirty · {dirtyCount}</StatusPill>
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-xl border border-zinc-200 bg-white p-1 shadow-sm" role="group" aria-label="Floor display">
+            <button type="button" onClick={() => setView('map')} aria-pressed={view === 'map'} className={`rounded-lg px-3 py-2 text-xs font-semibold ${view === 'map' ? 'bg-orange-500 text-white' : 'text-zinc-500 hover:bg-zinc-50'}`}>Map</button>
+            <button type="button" onClick={() => setView('list')} aria-pressed={view === 'list'} className={`rounded-lg px-3 py-2 text-xs font-semibold ${view === 'list' ? 'bg-orange-500 text-white' : 'text-zinc-500 hover:bg-zinc-50'}`}>List</button>
+          </div>
         </div>
       </header>
 
@@ -690,50 +735,43 @@ export default function FloorScreen() {
         </div>
       )}
 
-      <div className="grid gap-5 xl:grid-cols-3">
-        <div className="space-y-5 xl:col-span-2">
-          {ZONES.map((zone) => {
-            const tables = state.tables.filter((t) => t.zone === zone)
-            return (
-              <section key={zone}>
-                <h2 className="mb-2 text-xs font-bold uppercase tracking-widest text-zinc-500">
-                  {zone} · {tables.length} tables
-                </h2>
-                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-                  {tables.map((t) => (
-                    <TableCard key={t.id} table={t} onOpen={openTable} />
-                  ))}
-                </div>
-              </section>
-            )
-          })}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {[
+          { label: 'Occupied', value: occupied, note: `${state.tables.length ? Math.round((occupied / state.tables.length) * 100) : 0}% of floor`, tone: 'orange', icon: '▦' },
+          { label: 'Available', value: freeCount, note: 'Ready to seat', tone: 'green', icon: '✓' },
+          { label: 'Reserved', value: state.tables.filter((table) => table.status === 'reserved').length, note: 'Held for guests', tone: 'violet', icon: '◷' },
+          { label: 'Needs cleaning', value: dirtyCount, note: 'Bus & reset', tone: 'red', icon: '!' },
+        ].map((item) => <div key={item.label} className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-sm"><div className="flex items-center gap-3"><span className={`flex h-9 w-9 items-center justify-center rounded-xl text-sm font-bold ${item.tone === 'green' ? 'bg-emerald-50 text-emerald-700' : item.tone === 'violet' ? 'bg-violet-50 text-violet-700' : item.tone === 'red' ? 'bg-red-50 text-red-600' : 'bg-orange-50 text-orange-600'}`}>{item.icon}</span><span className="text-xs font-medium text-zinc-500">{item.label}</span></div><div className="tnum mt-2 text-2xl font-bold text-zinc-900">{item.value}</div><div className="mt-0.5 text-[10px] text-zinc-500">{item.note}</div></div>)}
+      </div>
+
+      <div className="grid items-start gap-4 xl:grid-cols-12">
+        <div className="space-y-4 xl:col-span-8">
+          {view === 'map' ? <FloorMap tables={state.tables} onOpen={openTable} /> : (
+            <div className="space-y-4">
+              {ZONES.map((zone) => {
+                const tables = state.tables.filter((table) => table.zone === zone)
+                return <section key={zone} className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm"><h2 className="mb-3 text-xs font-bold uppercase tracking-widest text-zinc-500">{zone} · {tables.length} tables</h2><div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">{tables.map((table) => <TableCard key={table.id} table={table} onOpen={openTable} />)}</div></section>
+              })}
+            </div>
+          )}
         </div>
 
-        <div className="space-y-5">
+        <aside className="space-y-4 xl:col-span-4">
           <ReservationsPanel
-            onSeatRes={(r) =>
-              setSeatCtx({
-                tableId: r.tableId,
-                party: r.partySize,
-                name: r.name,
-                reservationId: r.id,
-              })
-            }
+            onSeatRes={(reservation) => setSeatCtx({ tableId: reservation.tableId, party: reservation.partySize, name: reservation.name, reservationId: reservation.id })}
             onError={flash}
           />
           <WaitlistPanel
-            onSeatWl={(w) =>
-              setSeatCtx({ tableId: null, party: w.partySize, name: w.name, waitlistId: w.id })
-            }
+            onSeatWl={(waitlist) => setSeatCtx({ tableId: null, party: waitlist.partySize, name: waitlist.name, waitlistId: waitlist.id })}
             onError={flash}
           />
-        </div>
+        </aside>
       </div>
 
       {detailTable && (
         <TableDetail
           table={detailTable}
-          onClose={() => setDetailTableId(null)}
+          onClose={() => { setDetailTableId(null); setSelectedTableId(null) }}
           onSeat={(id) => setSeatCtx({ tableId: id, party: 2, name: '' })}
           onError={flash}
         />

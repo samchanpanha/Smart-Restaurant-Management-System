@@ -133,8 +133,8 @@ export default function SystemScreen() {
         <p className="mt-2 max-w-3xl text-sm leading-relaxed text-zinc-400">
           The ticket is the system of record — floor, kitchen, and inventory read the same order
           object. Every screen in steps 2–8 operates on the objects below; nothing invents a new
-          status. Data persists to localStorage; use <em>Reset demo data</em> to restore the
-          Friday-night seed.
+          status. Local demo data persists to localStorage; with the API connected, SQLite keeps the
+          shared snapshot, action history, and normalized menu catalog. Use <em>Reset demo data</em> to restore the Friday-night seed.
         </p>
       </header>
 

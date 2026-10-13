@@ -12,9 +12,21 @@ One operational system of record for the ticket — floor, kitchen, stock, and o
 npm install
 npm run dev      # → http://localhost:5173 (standalone demo, localStorage)
 npm run build    # production build → dist/
+npm test         # reducer, SQLite menu catalog, and workspace tab checks
 ```
 
 No backend needed for the demo: state persists to `localStorage`; **Reset demo data** in the sidebar restores the Friday-night seed.
+
+## Workspace tabs
+
+The app includes a Chrome-style tab strip above the active screen. Use **+** to
+open a tab, select a tab to switch screens, and **×** to close one. Each tab
+keeps its own screen and store location; restaurant data remains shared. The
+last remaining tab closes back to the current role's default screen (Floor when
+available). Keyboard shortcuts: **Ctrl/⌘+T** opens
+a tab, **Ctrl/⌘+W** closes the active tab, and **Ctrl/⌘+Tab** switches tabs
+(**Ctrl/⌘+Shift+Tab** goes backward). Tabs are session-only and reset to one
+tab when the app reloads.
 
 ## Two terminals, one truth (backend)
 
@@ -39,6 +51,29 @@ built frontend + API together (API on `:3001`, or set `PORT=`).
 
 Data lives in `server/data/restora.sqlite` (git-ignored). Delete it to reseed.
 Sidebar shows link state: **Live · server** / **Offline · this terminal** / **Local demo**.
+
+### SQLite menu catalog
+
+The existing snapshot/action-log database now also maintains a normalized,
+location-scoped catalog. Menu changes are projected in the same SQLite
+transaction as the state snapshot and action log. Tables include:
+
+- `menu_categories` and `menu_items` (prices stored as integer cents)
+- `menu_item_labels` for dietary labels and allergen notes
+- `menu_modifier_groups` and `menu_modifier_options`
+
+The owner can add/edit items in **Control → Menu & Recipes**. Descriptions,
+category, price, kitchen station, optional image URL, dietary/allergen labels,
+86 status, and guest visibility are saved per location. The customer QR menu
+reads those details and falls back to local state when the API is offline.
+
+Read endpoint: `GET /api/menu?loc=downtown` (optional `q`, `category`, and
+`availableOnly=true` filters). For example, `/api/menu?loc=riverside&q=salmon`
+returns Riverside's salmon item.
+
+Allergen/dietary notes in the included demo seed are examples only; verify them
+against the actual recipe and kitchen cross-contact practices before using them
+for guest safety decisions.
 
 Known v1 limits: actions apply optimistically — if two terminals race (same
 table), the server rejects the loser (`409`) and it resyncs. Edits made while

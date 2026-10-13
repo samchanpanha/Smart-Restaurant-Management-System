@@ -11,6 +11,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useReducer,
 import { ROLE_NAV } from './constants'
 import { uid } from './models'
 import { buildEmpire, migrateToEmpire, reducer } from './reducer'
+import { activeWorkspaceTab, createWorkspace, workspaceReducer } from './workspace'
 
 // Re-exported so screens keep importing from one place.
 export { getAlerts, getDashboard, quoteWait, tableName } from './reducer'
@@ -74,6 +75,13 @@ function locOfTable(empire, tableId) {
   return null
 }
 
+function initialScreen(kiosk) {
+  if (kiosk.role && kiosk.screen && !ROLE_NAV[kiosk.role].includes(kiosk.screen)) {
+    return ROLE_NAV[kiosk.role][0]
+  }
+  return kiosk.screen || (kiosk.role ? ROLE_NAV[kiosk.role][0] : 'floor')
+}
+
 async function fetchState(signal) {
   const res = await fetch('/api/state', { signal })
   if (!res.ok) throw new Error(`state ${res.status}`)
@@ -87,17 +95,43 @@ export function RestoraProvider({ children }) {
   const empireInit = useMemo(() => loadPersisted() || buildEmpire(), [])
   const kiosk = useMemo(kioskParams, [])
   const [empire, rawDispatch] = useReducer(reducer, empireInit)
-  const [locId, setLocId] = useState(
-    () => locOfTable(empireInit, kiosk.guest) || kiosk.loc || 'downtown',
+  const [workspace, workspaceDispatch] = useReducer(
+    workspaceReducer,
+    null,
+    () => createWorkspace(
+      initialScreen(kiosk),
+      locOfTable(empireInit, kiosk.guest) || kiosk.loc || 'downtown',
+      uid('tab'),
+    ),
   )
+  const activeTab = activeWorkspaceTab(workspace)
+  const { tabs, activeTabId } = workspace
+  const locId = activeTab?.locId || 'downtown'
+  const screen = activeTab?.screen || 'floor'
+  const setScreen = useCallback((nextScreen) => {
+    workspaceDispatch({ type: 'SET_SCREEN', screen: nextScreen })
+  }, [])
+  const setLocId = useCallback((nextLocId) => {
+    workspaceDispatch({ type: 'SET_LOCATION', locId: nextLocId })
+  }, [])
+  const openTab = useCallback((nextScreen = 'floor') => {
+    workspaceDispatch({ type: 'OPEN_TAB', id: uid('tab'), screen: nextScreen })
+  }, [])
+  const activateTab = useCallback((tabId) => {
+    workspaceDispatch({ type: 'ACTIVATE_TAB', tabId })
+  }, [])
+  const closeTab = useCallback((tabId, fallbackScreen = 'floor') => {
+    workspaceDispatch({
+      type: 'CLOSE_TAB',
+      tabId,
+      replacementId: uid('tab'),
+      fallbackScreen,
+    })
+  }, [])
   const [role, setRole] = useState(kiosk.role || 'owner')
-  const [screen, setScreen] = useState(() => {
-    if (kiosk.screen) return kiosk.screen
-    if (kiosk.role) return ROLE_NAV[kiosk.role][0]
-    return 'floor'
-  })
   const [selectedTableId, setSelectedTableId] = useState(null)
   const [selectedDishId, setSelectedDishId] = useState(null)
+  const [selectedOrderId, setSelectedOrderId] = useState(null)
 
   const state = useMemo(
     () => empire.locations[locId] || empire.locations.downtown,
@@ -106,6 +140,8 @@ export function RestoraProvider({ children }) {
 
   // link: { mode: 'local'|'server', status: 'starting'|'live'|'offline'|'local' }
   const [link, setLink] = useState({ mode: 'local', status: 'starting' })
+  const linkRef = useRef(link)
+  linkRef.current = link
   const [notice, setNotice] = useState(null)
   const locRef = useRef(locId)
   locRef.current = locId
@@ -134,7 +170,7 @@ export function RestoraProvider({ children }) {
     if (!kiosk.guest) return
     const found = locOfTable(empire, kiosk.guest)
     if (found && found !== locRef.current) setLocId(found)
-  }, [empire, kiosk.guest])
+  }, [empire, kiosk.guest, setLocId])
 
   const resync = useCallback(async () => {
     try {
@@ -322,10 +358,11 @@ export function RestoraProvider({ children }) {
   const value = useMemo(
     () => ({
       state, empire, dispatch, role, setRole, screen, setScreen,
+      tabs, activeTabId, openTab, activateTab, closeTab,
       selectedTableId, setSelectedTableId, selectedDishId, setSelectedDishId,
-      locId, setLocId, link, resync, notice,
+      selectedOrderId, setSelectedOrderId, locId, setLocId, link, resync, notice,
     }),
-    [state, empire, dispatch, role, screen, selectedTableId, selectedDishId, locId, link, resync, notice],
+    [state, empire, dispatch, role, screen, setScreen, tabs, activeTabId, openTab, activateTab, closeTab, selectedTableId, selectedDishId, selectedOrderId, locId, setLocId, link, resync, notice],
   )
 
   if (link.status === 'starting') {

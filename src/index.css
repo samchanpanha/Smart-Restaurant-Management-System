@@ -86,3 +86,253 @@ body {
 .animate-status-in {
   animation: restora-pulse-in 0.25s ease-out;
 }
+
+/* ─── Restora web-ops light theme ─────────────────────────────────── */
+/* Semantic ink tokens are scoped to the staff workspace so the guest QR
+   experience can keep its own surface treatment. */
+.restora-theme {
+  color-scheme: light;
+  --color-ink-950: #f5f6f8;
+  --color-ink-900: #ffffff;
+  --color-ink-850: #fafbfc;
+  --color-ink-800: #f6f7f9;
+  --color-ink-700: #e6e8eb;
+  --color-ink-600: #d4d7dc;
+  --color-paper-50: #f8f9fb;
+  --color-paper-100: #eef0f3;
+  --color-paper-200: #e1e4e8;
+
+  /* Pull the existing utility palette into the warm orange / clean white
+     reference design without changing the stateful screens' behavior. */
+  --color-amber-100: #b84a12;
+  --color-amber-200: #b84a12;
+  --color-amber-300: #d45b17;
+  --color-amber-400: #fb8438;
+  --color-amber-500: #f36a21;
+  --color-amber-600: #df5817;
+  --color-emerald-200: #146b4f;
+  --color-emerald-300: #17835d;
+  --color-sky-200: #155d91;
+  --color-sky-300: #1675b8;
+  --color-red-200: #9c3030;
+  --color-red-300: #bd3737;
+  --color-violet-200: #6549a6;
+  --color-violet-300: #795cc0;
+
+  color: #25282c;
+  background: var(--color-ink-950);
+  min-height: 100vh;
+}
+
+.restora-theme :is(.app-topbar, .app-tabs, .app-workspace) .text-zinc-100 { color: #1d2024; }
+.restora-theme :is(.app-topbar, .app-tabs, .app-workspace) .text-zinc-200 { color: #2d3137; }
+.restora-theme :is(.app-topbar, .app-tabs, .app-workspace) .text-zinc-300 { color: #454b53; }
+.restora-theme :is(.app-topbar, .app-tabs, .app-workspace) .text-zinc-400 { color: #626a74; }
+.restora-theme :is(.app-topbar, .app-tabs, .app-workspace) .text-zinc-500 { color: #77808b; }
+.restora-theme :is(.app-topbar, .app-tabs, .app-workspace) .text-zinc-600 { color: #626a74; }
+.restora-theme :is(.app-topbar, .app-tabs, .app-workspace) .text-zinc-700 { color: #4b5159; }
+.restora-theme :is(.app-topbar, .app-tabs, .app-workspace) .text-zinc-800 { color: #30343a; }
+
+.restora-theme .app-sidebar {
+  --color-ink-950: #131416;
+  --color-ink-900: #17181a;
+  --color-ink-850: #1e2022;
+  --color-ink-800: #222427;
+  --color-ink-700: #2c2f33;
+  --color-ink-600: #3b3e42;
+  --color-zinc-100: #f7f7f7;
+  --color-zinc-200: #e9eaec;
+  --color-zinc-300: #d4d6d9;
+  --color-zinc-400: #b6b9be;
+  --color-zinc-500: #92969c;
+  --color-zinc-600: #74787d;
+  --color-amber-100: #ffd7bd;
+  --color-amber-200: #ffd7bd;
+  --color-amber-300: #ff9a62;
+  --color-amber-400: #ff8736;
+  --color-amber-500: #f36a21;
+  --color-amber-600: #df5817;
+
+  color: #f8f8f8;
+  background: #17181a;
+  border-color: #2a2c2f;
+}
+
+.restora-theme .app-sidebar nav > div > div:first-child {
+  color: #85898f;
+}
+
+.restora-theme .app-topbar {
+  min-height: 68px;
+  border-bottom: 1px solid #e9eaed;
+  background: #fff;
+  color: #202328;
+}
+
+ .restora-theme .app-tabs {
+  border-bottom-color: #eceef0;
+  background: #fff;
+}
+
+.restora-theme .app-workspace {
+  background: #f7f8fa;
+}
+
+.restora-theme .app-page {
+  width: 100%;
+  max-width: 1480px;
+  margin-inline: auto;
+  padding: 28px 30px 40px;
+}
+
+.restora-theme input,
+.restora-theme select,
+.restora-theme textarea {
+  color: #25282c;
+  background-color: #fff;
+}
+
+.restora-theme input::placeholder,
+.restora-theme textarea::placeholder {
+  color: #9aa1aa;
+}
+
+.restora-theme .rounded-2xl.border,
+.restora-theme .rounded-xl.border {
+  box-shadow: 0 1px 2px rgb(20 28 38 / 4%);
+}
+
+.restora-theme .bg-black\/30,
+.restora-theme .bg-black\/40,
+.restora-theme .bg-black\/50 {
+  background-color: rgb(33 39 48 / 5%);
+}
+
+.restora-theme .app-sidebar .bg-black\/30,
+.restora-theme .app-sidebar .bg-black\/40,
+.restora-theme .app-sidebar .bg-black\/50 {
+  background-color: rgb(0 0 0 / 24%);
+}
+
+.restora-theme .bg-white\/5 {
+  background-color: rgb(40 48 58 / 3%);
+}
+
+.restora-theme .bg-white\/10 {
+  background-color: rgb(40 48 58 / 6%);
+}
+
+.restora-theme .app-sidebar .bg-white\/5 {
+  background-color: rgb(255 255 255 / 5%);
+}
+
+.restora-theme .app-sidebar .bg-white\/10 {
+  background-color: rgb(255 255 255 / 9%);
+}
+
+.restora-theme .border-white\/5 {
+  border-color: #eef0f2;
+}
+
+.restora-theme .divide-white\/5 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #eef0f2;
+}
+
+.restora-theme .app-sidebar .border-white\/5 {
+  border-color: rgb(255 255 255 / 8%);
+}
+
+.restora-theme .bg-amber-500\/5 { background-color: rgb(243 106 33 / 5%); }
+.restora-theme .bg-amber-500\/10 { background-color: rgb(243 106 33 / 9%); }
+.restora-theme .bg-amber-500\/15 { background-color: rgb(243 106 33 / 11%); }
+.restora-theme .bg-emerald-500\/5 { background-color: rgb(23 131 93 / 5%); }
+.restora-theme .bg-emerald-500\/10 { background-color: rgb(23 131 93 / 8%); }
+.restora-theme .bg-emerald-500\/15 { background-color: rgb(23 131 93 / 10%); }
+.restora-theme .bg-sky-500\/5 { background-color: rgb(22 117 184 / 5%); }
+.restora-theme .bg-sky-500\/10 { background-color: rgb(22 117 184 / 8%); }
+.restora-theme .bg-sky-500\/15 { background-color: rgb(22 117 184 / 10%); }
+.restora-theme .bg-red-500\/5 { background-color: rgb(189 55 55 / 5%); }
+.restora-theme .bg-red-500\/10 { background-color: rgb(189 55 55 / 8%); }
+.restora-theme .bg-red-500\/15 { background-color: rgb(189 55 55 / 10%); }
+.restora-theme .bg-violet-500\/10 { background-color: rgb(121 92 192 / 9%); }
+.restora-theme .bg-violet-500\/20 { background-color: rgb(121 92 192 / 12%); }
+
+.restora-theme .app-sidebar .rounded-lg.bg-amber-500,
+.restora-theme .app-sidebar .bg-amber-500 {
+  color: #fff;
+}
+
+.restora-theme .app-sidebar select {
+  color: #f7f7f7;
+  background-color: #242629;
+}
+
+.restora-theme .text-white {
+  color: #fff;
+}
+
+.restora-theme .app-sidebar .text-black {
+  color: #fff;
+}
+
+@media (max-width: 768px) {
+  .restora-theme .app-page {
+    padding: 20px 16px 32px;
+  }
+}
+
+.restora-theme .global-search input {
+  background: transparent;
+}
+
+.restora-theme .bg-amber-500.text-black {
+  color: #fff;
+}
+
+@media (max-width: 760px) {
+  .restora-theme .app-sidebar {
+    width: 68px;
+  }
+
+  .restora-theme .app-sidebar > div:first-child {
+    padding-inline: 10px;
+  }
+
+  .restora-theme .app-sidebar-copy,
+  .restora-theme .app-sidebar-label,
+  .restora-theme .app-sidebar-branch,
+  .restora-theme .app-sidebar .status-pill-label,
+  .restora-theme .app-sidebar .reset-label {
+    display: none;
+  }
+
+  .restora-theme .app-sidebar nav {
+    padding-inline: 8px;
+  }
+
+  .restora-theme .app-sidebar nav button {
+    justify-content: center;
+    padding-inline: 0;
+  }
+
+  .restora-theme .app-sidebar nav button span:last-child {
+    display: none;
+  }
+
+  .restora-theme .app-sidebar > div:last-child {
+    padding-inline: 7px;
+  }
+
+  .restora-theme .app-sidebar > div:last-child > div:last-of-type {
+    display: none;
+  }
+
+  .restora-theme .app-topbar {
+    gap: 10px;
+    padding-inline: 12px;
+  }
+
+  .restora-theme .app-page {
+    padding-inline: 14px;
+  }
+}
