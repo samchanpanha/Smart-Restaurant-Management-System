@@ -4,6 +4,8 @@ import { NAV_SECTIONS, ROLE_NAV } from './lib/constants'
 import { RestoraProvider, useRestora } from './lib/store'
 import CatalogScreen from './screens/CatalogScreen'
 import ComingSoon from './screens/ComingSoon'
+import MiniAppScreen from './screens/MiniAppScreen'
+import TelegramScreen from './screens/TelegramScreen'
 import NewTabPicker from './components/NewTabPicker'
 import CostingScreen from './screens/CostingScreen'
 import DashboardScreen from './screens/DashboardScreen'
@@ -28,9 +30,25 @@ function guestTableId() {
   }
 }
 
+/** ?tg=1 opens the Telegram mini app instead of the terminal workspace. */
+function telegramMiniApp() {
+  try {
+    return new URLSearchParams(window.location.search).get('tg') !== null
+  } catch {
+    return false
+  }
+}
+
 const SCREEN_LABELS = Object.fromEntries(
   NAV_SECTIONS.flatMap((section) => section.items.map((item) => [item.id, item.label])),
 )
+
+/** The mini app falls back to the first table when the link has no table. */
+function MiniAppFrame({ tableId }) {
+  const { state } = useRestora()
+  const resolved = tableId || state.tables[0]?.id || ''
+  return <MiniAppScreen tableId={resolved} />
+}
 
 /**
  * A tab keeps the screen it was opened with, but a role that cannot open
@@ -83,11 +101,21 @@ export function Router() {
   if (screen === 'settings') return <SettingsScreen />
   if (screen === 'costing') return <CostingScreen />
   if (screen === 'reports') return <ReportsScreen />
+  if (screen === 'telegram') return <TelegramScreen />
   return <ComingSoon screen={screen} />
 }
 
 export default function App() {
   const guest = guestTableId()
+  const miniApp = telegramMiniApp()
+  // The Telegram mini app is the guest menu with the platform chrome on top.
+  if (miniApp) {
+    return (
+      <RestoraProvider>
+        <MiniAppFrame tableId={guest} />
+      </RestoraProvider>
+    )
+  }
   // Guests get their own light app — same provider, same live ticket.
   if (guest) {
     return (

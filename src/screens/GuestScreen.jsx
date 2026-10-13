@@ -231,6 +231,9 @@ export default function GuestScreen({ tableId }) {
     setJustSent(true)
     setTab('status')
     window.setTimeout(() => setJustSent(false), 5000)
+    // The Telegram mini app listens for this to fire a haptic tap and to
+    // collapse its cart sheet; in a plain browser nobody is listening.
+    window.dispatchEvent(new CustomEvent('restora:order-sent', { detail: { tableId } }))
   }
 
   // Photo policy lives in Settings → Food & menu so a slow connection can
