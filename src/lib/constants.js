@@ -129,7 +129,7 @@ export const SCREEN_ICONS = {
 }
 
 export const ROLE_NAV = {
-  owner: ['dashboard', 'floor', 'tickets', 'kitchen', 'menu', 'catalog', 'inventory', 'suppliers', 'reports', 'costing', 'settings', 'system'],
+  owner: ['dashboard', 'floor', 'tickets', 'kitchen', 'menu', 'catalog', 'inventory', 'movements', 'suppliers', 'purchases', 'reports', 'costing', 'settings', 'system', 'telegram'],
   server: ['floor', 'tickets'],
   kitchen: ['kitchen'],
   host: ['floor', 'dashboard'],
@@ -153,6 +153,8 @@ export const NAV_SECTIONS = [
       { id: 'menu', label: 'Menu & Recipes', step: 7 },
       { id: 'catalog', label: 'Catalog', step: 9 },
       { id: 'inventory', label: 'Inventory', step: 5 },
+      { id: 'movements', label: 'Stock movements', step: 5 },
+      { id: 'purchases', label: 'Purchases', step: 9 },
       { id: 'suppliers', label: 'Suppliers', step: 9 },
     ],
   },
@@ -169,6 +171,7 @@ export const NAV_SECTIONS = [
     label: 'Settings',
     items: [
       { id: 'settings', label: 'Settings & Documents', step: 9 },
+      { id: 'telegram', label: 'Telegram & Mini App', step: 9 },
       { id: 'system', label: 'System & Model', step: 1 },
     ],
   },

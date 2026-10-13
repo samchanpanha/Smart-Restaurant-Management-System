@@ -230,6 +230,7 @@ export function defaultTemplates() {
       showTaxBreakdown: true,
       showServiceCharge: false,
       showDiscount: false,
+      showShipping: true,
       showPaymentTerms: true,
       showBankDetails: false,
       showSignature: true,

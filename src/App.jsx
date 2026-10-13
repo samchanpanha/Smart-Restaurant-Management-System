@@ -11,6 +11,8 @@ import GuestScreen from './screens/GuestScreen'
 import InventoryScreen from './screens/InventoryScreen'
 import KitchenScreen from './screens/KitchenScreen'
 import MenuScreen from './screens/MenuScreen'
+import MovementsScreen from './screens/MovementsScreen'
+import PurchasesScreen from './screens/PurchasesScreen'
 import ReportsScreen from './screens/ReportsScreen'
 import SettingsScreen from './screens/SettingsScreen'
 import SuppliersScreen from './screens/SuppliersScreen'
@@ -73,6 +75,8 @@ export function Router() {
   if (screen === 'menu') return <MenuScreen />
   if (screen === 'catalog') return <CatalogScreen />
   if (screen === 'suppliers') return <SuppliersScreen />
+  if (screen === 'purchases') return <PurchasesScreen />
+  if (screen === 'movements') return <MovementsScreen />
   if (screen === 'settings') return <SettingsScreen />
   if (screen === 'costing') return <CostingScreen />
   if (screen === 'reports') return <ReportsScreen />

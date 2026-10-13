@@ -21,6 +21,7 @@ import express from 'express'
 import fs from 'node:fs'
 import path from 'node:path'
 import { STATE_VERSION, buildEmpire, migrateToEmpire, reducer } from '../src/lib/reducer.js'
+import { DOC_KINDS } from '../src/lib/settings.js'
 import {
   actionsSince, commitAction, getCategories, getDocumentTotals, getDocuments, getInventory,
   getMenuCatalog, getSettings, getSuppliers, loadSnapshot, logStats, saveSnapshot, syncMenuCatalog,
@@ -149,8 +150,8 @@ app.get('/api/documents', (req, res) => {
   const locationId = resolveLocation(req, res)
   if (!locationId) return
   const kind = shortQuery(req.query.kind, 16)
-  if (kind && !['invoice', 'receipt', 'ticket', 'report'].includes(kind)) {
-    return res.status(400).json({ error: 'kind must be invoice, receipt, ticket, or report' })
+  if (kind && !DOC_KINDS.includes(kind)) {
+    return res.status(400).json({ error: `kind must be one of ${DOC_KINDS.join(', ')}` })
   }
   res.setHeader('Cache-Control', 'no-store')
   res.json({

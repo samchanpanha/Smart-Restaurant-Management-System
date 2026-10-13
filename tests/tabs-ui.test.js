@@ -294,7 +294,7 @@ test('switching role keeps the workspace, locks what the role cannot open', asyn
   // … the nav offers only what the role may open …
   assert.equal(navButton('Settings'), undefined)
   assert.equal(navButton('Kitchen'), undefined)
-  assert.ok(navButton('Orders'))
+  assert.ok(navButton('Tickets'))
   // … and switching back restores the very same tab untouched.
   await setRole('owner')
   assert.match(container.textContent, /Live kitchen display/)
@@ -312,7 +312,7 @@ test('a second tab the role can open stays live while another is restricted', as
   await setRole('server')
   // Jump to the Inventory tab — the server role owns Tickets/Floor, so the
   // Inventory tab is restricted too; the Tickets tab renders fine.
-  click(navButton('Orders'))
+  click(navButton('Tickets'))
   await flush()
   assert.match(container.textContent, /Track and manage every order/)
   keydown('1', { alt: true })

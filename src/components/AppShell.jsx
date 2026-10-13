@@ -9,27 +9,12 @@ import { Icon } from './Icon'
 import { NAV_SECTIONS, ROLES, ROLE_NAV, SCREEN_ICONS, screenForAlert } from '../lib/constants'
 import { getAlerts, LOCATIONS, useNow, useRestora } from '../lib/store'
 
-const NAV_LABELS = {
-  dashboard: 'Dashboard',
-  floor: 'Tables',
-  tickets: 'Orders',
-  kitchen: 'Kitchen',
-  inventory: 'Inventory',
-  menu: 'Menu & Recipes',
-  catalog: 'Catalog',
-  suppliers: 'Suppliers',
-  purchases: 'Purchases',
-  costing: 'Food Cost & Profit',
-  reports: 'Reports',
-  settings: 'Settings',
-  system: 'System & Model',
-}
-
-// Sidebar order follows the nav sections; icons come from the shared map.
+// One label per screen, everywhere: the sidebar, the tab strip and the
+// restricted-screen panel all read the same source, so a screen is never
+// called two different things.
 const NAV_ITEMS = NAV_SECTIONS
-  .flatMap((section) => section.items.map((item) => item.id))
-  .filter((id) => NAV_LABELS[id])
-  .map((id) => ({ id, label: NAV_LABELS[id], icon: SCREEN_ICONS[id] || 'dashboard' }))
+  .flatMap((section) => section.items)
+  .map((item) => ({ id: item.id, label: item.label, icon: SCREEN_ICONS[item.id] || 'dashboard' }))
 
 function displayOrderId(id) {
   const suffix = String(id || '').replace(/\D/g, '').slice(-4)

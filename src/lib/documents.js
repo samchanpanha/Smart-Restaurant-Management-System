@@ -382,6 +382,85 @@ export function buildShiftReport(shop, { range = 'tonight', now = Date.now() } =
   }
 }
 
+/**
+ * A purchase order is the same paper as an invoice with the parties
+ * swapped: the house is the buyer, the supplier is the vendor, and the
+ * lines are what is being ordered. Quantities carry what has already
+ * arrived, so a partially delivered order can be re-sent as-is.
+ */
+export function buildPurchaseOrderDocument({ shop, purchase, settings } = {}) {
+  const template = templateFor(settings, 'purchase')
+  const currency = documentCurrency(settings, template)
+  const supplier = (shop.suppliers || []).find((entry) => entry.id === purchase?.supplierId)
+  const inventoryById = Object.fromEntries((shop.inventory || []).map((item) => [item.id, item]))
+
+  const lines = (purchase?.lines || []).map((line) => {
+    const item = inventoryById[line.inventoryItemId]
+    const qty = Number(line.qty) || 0
+    const unitCost = Number(line.unitCost) || 0
+    const received = Number(line.receivedQty) || 0
+    return {
+      id: line.id,
+      name: line.name || item?.name || 'Item',
+      sku: item?.sku || '',
+      unit: line.unit || item?.unit || '',
+      qty,
+      receivedQty: received,
+      backorderQty: Math.max(0, Math.round((qty - received) * 1000) / 1000),
+      unitPrice: unitCost,
+      lineTotal: roundMoney(qty * unitCost),
+      notes: received > 0 && received < qty ? `${received} of ${qty} received` : '',
+    }
+  })
+
+  const subtotal = roundMoney(lines.reduce((sum, line) => sum + line.lineTotal, 0))
+  const tax = roundMoney(Number(purchase?.tax) || 0)
+  const shipping = roundMoney(Number(purchase?.shipping) || 0)
+
+  return {
+    kind: 'purchase',
+    title: template.title,
+    issuedAt: new Date().toISOString(),
+    number: purchase?.number || '',
+    reference: purchase?.reference || purchase?.id || '',
+    currency,
+    seller: sellerBlock(settings),
+    partyLabels: { left: 'Vendor', right: 'Deliver to' },
+    customer: {
+      label: purchase?.vendor || supplier?.name || 'Unassigned vendor',
+      lines: [
+        supplier?.contact ? `Contact: ${supplier.contact}` : '',
+        supplier?.email || '',
+        supplier?.phone || '',
+        purchase?.reference ? `Their ref: ${purchase.reference}` : '',
+      ].filter(Boolean),
+    },
+    delivery: {
+      expectedAt: purchase?.expectedAt || null,
+      orderedAt: purchase?.orderedAt || null,
+      receivedAt: purchase?.receivedAt || null,
+      status: purchase?.status || 'draft',
+      location: settings.restaurantName,
+      addressLines: (settings.addressLines || []).filter(Boolean),
+    },
+    lines,
+    totals: {
+      subtotal,
+      tax,
+      taxPct: Number(settings.taxPct) || 0,
+      taxLabel: settings.taxLabel || 'Tax',
+      shipping,
+      grandTotal: roundMoney(subtotal + tax + shipping),
+    },
+    payments: [],
+    meta: {
+      status: purchase?.status || 'draft',
+      note: clampText(purchase?.note, 240),
+      createdBy: purchase?.createdBy || '',
+    },
+  }
+}
+
 export function buildReportDocument({ shop, settings, report, range = 'tonight' } = {}) {
   const template = templateFor(settings, 'report')
   const currency = documentCurrency(settings, template)
@@ -451,6 +530,9 @@ function totalsRows(doc, template) {
   if (template.showTaxBreakdown && t.tax) {
     rows.push(`<tr><td>${escapeHtml(t.taxLabel)} (${((t.taxPct || 0) * 100).toFixed(3).replace(/0+$/, '').replace(/\.$/, '')}%)</td><td class="num">${escapeHtml(money(t.tax, doc.currency))}</td></tr>`)
   }
+  if (t.shipping) {
+    rows.push(`<tr><td>Delivery</td><td class="num">${escapeHtml(money(t.shipping, doc.currency))}</td></tr>`)
+  }
   if (t.rounding) {
     rows.push(`<tr><td>Rounding</td><td class="num">${escapeHtml(money(t.rounding, doc.currency))}</td></tr>`)
   }
@@ -498,9 +580,18 @@ export function renderDocumentHtml(doc, settings, options = {}) {
 
   const partyRow = (template.showCustomer && doc.customer) ? `
     <section class="parties">
-      <div><span class="label">Billed to</span><div class="value">${escapeHtml(doc.customer.label)}</div>${addressHtml(doc.customer.lines || [])}</div>
-      <div><span class="label">Served by</span><div class="value">${escapeHtml(doc.meta?.serverLabel || doc.customer.lines?.[0] || 'Restora team')}</div>${doc.customer.dueDate ? `<div class="muted">Due ${escapeHtml(new Date(doc.customer.dueDate).toLocaleDateString())}</div>` : ''}</div>
+      <div><span class="label">${escapeHtml(doc.partyLabels?.left || 'Billed to')}</span><div class="value">${escapeHtml(doc.customer.label)}</div>${addressHtml(doc.customer.lines || [])}</div>
+      <div><span class="label">${escapeHtml(doc.partyLabels?.right || 'Served by')}</span><div class="value">${escapeHtml(doc.delivery?.location || doc.meta?.serverLabel || doc.customer.lines?.[0] || 'Restora team')}</div>${addressHtml(doc.delivery?.addressLines || [])}${doc.customer.dueDate ? `<div class="muted">Due ${escapeHtml(new Date(doc.customer.dueDate).toLocaleDateString())}</div>` : ''}</div>
     </section>` : ''
+
+  const poStrip = doc.kind === 'purchase' ? `
+    <section class="po-strip">
+      <div><span class="label">Status</span><div class="value">${escapeHtml(String(doc.delivery?.status || 'draft').replace(/^./, (c) => c.toUpperCase()))}</div></div>
+      <div><span class="label">Ordered</span><div class="value">${escapeHtml(doc.delivery?.orderedAt ? new Date(doc.delivery.orderedAt).toLocaleDateString() : '—')}</div></div>
+      <div><span class="label">Expected</span><div class="value">${escapeHtml(doc.delivery?.expectedAt ? new Date(doc.delivery.expectedAt).toLocaleDateString() : '—')}</div></div>
+      <div><span class="label">Received</span><div class="value">${escapeHtml(doc.delivery?.receivedAt ? new Date(doc.delivery.receivedAt).toLocaleDateString() : '—')}</div></div>
+    </section>
+    <section class="note-line">${doc.meta?.note ? `Order note: ${escapeHtml(doc.meta.note)}` : ''}</section>` : ''
 
   const body = doc.kind === 'ticket' ? renderTicketBody(doc, template) : `
     <table class="lines">
@@ -537,6 +628,9 @@ export function renderDocumentHtml(doc, settings, options = {}) {
   .doc-title { font-weight: 800; letter-spacing: .14em; font-size: .95em; color: ${accent}; }
   .doc-number { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .85em; }
   .doc-date { font-size: .75em; color: #6b7280; }
+  .po-strip { display: flex; gap: 10px; margin: 10px 0 4px; }
+  .po-strip > div { flex: 1; border: 1px solid #e6e8eb; border-radius: 6px; padding: 5px 8px; background: #fafbfc; }
+  .note-line { font-size: .82em; color: #444b55; margin-bottom: 8px; min-height: 1em; }
   .parties { display: flex; gap: 12px; margin: 10px 0; }
   .parties > div { flex: 1; border: 1px solid #e6e8eb; border-radius: 6px; padding: 6px 8px; }
   .label { display: block; font-size: .68em; letter-spacing: .1em; text-transform: uppercase; color: #78808b; }
@@ -580,7 +674,7 @@ export function renderDocumentHtml(doc, settings, options = {}) {
   <div class="sheet">
     ${header}
     ${partyRow}
-    ${body}
+    ${poStrip}${body}
     ${reportBody}
     ${doc.customer?.dueDate && doc.kind === 'invoice' ? `<div class="foot"><div>Payment terms: ${escapeHtml(doc.customer.paymentTerms || '')} · due ${escapeHtml(new Date(doc.customer.dueDate).toLocaleDateString())}</div><div>${escapeHtml(template.termsText || '')}</div></div>` : ''}
     ${template.thankYou ? `<div class="foot"><div>${escapeHtml(template.thankYou)}</div><div>${escapeHtml(template.footerText || '')}</div></div>` : (template.footerText ? `<div class="foot"><div>${escapeHtml(template.footerText)}</div></div>` : '')}
