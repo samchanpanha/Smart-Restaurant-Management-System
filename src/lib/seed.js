@@ -32,24 +32,76 @@ export function buildSeed() {
 
   // ─── Menu + recipes ───────────────────────────────────────────
   const menu = [
-    { id: 'm_salad', name: 'House Salad', category: 'Starters', price: 9, station: 'pantry', available: true, substituteId: null,
-      modifiers: [{ id: 'dressing', label: 'Dressing', required: true, options: ['Ranch', 'Vinaigrette', 'Blue cheese'] }] },
-    { id: 'm_wings', name: 'Grill Wings', category: 'Starters', price: 12, station: 'grill', available: true, substituteId: null,
-      modifiers: [{ id: 'sauce', label: 'Sauce', required: true, options: ['Buffalo', 'BBQ', 'Garlic parm'] }] },
-    { id: 'm_soup', name: 'Soup of the Day', category: 'Starters', price: 7, station: 'saute', available: true, substituteId: null, modifiers: [] },
-    { id: 'm_burger', name: 'Restora Burger', category: 'Mains', price: 16, station: 'grill', available: true, substituteId: 'm_chickenpasta',
-      modifiers: [{ id: 'temp', label: 'Temp', required: true, options: ['Rare', 'Medium rare', 'Medium', 'Well'] }] },
-    { id: 'm_salmon', name: 'Grilled Salmon', category: 'Mains', price: 26, station: 'saute', available: false, substituteId: 'm_chickenpasta',
-      modifiers: [{ id: 'doneness', label: 'Doneness', required: true, options: ['Medium', 'Well'] }] },
-    { id: 'm_chickenpasta', name: 'Chicken Pasta', category: 'Mains', price: 19, station: 'saute', available: true, substituteId: null, modifiers: [] },
-    { id: 'm_steak', name: 'Ribeye Plate', category: 'Mains', price: 29, station: 'grill', available: true, substituteId: 'm_burger',
-      modifiers: [{ id: 'temp', label: 'Temp', required: true, options: ['Rare', 'Medium rare', 'Medium', 'Well'] }] },
-    { id: 'm_fishchips', name: 'Fish & Chips', category: 'Mains', price: 18, station: 'grill', available: true, substituteId: 'm_burger', modifiers: [] },
-    { id: 'm_vegbowl', name: 'Garden Bowl', category: 'Mains', price: 14, station: 'pantry', available: true, substituteId: null, modifiers: [] },
-    { id: 'm_cake', name: 'Chocolate Cake', category: 'Desserts', price: 8, station: 'dessert', available: true, substituteId: 'm_icecream', modifiers: [] },
-    { id: 'm_icecream', name: 'Ice Cream', category: 'Desserts', price: 6, station: 'dessert', available: true, substituteId: null, modifiers: [] },
-    { id: 'm_soda', name: 'Soda', category: 'Drinks', price: 3, station: 'pantry', available: true, substituteId: null, modifiers: [] },
-    { id: 'm_coffee', name: 'Coffee', category: 'Drinks', price: 4, station: 'pantry', available: true, substituteId: null, modifiers: [] },
+    {
+      id: 'm_salad', name: 'House Salad', category: 'Starters', price: 9, station: 'pantry', available: true, active: true,
+      description: 'Crisp greens, tomato, and your choice of dressing. Tossed to order.',
+      dietaryTags: ['Vegetarian'], allergens: ['Varies by dressing choice'], imageUrl: '', sortOrder: 0, substituteId: null,
+      modifiers: [{ id: 'dressing', label: 'Dressing', required: true, options: ['Ranch', 'Vinaigrette', 'Blue cheese'] }],
+    },
+    {
+      id: 'm_wings', name: 'Grill Wings', category: 'Starters', price: 12, station: 'grill', available: true, active: true,
+      description: 'Grill-fired wings tossed in your choice of sauce.',
+      dietaryTags: [], allergens: ['Varies by sauce choice'], imageUrl: '', sortOrder: 1, substituteId: null,
+      modifiers: [{ id: 'sauce', label: 'Sauce', required: true, options: ['Buffalo', 'BBQ', 'Garlic parm'] }],
+    },
+    {
+      id: 'm_soup', name: 'Soup of the Day', category: 'Starters', price: 7, station: 'saute', available: true, active: true,
+      description: 'A rotating daily soup, prepared in-house. Ask us what is simmering today.',
+      dietaryTags: [], allergens: ['Varies by daily recipe'], imageUrl: '', sortOrder: 2, substituteId: null, modifiers: [],
+    },
+    {
+      id: 'm_burger', name: 'Restora Burger', category: 'Mains', price: 16, station: 'grill', available: true, active: true,
+      description: 'Smashed beef patty, cheddar, brioche, and fries on the side.',
+      dietaryTags: [], allergens: ['Wheat', 'Milk'], imageUrl: '', sortOrder: 3, substituteId: 'm_chickenpasta',
+      modifiers: [{ id: 'temp', label: 'Temp', required: true, options: ['Rare', 'Medium rare', 'Medium', 'Well'] }],
+    },
+    {
+      id: 'm_salmon', name: 'Grilled Salmon', category: 'Mains', price: 26, station: 'saute', available: false, active: true,
+      description: 'Crisp-skin salmon fillet with seasonal market sides.',
+      dietaryTags: [], allergens: ['Fish'], imageUrl: '', sortOrder: 4, substituteId: 'm_chickenpasta',
+      modifiers: [{ id: 'doneness', label: 'Doneness', required: true, options: ['Medium', 'Well'] }],
+    },
+    {
+      id: 'm_chickenpasta', name: 'Chicken Pasta', category: 'Mains', price: 19, station: 'saute', available: true, active: true,
+      description: 'Grilled chicken over pasta tossed in a creamy sauce.',
+      dietaryTags: [], allergens: ['Wheat', 'Milk'], imageUrl: '', sortOrder: 5, substituteId: null, modifiers: [],
+    },
+    {
+      id: 'm_steak', name: 'Ribeye Plate', category: 'Mains', price: 29, station: 'grill', available: true, active: true,
+      description: 'Grilled ribeye, rested for five minutes, served with fries.',
+      dietaryTags: [], allergens: [], imageUrl: '', sortOrder: 6, substituteId: 'm_burger',
+      modifiers: [{ id: 'temp', label: 'Temp', required: true, options: ['Rare', 'Medium rare', 'Medium', 'Well'] }],
+    },
+    {
+      id: 'm_fishchips', name: 'Fish & Chips', category: 'Mains', price: 18, station: 'grill', available: true, active: true,
+      description: 'Crisp fish with golden fries and lemon.',
+      dietaryTags: [], allergens: ['Fish', 'Wheat'], imageUrl: '', sortOrder: 7, substituteId: 'm_burger', modifiers: [],
+    },
+    {
+      id: 'm_vegbowl', name: 'Garden Bowl', category: 'Mains', price: 14, station: 'pantry', available: true, active: true,
+      description: 'A fresh bowl of greens, tomato, and dressing.',
+      dietaryTags: ['Vegetarian'], allergens: ['Varies by dressing choice'], imageUrl: '', sortOrder: 8, substituteId: null, modifiers: [],
+    },
+    {
+      id: 'm_cake', name: 'Chocolate Cake', category: 'Desserts', price: 8, station: 'dessert', available: true, active: true,
+      description: 'Rich chocolate cake, plated to order.',
+      dietaryTags: [], allergens: ['Wheat', 'Milk', 'Egg'], imageUrl: '', sortOrder: 9, substituteId: 'm_icecream', modifiers: [],
+    },
+    {
+      id: 'm_icecream', name: 'Ice Cream', category: 'Desserts', price: 6, station: 'dessert', available: true, active: true,
+      description: 'Two scoops of classic ice cream.',
+      dietaryTags: ['Vegetarian'], allergens: ['Milk'], imageUrl: '', sortOrder: 10, substituteId: null, modifiers: [],
+    },
+    {
+      id: 'm_soda', name: 'Soda', category: 'Drinks', price: 3, station: 'pantry', available: true, active: true,
+      description: 'An ice-cold can of soda.',
+      dietaryTags: [], allergens: [], imageUrl: '', sortOrder: 11, substituteId: null, modifiers: [],
+    },
+    {
+      id: 'm_coffee', name: 'Coffee', category: 'Drinks', price: 4, station: 'pantry', available: true, active: true,
+      description: 'Freshly brewed dinner coffee.',
+      dietaryTags: [], allergens: [], imageUrl: '', sortOrder: 12, substituteId: null, modifiers: [],
+    },
   ]
 
   const recipes = {

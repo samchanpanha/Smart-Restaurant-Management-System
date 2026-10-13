@@ -5,6 +5,7 @@
 
 import { useMemo, useState } from 'react'
 import { money, orderTotals } from '../lib/models'
+import { useMenuCatalog } from '../lib/useMenuCatalog'
 import { useNow, useRestora } from '../lib/store'
 
 const DESC = {
@@ -48,9 +49,28 @@ function DishModal({ item, onAdd, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label={item.name} onClick={onClose}>
       <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-3xl bg-white p-6 shadow-2xl sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
+        {item.imageUrl && (
+          <img
+            src={item.imageUrl}
+            alt=""
+            loading="lazy"
+            onError={(event) => { event.currentTarget.hidden = true }}
+            className="mb-4 h-44 w-full rounded-2xl object-cover"
+          />
+        )}
         <h2 className="text-xl font-extrabold text-stone-900">{item.name}</h2>
-        <p className="mt-1 text-sm text-stone-500">{DESC[item.id]}</p>
-        <div className="tnum mt-1 text-lg font-extrabold text-amber-700">{money(item.price)}</div>
+        <p className="mt-1 text-sm leading-relaxed text-stone-500">{item.description || DESC[item.id] || 'Prepared fresh to order.'}</p>
+        <div className="tnum mt-2 text-lg font-extrabold text-amber-700">{money(item.price)}</div>
+        {!!item.dietaryTags?.length && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {item.dietaryTags.map((tag) => <span key={tag} className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-800">{tag}</span>)}
+          </div>
+        )}
+        {!!item.allergens?.length && (
+          <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900">
+            Allergen notes: {item.allergens.join(', ')}. Ask the team about ingredients and cross-contact.
+          </p>
+        )}
 
         {(item.modifiers || []).map((g) => (
           <div key={g.id} className="mt-4">
@@ -167,7 +187,8 @@ function PaySheet({ order, onClose, onPaid }) {
 // ─── Guest app ────────────────────────────────────────────────────
 
 export default function GuestScreen({ tableId }) {
-  const { state, dispatch } = useRestora()
+  const { state, dispatch, locId, link } = useRestora()
+  const { items: catalogMenu } = useMenuCatalog(state.menu, locId, link.status)
   useNow(5000)
   const [tab, setTab] = useState('menu')
   const [cat, setCat] = useState('Mains')
@@ -181,9 +202,10 @@ export default function GuestScreen({ tableId }) {
   const table = state.tables.find((t) => t.id === tableId)
   const order = table ? openOrderFor(state, tableId) : null
   const paid = table ? paidOrderFor(state, tableId) : null
-  const menuById = useMemo(() => Object.fromEntries(state.menu.map((m) => [m.id, m])), [state.menu])
-  const cats = useMemo(() => [...new Set(state.menu.map((m) => m.category))], [state.menu])
-  const available = state.menu.filter((m) => m.available && (m.category === cat || cat === 'All'))
+  const menuById = useMemo(() => Object.fromEntries(catalogMenu.map((m) => [m.id, m])), [catalogMenu])
+  const activeMenu = useMemo(() => catalogMenu.filter((m) => m.active !== false), [catalogMenu])
+  const cats = useMemo(() => [...new Set(activeMenu.map((m) => m.category))], [activeMenu])
+  const available = activeMenu.filter((m) => m.available && (m.category === cat || cat === 'All'))
 
   const myLines = order ? order.items.filter((i) => i.by === 'guest' && !i.voided) : []
   const cartTotal = cart.reduce((s, c) => s + (menuById[c.menuItemId]?.price || 0) * c.qty, 0)
@@ -311,13 +333,30 @@ export default function GuestScreen({ tableId }) {
                     type="button" onClick={() => setDetail(m)}
                     className="w-full rounded-3xl bg-white p-4 text-left shadow-sm transition-transform active:scale-[0.99]"
                   >
+                    {m.imageUrl && (
+                      <img
+                        src={m.imageUrl}
+                        alt=""
+                        loading="lazy"
+                        onError={(event) => { event.currentTarget.hidden = true }}
+                        className="mb-3 h-36 w-full rounded-2xl object-cover"
+                      />
+                    )}
                     <div className="flex items-start justify-between gap-3">
-                      <div>
+                      <div className="min-w-0">
                         <div className="font-extrabold">{m.name}</div>
-                        <div className="mt-0.5 line-clamp-2 text-[13px] leading-snug text-stone-500">{DESC[m.id]}</div>
+                        <div className="mt-0.5 line-clamp-2 text-[13px] leading-snug text-stone-500">{m.description || DESC[m.id] || 'Prepared fresh to order.'}</div>
                       </div>
                       <div className="tnum shrink-0 font-extrabold text-amber-700">{money(m.price)}</div>
                     </div>
+                    {!!m.dietaryTags?.length && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {m.dietaryTags.map((tag) => <span key={tag} className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-800">{tag}</span>)}
+                      </div>
+                    )}
+                    {!!m.allergens?.length && (
+                      <div className="mt-1.5 text-[10px] font-semibold text-amber-800">Allergen notes · {m.allergens.join(', ')}</div>
+                    )}
                   </button>
                 </li>
               ))}

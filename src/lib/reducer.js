@@ -3,7 +3,7 @@
 // Express server. No React, no DOM — safe to import from Node.
 // The ticket stays the system of record on every terminal.
 
-import { TARGETS } from './constants.js'
+import { STATIONS, TARGETS } from './constants.js'
 import {
   assertTableTransition,
   costingFor,
@@ -20,6 +20,61 @@ import {
 import { buildSeed, buildSeedRiverside } from './seed.js'
 
 export { buildSeed, buildSeedRiverside }
+
+const MAX_MENU_PRICE = 999999.99
+
+function cleanLabelList(value) {
+  if (!Array.isArray(value)) return []
+  return [...new Set(value
+    .map((entry) => String(entry ?? '').trim().replace(/\s+/g, ' ').slice(0, 48))
+    .filter(Boolean))].slice(0, 12)
+}
+
+function cleanImageUrl(value) {
+  const url = String(value ?? '').trim().slice(0, 500)
+  if (!url) return ''
+  if (url.startsWith('/') && !url.startsWith('//')) return url
+  try {
+    const parsed = new URL(url)
+    return ['https:', 'http:'].includes(parsed.protocol) ? url : ''
+  } catch {
+    return ''
+  }
+}
+
+function normalizeMenuItem(item, index = 0) {
+  const numericPrice = Number(item?.price)
+  const numericOrder = Number(item?.sortOrder)
+  return {
+    ...item,
+    id: String(item?.id ?? '').trim(),
+    name: String(item?.name ?? 'Menu item').trim().slice(0, 60) || 'Menu item',
+    description: String(item?.description ?? '').trim().slice(0, 240),
+    category: String(item?.category ?? 'Other').trim().slice(0, 40) || 'Other',
+    price: Number.isFinite(numericPrice)
+      ? Math.round(Math.min(MAX_MENU_PRICE, Math.max(0, numericPrice)) * 100) / 100
+      : 0,
+    station: STATIONS.includes(item?.station) ? item.station : 'pantry',
+    available: item?.available !== false,
+    active: item?.active !== false,
+    dietaryTags: cleanLabelList(item?.dietaryTags),
+    allergens: cleanLabelList(item?.allergens),
+    imageUrl: cleanImageUrl(item?.imageUrl),
+    sortOrder: Number.isFinite(numericOrder) ? Math.max(0, Math.trunc(numericOrder)) : index,
+    modifiers: Array.isArray(item?.modifiers) ? item.modifiers : [],
+    substituteId: item?.substituteId ? String(item.substituteId) : null,
+  }
+}
+
+function withMenuDefaults(shop) {
+  if (!shop || !Array.isArray(shop.menu)) return shop
+  return { ...shop, menu: shop.menu.map((item, index) => normalizeMenuItem(item, index)) }
+}
+
+function uniqueMenuName(menu, itemId, name) {
+  const normalized = String(name ?? '').trim().toLocaleLowerCase()
+  return normalized && !menu.some((item) => item.id !== itemId && item.name.toLocaleLowerCase() === normalized)
+}
 
 // ─── Reducer ────────────────────────────────────────────────────
 
@@ -115,7 +170,7 @@ function shopReducer(state, action) {
     case 'ADD_ITEM': {
       const { orderId, menuItemId, qty = 1, modifiers = [], course = 'main', notes = '', by = 'server', guest = null } = action
       const menuItem = state.menu.find((m) => m.id === menuItemId)
-      if (!menuItem || !menuItem.available) return state // 86 blocked
+      if (!menuItem || !menuItem.available || menuItem.active === false) return state // 86/hidden blocked
       const item = {
         id: uid('it'),
         menuItemId,
@@ -245,7 +300,7 @@ function shopReducer(state, action) {
       const totalDec = {}
       for (const g of items) {
         const menuItem = state.menu.find((m) => m.id === g.menuItemId)
-        if (!menuItem || !menuItem.available) continue
+        if (!menuItem || !menuItem.available || menuItem.active === false) continue
         const qty = Math.min(12, Math.max(1, Number(g.qty) || 1))
         const recipe = state.recipes[g.menuItemId]
         const dec = theoreticalDecrementFor(recipe, qty)
@@ -539,6 +594,42 @@ function shopReducer(state, action) {
     }
 
     // ── Menu / costing ─────────────────────────────────────
+    case 'ADD_MENU_ITEM': {
+      const raw = action.item
+      if (!raw || typeof raw.id !== 'string' || !raw.id.trim()) return state
+      if (state.menu.some((item) => item.id === raw.id.trim())) return state
+      const item = normalizeMenuItem(raw, state.menu.length)
+      if (!uniqueMenuName(state.menu, item.id, item.name)) return state
+      const recipe = {
+        id: `r_${item.id}`,
+        yieldPortions: 1,
+        prepNotes: '',
+        ingredients: [],
+        ...(action.recipe || {}),
+      }
+      return {
+        ...state,
+        menu: [...state.menu, item],
+        recipes: { ...state.recipes, [item.id]: recipe },
+      }
+    }
+
+    case 'UPDATE_MENU_ITEM': {
+      const { menuItemId, patch = {} } = action
+      const current = state.menu.find((item) => item.id === menuItemId)
+      if (!current || !patch || typeof patch !== 'object') return state
+      if ('name' in patch && !String(patch.name ?? '').trim()) return state
+      if ('category' in patch && !String(patch.category ?? '').trim()) return state
+      if ('price' in patch) {
+        const price = Number(patch.price)
+        if (!Number.isFinite(price) || price < 0 || price > MAX_MENU_PRICE) return state
+      }
+      const nextItem = normalizeMenuItem({ ...current, ...patch, id: current.id }, current.sortOrder)
+      if (!uniqueMenuName(state.menu, current.id, nextItem.name)) return state
+      const menu = state.menu.map((item) => (item.id === current.id ? nextItem : item))
+      return { ...state, menu }
+    }
+
     case 'UPDATE_RECIPE': {
       const { menuItemId, recipe } = action
       return { ...state, recipes: { ...state.recipes, [menuItemId]: recipe } }
@@ -546,7 +637,13 @@ function shopReducer(state, action) {
 
     case 'UPDATE_PRICE': {
       const { menuItemId, price } = action
-      const menu = state.menu.map((m) => (m.id === menuItemId ? { ...m, price: Number(price) } : m))
+      const numericPrice = Number(price)
+      if (!Number.isFinite(numericPrice) || numericPrice < 0 || numericPrice > MAX_MENU_PRICE) return state
+      const menu = state.menu.map((m) =>
+        m.id === menuItemId
+          ? { ...m, price: Math.round(numericPrice * 100) / 100 }
+          : m,
+      )
       return { ...state, menu }
     }
 
@@ -574,9 +671,19 @@ export function buildEmpire() {
 
 export function migrateToEmpire(old) {
   if (!old) return null
-  if (old.version === 2 && old.locations?.downtown && old.locations?.riverside) return old
+  if (old.version === 2 && old.locations?.downtown && old.locations?.riverside) {
+    return {
+      ...old,
+      locations: Object.fromEntries(
+        Object.entries(old.locations).map(([id, shop]) => [id, withMenuDefaults(shop)]),
+      ),
+    }
+  }
   if (old.version === 1 && Array.isArray(old.tables)) {
-    const downtown = { ...old, settings: { ...old.settings, restaurantName: 'Restora · Downtown' } }
+    const downtown = withMenuDefaults({
+      ...old,
+      settings: { ...old.settings, restaurantName: 'Restora · Downtown' },
+    })
     return { version: 2, locations: { downtown, riverside: buildSeedRiverside() } }
   }
   return null
@@ -658,7 +765,7 @@ export function getAlerts(state) {
 
   // Manual 86 flags
   for (const m of state.menu) {
-    if (!m.available) {
+    if (!m.available && m.active !== false) {
       alerts.push({
         key: `86_${m.id}`,
         type: '86',

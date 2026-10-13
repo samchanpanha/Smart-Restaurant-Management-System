@@ -15,7 +15,7 @@ import express from 'express'
 import fs from 'node:fs'
 import path from 'node:path'
 import { buildEmpire, migrateToEmpire, reducer } from '../src/lib/reducer.js'
-import { actionsSince, appendAction, loadSnapshot, logStats, saveSnapshot } from './db.js'
+import { actionsSince, commitAction, getMenuCatalog, loadSnapshot, logStats, saveSnapshot, syncMenuCatalog } from './db.js'
 
 const PORT = Number(process.env.PORT || 3001)
 const HOST = process.env.HOST || '0.0.0.0'
@@ -39,6 +39,8 @@ if (!migrated) {
   } else {
     console.log(`[restora] restored empire snapshot at seq=${seq}`)
   }
+  // Also backfill the relational menu tables when booting an older SQLite file.
+  syncMenuCatalog(state)
 }
 
 // ─── App ────────────────────────────────────────────────────────
@@ -52,6 +54,26 @@ app.get('/api/health', (req, res) => {
 
 app.get('/api/state', (req, res) => {
   res.json({ state, seq })
+})
+
+// Relational read model for owner catalog and guest-menu displays.
+// Example: GET /api/menu?loc=downtown&q=burger&availableOnly=true
+app.get('/api/menu', (req, res) => {
+  const locationId = typeof req.query.loc === 'string' ? req.query.loc : 'downtown'
+  if (!Object.hasOwn(state.locations || {}, locationId)) {
+    return res.status(400).json({ error: 'loc must name a configured restaurant location' })
+  }
+  const query = typeof req.query.q === 'string' ? req.query.q.trim() : ''
+  const category = typeof req.query.category === 'string' ? req.query.category.trim() : ''
+  if (query.length > 80 || category.length > 40) {
+    return res.status(400).json({ error: 'search and category values are too long' })
+  }
+  res.setHeader('Cache-Control', 'no-store')
+  res.json(getMenuCatalog(locationId, {
+    query,
+    category,
+    availableOnly: req.query.availableOnly === 'true',
+  }))
 })
 
 app.post('/api/actions', (req, res) => {
@@ -71,9 +93,10 @@ app.post('/api/actions', (req, res) => {
     return res.status(409).json({ error: err.message || 'illegal transition' })
   }
   if (next === state) return res.json({ seq, noop: true }) // no-op action
+  // Keep action log, JSON snapshot, and normalized catalog in one SQLite commit.
+  const nextSeq = commitAction(clientId, action, next)
   state = next
-  seq = appendAction(typeof clientId === 'string' ? clientId : 'anon', action)
-  saveSnapshot(state, seq)
+  seq = nextSeq
   broadcast({ seq, action, clientId: clientId || 'anon' })
   res.json({ seq })
 })

@@ -35,99 +35,87 @@ function dishesUsing(state, skuId) {
 
 function StockTab() {
   const { state } = useRestora()
-  const [filter, setFilter] = useState('all') // all | exceptions | low | out
+  const [filter, setFilter] = useState('all')
   const [loc, setLoc] = useState('all')
-
-  const locs = useMemo(() => [...new Set(state.inventory.map((i) => i.location))], [state.inventory])
+  const [query, setQuery] = useState('')
+  const locs = useMemo(() => [...new Set(state.inventory.map((item) => item.location))], [state.inventory])
 
   const rows = state.inventory
     .map((sku) => ({ sku, st: stockStatusFor(sku) }))
     .filter(({ sku, st }) => {
       if (loc !== 'all' && sku.location !== loc) return false
+      if (query && !`${sku.name} ${sku.vendor}`.toLowerCase().includes(query.toLowerCase())) return false
       if (filter === 'exceptions') return st !== 'ok' || sku.onHand < 0
       if (filter === 'low') return st === 'low'
       if (filter === 'out') return st === 'out'
       return true
     })
     .sort((a, b) => {
-      const rank = (r) => (r.sku.onHand < 0 ? 0 : r.st === 'out' ? 1 : r.st === 'low' ? 2 : 3)
+      const rank = (row) => (row.sku.onHand < 0 ? 0 : row.st === 'out' ? 1 : row.st === 'low' ? 2 : 3)
       return rank(a) - rank(b) || a.sku.name.localeCompare(b.sku.name)
     })
 
+  const filters = [
+    ['all', `All items (${state.inventory.length})`],
+    ['exceptions', 'Exceptions'],
+    ['low', 'Low stock'],
+    ['out', 'Out of stock'],
+  ]
+
+  function itemIcon(name) {
+    const value = name.toLowerCase()
+    if (value.includes('salmon') || value.includes('fish')) return '🐟'
+    if (value.includes('chicken') || value.includes('beef') || value.includes('patty') || value.includes('steak') || value.includes('wing')) return '🥩'
+    if (value.includes('tomato') || value.includes('lettuce') || value.includes('salad')) return '🥬'
+    if (value.includes('cheese') || value.includes('cream') || value.includes('ice cream')) return '🧀'
+    if (value.includes('bun') || value.includes('pasta') || value.includes('fries')) return '🥖'
+    if (value.includes('soda') || value.includes('coffee')) return '☕'
+    return '📦'
+  }
+
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap gap-2">
-        <div className="flex gap-1 rounded-xl bg-[var(--color-ink-900)] p-1 ring-1 ring-inset ring-[var(--color-ink-700)]" role="tablist" aria-label="Stock filter">
-          {[['all', 'All'], ['exceptions', 'Exceptions'], ['low', 'Low'], ['out', 'Out']].map(([id, label]) => (
-            <button
-              key={id}
-              role="tab"
-              aria-selected={filter === id}
-              type="button"
-              onClick={() => setFilter(id)}
-              className={`min-h-[44px] rounded-lg px-3.5 text-sm font-semibold ${filter === id ? 'bg-amber-500/15 text-amber-200 ring-1 ring-inset ring-amber-500/40' : 'text-zinc-400 hover:text-zinc-200'}`}
-            >
-              {label}
-            </button>
-          ))}
+    <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
+      <div className="flex flex-col gap-3 border-b border-zinc-100 p-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex gap-1 overflow-x-auto" role="tablist" aria-label="Stock filter">
+          {filters.map(([id, label]) => <button key={id} role="tab" aria-selected={filter === id} type="button" onClick={() => setFilter(id)} className={`shrink-0 rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${filter === id ? 'bg-orange-500 text-white shadow-sm' : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-800'}`}>{label}</button>)}
         </div>
-        <select value={loc} onChange={(e) => setLoc(e.target.value)} className={`${inputCls} w-auto`} aria-label="Filter by location">
-          <option value="all">All locations</option>
-          {locs.map((l) => (
-            <option key={l} value={l}>{l.replace('_', ' ')}</option>
-          ))}
-        </select>
+        <div className="flex gap-2">
+          <label className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-zinc-200 px-3 lg:w-56">
+            <span className="text-zinc-400" aria-hidden="true">⌕</span>
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search inventory..." aria-label="Search inventory" className="min-w-0 border-0 bg-transparent py-2 text-xs outline-none" />
+          </label>
+          <select value={loc} onChange={(event) => setLoc(event.target.value)} className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-700" aria-label="Filter by storage location">
+            <option value="all">All storage</option>
+            {locs.map((item) => <option key={item} value={item}>{item.replace('_', ' ')}</option>)}
+          </select>
+        </div>
       </div>
 
-      <ul className="space-y-2">
-        {rows.map(({ sku, st }) => {
-          const dishes = dishesUsing(state, sku.id)
-          const negative = sku.onHand < 0
-          return (
-            <li
-              key={sku.id}
-              className={`rounded-2xl border bg-[var(--color-ink-900)] p-4 ${negative ? 'border-red-500/60 ring-1 ring-red-500/40' : st === 'out' ? 'border-red-500/40' : st === 'low' ? 'border-amber-500/40' : 'border-[var(--color-ink-700)]'}`}
-            >
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="font-bold">{sku.name}</div>
-                  <div className="mt-0.5 text-[11px] text-zinc-500">
-                    {sku.location.replace('_', ' ')} · {money(sku.lastCost)}/{sku.unit} · {sku.vendor}
-                  </div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="text-right">
-                    <div className={`tnum text-2xl font-bold ${negative ? 'text-red-300' : ''}`}>{sku.onHand}</div>
-                    <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">theoretical</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="tnum text-lg text-zinc-300">{sku.par}</div>
-                    <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">par</div>
-                  </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <StatusPill tone={st === 'ok' ? 'ok' : st === 'low' ? 'warn' : 'bad'}>
-                      {st === 'ok' ? 'OK' : st === 'low' ? 'Low' : 'Out'}
-                    </StatusPill>
-                    {negative && (
-                      <StatusPill tone="bad" size="sm">Negative — recount</StatusPill>
-                    )}
-                  </div>
-                </div>
-              </div>
-              {dishes.length > 0 && (
-                <div className="mt-2 border-t border-white/5 pt-2 text-xs text-zinc-500">
-                  Hits: <span className="text-zinc-400">{dishes.map((d) => d.name).join(', ')}</span>
-                </div>
-              )}
-            </li>
-          )
-        })}
-        {rows.length === 0 && (
-          <li className="rounded-2xl border border-dashed border-[var(--color-ink-600)] p-6 text-center text-sm text-zinc-500">
-            Nothing matches this filter.
-          </li>
-        )}
-      </ul>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[760px] border-collapse text-left">
+          <thead className="bg-zinc-50 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+            <tr><th className="px-5 py-3">Item</th><th className="px-4 py-3">Storage</th><th className="px-4 py-3">Current stock</th><th className="px-4 py-3">Par level</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Last cost</th></tr>
+          </thead>
+          <tbody className="divide-y divide-zinc-100">
+            {rows.map(({ sku, st }) => {
+              const negative = sku.onHand < 0
+              const dishes = dishesUsing(state, sku.id)
+              return (
+                <tr key={sku.id} className="transition-colors hover:bg-orange-50/30">
+                  <td className="px-5 py-3.5"><div className="flex items-center gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-lg">{itemIcon(sku.name)}</span><span className="min-w-0"><span className="block text-sm font-semibold text-zinc-800">{sku.name}</span><span className="mt-0.5 block max-w-[260px] truncate text-[10px] text-zinc-500">{sku.vendor}{dishes.length ? ` · ${dishes.length} recipes` : ''}</span></span></div></td>
+                  <td className="px-4 py-3.5 text-xs capitalize text-zinc-500">{sku.location.replace('_', ' ')}</td>
+                  <td className="px-4 py-3.5"><span className={`tnum text-sm font-bold ${negative ? 'text-red-600' : 'text-zinc-800'}`}>{sku.onHand}</span><span className="ml-1 text-[10px] text-zinc-500">{sku.unit}</span></td>
+                  <td className="px-4 py-3.5 tnum text-sm text-zinc-700">{sku.par} <span className="text-[10px] text-zinc-400">{sku.unit}</span></td>
+                  <td className="px-4 py-3.5"><StatusPill tone={st === 'ok' ? 'ok' : st === 'low' ? 'warn' : 'bad'} size="sm">{st === 'ok' ? 'In stock' : st === 'low' ? 'Low stock' : 'Out of stock'}</StatusPill>{negative && <span className="ml-1 text-[10px] font-semibold text-red-600">Recount</span>}</td>
+                  <td className="px-4 py-3.5 tnum text-xs font-semibold text-zinc-700">{money(sku.lastCost)} <span className="font-normal text-zinc-400">/ {sku.unit}</span></td>
+                </tr>
+              )
+            })}
+            {!rows.length && <tr><td colSpan="6" className="px-6 py-14 text-center text-sm text-zinc-500">Nothing matches this filter.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      <div className="flex items-center justify-between border-t border-zinc-100 px-5 py-3 text-[11px] text-zinc-500"><span>Showing {rows.length} of {state.inventory.length} inventory items</span><span>On-hand is theoretical · actions update live</span></div>
     </div>
   )
 }
@@ -297,8 +285,6 @@ function CountTab({ onDone }) {
   const { state, dispatch } = useRestora()
   const [counts, setCounts] = useState({}) // skuId -> { counted: string, reason: string }
   const [missingReason, setMissingReason] = useState(false)
-
-  const invById = useMemo(() => Object.fromEntries(state.inventory.map((i) => [i.id, i])), [state.inventory])
 
   function entry(skuId) {
     return counts[skuId] || { counted: '', reason: '' }
@@ -511,55 +497,61 @@ export default function InventoryScreen() {
     flash._t = window.setTimeout(() => setBanner(null), 4200)
   }
 
-  const low = state.inventory.filter((i) => stockStatusFor(i) === 'low').length
-  const out = state.inventory.filter((i) => stockStatusFor(i) === 'out').length
-  const invById = useMemo(() => Object.fromEntries(state.inventory.map((i) => [i.id, i])), [state.inventory])
-  const wasteTotal = state.wasteLog.reduce((s, w) => s + w.qty * (invById[w.inventoryItemId]?.lastCost || 0), 0)
+  const low = state.inventory.filter((item) => stockStatusFor(item) === 'low').length
+  const out = state.inventory.filter((item) => stockStatusFor(item) === 'out').length
+  const inventoryValue = state.inventory.reduce((sum, item) => sum + Math.max(0, item.onHand) * item.lastCost, 0)
+  const belowPar = state.inventory.filter((item) => item.onHand < item.par).length
+
+  function downloadReport() {
+    const header = ['Item', 'Location', 'On hand', 'Unit', 'Par', 'Last cost', 'Vendor', 'Status']
+    const lines = state.inventory.map((item) => [item.name, item.location, item.onHand, item.unit, item.par, item.lastCost, item.vendor, stockStatusFor(item)])
+    const csv = [header, ...lines].map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(',')).join('\n')
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = 'restora-inventory.csv'
+    anchor.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const metrics = [
+    { label: 'Total items', value: state.inventory.length, note: 'Tracked SKUs', icon: '▧', tone: 'orange' },
+    { label: 'Low stock', value: low, note: `${belowPar} items below par`, icon: '!', tone: 'amber' },
+    { label: 'Out of stock', value: out, note: out ? 'Replenishment needed' : 'Everything available', icon: '◉', tone: 'red' },
+    { label: 'Inventory value', value: money(inventoryValue), note: 'At last invoice cost', icon: '$', tone: 'green' },
+  ]
+
+  const iconTone = {
+    orange: 'bg-orange-50 text-orange-600',
+    amber: 'bg-amber-50 text-amber-700',
+    red: 'bg-red-50 text-red-600',
+    green: 'bg-emerald-50 text-emerald-700',
+  }
 
   return (
-    <div className="space-y-4">
-      <header className="flex flex-wrap items-end justify-between gap-3">
+    <div className="space-y-5">
+      <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <div className="text-[11px] font-semibold uppercase tracking-widest text-amber-300">
-            Control · step 5 · closer / Maya
-          </div>
-          <h1 className="mt-1 text-3xl font-bold tracking-tight">Inventory</h1>
+          <div className="mb-1 text-xs font-semibold text-orange-600">Stock control</div>
+          <h1 className="text-3xl font-bold tracking-tight text-zinc-900">Inventory</h1>
+          <p className="mt-1 text-sm text-zinc-500">Track stock, monitor usage, and prevent waste.</p>
         </div>
-        <div className="flex gap-2">
-          <StatusPill tone="muted">SKUs · {state.inventory.length}</StatusPill>
-          <StatusPill tone={low ? 'warn' : 'muted'}>Low · {low}</StatusPill>
-          <StatusPill tone={out ? 'bad' : 'ok'}>Out · {out}</StatusPill>
-          <StatusPill tone={wasteTotal ? 'warn' : 'muted'}>Waste · {money(wasteTotal)}</StatusPill>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => setTab('receive')} className="min-h-10 rounded-xl bg-orange-500 px-4 text-sm font-bold text-white shadow-sm hover:bg-orange-600">＋ Receive stock</button>
+          <button type="button" onClick={downloadReport} className="min-h-10 rounded-xl border border-zinc-200 bg-white px-4 text-sm font-semibold text-zinc-700 hover:bg-zinc-50">↓ Download report</button>
         </div>
       </header>
 
-      <p className="rounded-xl bg-sky-500/10 px-4 py-2.5 text-xs leading-relaxed text-sky-200/90 ring-1 ring-inset ring-sky-500/30">
-        On-hand is <strong>theoretical</strong> — it drops when the kitchen fires. Counted truth is written only by
-        receiving, waste, or the count sheet. Par alerts surface on the Dashboard 2h before the {state.settings.rushHour}:00 rush.
-      </p>
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        {metrics.map((item) => <div key={item.label} className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-sm"><div className="flex items-center gap-3"><span className={`flex h-10 w-10 items-center justify-center rounded-xl text-lg font-bold ${iconTone[item.tone]}`}>{item.icon}</span><span className="text-xs font-medium text-zinc-500">{item.label}</span></div><div className="tnum mt-3 text-2xl font-bold text-zinc-900">{item.value}</div><div className="mt-1 text-[11px] text-zinc-500">{item.note}</div></div>)}
+      </div>
 
-      {banner && (
-        <div className="animate-status-in rounded-xl bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200 ring-1 ring-inset ring-emerald-500/30" role="status">
-          {banner}
-        </div>
-      )}
+      <div className="flex items-start gap-3 rounded-xl border border-sky-100 bg-sky-50 px-4 py-3 text-xs leading-relaxed text-sky-800"><span className="mt-0.5 text-base" aria-hidden="true">ⓘ</span><p>On-hand is <strong>theoretical</strong> — it drops when the kitchen fires. Counted truth is written only by receiving, waste, or the count sheet. Par alerts surface 2 hours before the {state.settings.rushHour}:00 rush.</p></div>
 
-      <div className="flex gap-1.5 overflow-x-auto rounded-xl bg-[var(--color-ink-900)] p-1.5 ring-1 ring-inset ring-[var(--color-ink-700)]" role="tablist" aria-label="Inventory sections">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            role="tab"
-            aria-selected={tab === t.id}
-            type="button"
-            onClick={() => setTab(t.id)}
-            className={`min-h-[44px] flex-1 whitespace-nowrap rounded-lg px-3 text-sm font-semibold transition-colors ${
-              tab === t.id ? 'bg-amber-500/15 text-amber-200 ring-1 ring-inset ring-amber-500/40' : 'text-zinc-400 hover:text-zinc-200'
-            }`}
-          >
-            {t.label}
-            {t.id === 'stock' && (low + out > 0) && <span className="ml-1.5 rounded-full bg-amber-500/20 px-1.5 text-[11px]">{low + out}</span>}
-          </button>
-        ))}
+      {banner && <div className="animate-status-in rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status">{banner}</div>}
+
+      <div className="flex gap-1 overflow-x-auto rounded-xl border border-zinc-200 bg-white p-1.5 shadow-sm" role="tablist" aria-label="Inventory sections">
+        {TABS.map((item) => <button key={item.id} role="tab" aria-selected={tab === item.id} type="button" onClick={() => setTab(item.id)} className={`min-h-10 flex-1 whitespace-nowrap rounded-lg px-4 text-sm font-semibold transition-colors ${tab === item.id ? 'bg-orange-500 text-white shadow-sm' : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-800'}`}>{item.label}{item.id === 'stock' && belowPar > 0 && <span className={`ml-2 rounded-full px-1.5 py-0.5 text-[10px] ${tab === item.id ? 'bg-white/20 text-white' : 'bg-orange-50 text-orange-700'}`}>{belowPar}</span>}</button>)}
       </div>
 
       {tab === 'stock' && <StockTab />}

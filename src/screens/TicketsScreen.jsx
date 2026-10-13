@@ -238,10 +238,11 @@ function Composer({ order, onError }) {
   const [course, setCourse] = useState('main')
   const [modFor, setModFor] = useState(null)
 
-  const categories = useMemo(() => [...new Set(state.menu.map((m) => m.category))], [state.menu])
+  const activeMenu = useMemo(() => state.menu.filter((m) => m.active !== false), [state.menu])
+  const categories = useMemo(() => [...new Set(activeMenu.map((m) => m.category))], [activeMenu])
   const menuById = useMemo(() => Object.fromEntries(state.menu.map((m) => [m.id, m])), [state.menu])
 
-  const items = state.menu.filter((m) => {
+  const items = activeMenu.filter((m) => {
     if (query.trim()) return m.name.toLowerCase().includes(query.trim().toLowerCase())
     return m.category === category
   })
@@ -333,7 +334,7 @@ function Composer({ order, onError }) {
                   </StatusPill>
                 </div>
                 <div className="tnum mt-0.5 text-xs text-zinc-500">{money(m.price)}</div>
-                {sub && sub.available ? (
+                {sub && sub.available && sub.active !== false ? (
                   <button
                     type="button"
                     onClick={() => tap(sub)}
@@ -945,7 +946,7 @@ function NewCheckModal({ onClose, onCreated }) {
 // ─── Screen ─────────────────────────────────────────────────────
 
 export default function TicketsScreen() {
-  const { state, dispatch, selectedTableId, setSelectedTableId } = useRestora()
+  const { state, dispatch, selectedTableId, setSelectedTableId, selectedOrderId, setSelectedOrderId } = useRestora()
   const [tab, setTab] = useState('active')
   const [tableFilter, setTableFilter] = useState('')
   const [serverFilter, setServerFilter] = useState('')
@@ -960,21 +961,31 @@ export default function TicketsScreen() {
     flash._t = window.setTimeout(() => setBanner(null), 4200)
   }
 
-  // Floor handoff: a table selected on Floor opens (or starts) its check here.
+  // Search/Floor handoff opens the exact order or starts a check for a selected table.
   useEffect(() => {
+    if (selectedOrderId) {
+      const order = state.orders.find((item) => item.id === selectedOrderId)
+      if (order) {
+        setSelectedId(order.id)
+        setTab(TABS.find((item) => item.match(order.status))?.id || 'active')
+      }
+      setSelectedOrderId(null)
+      return
+    }
     if (!selectedTableId) return
-    const table = state.tables.find((t) => t.id === selectedTableId)
+    const table = state.tables.find((item) => item.id === selectedTableId)
     if (!table) return
     const existing = openOrderForTable(state.orders, selectedTableId)
     if (existing) {
       setSelectedId(existing.id)
-      setTab(TABS.find((t) => t.match(existing.status))?.id || 'active')
+      setTab(TABS.find((item) => item.match(existing.status))?.id || 'active')
     } else if (table.status === 'seated' || table.status === 'ordered') {
+      setPendingTable(selectedTableId)
       dispatch({ type: 'CREATE_ORDER', tableId: selectedTableId })
     }
     setSelectedTableId(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedTableId])
+  }, [selectedTableId, selectedOrderId])
 
   // Select a freshly created check once the reducer commits it.
   useEffect(() => {
@@ -992,13 +1003,19 @@ export default function TicketsScreen() {
     if (selectedId && !state.orders.some((o) => o.id === selectedId)) setSelectedId(null)
   }, [state.orders, selectedId])
 
+  const activeOrders = state.orders.filter((order) => ['open', 'sent', 'in_prep'].includes(order.status)).length
+  const readyOrders = state.orders.filter((order) => ['ready', 'served'].includes(order.status)).length
+  const completedOrders = state.orders.filter((order) => order.status === 'paid').length
+
   return (
-    <div className="space-y-4">
-      <header>
-        <div className="text-[11px] font-semibold uppercase tracking-widest text-amber-300">
-          Live · step 3 · server: Jordan
+    <div className="space-y-5">
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <div className="mb-1 text-xs font-semibold text-orange-600">Live service</div>
+          <h1 className="text-3xl font-bold tracking-tight text-zinc-900">Orders</h1>
+          <p className="mt-1 text-sm text-zinc-500">Track and manage every order in real time.</p>
         </div>
-        <h1 className="mt-1 text-3xl font-bold tracking-tight">Tickets</h1>
+        <button type="button" onClick={() => setNewOpen(true)} className="min-h-10 rounded-xl bg-orange-500 px-4 text-sm font-bold text-white shadow-sm hover:bg-orange-600">＋ New order</button>
       </header>
 
       {banner && (
@@ -1006,6 +1023,14 @@ export default function TicketsScreen() {
           {banner}
         </div>
       )}
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: 'Active orders', value: activeOrders, note: 'In progress', tone: 'orange' },
+          { label: 'Ready to serve', value: readyOrders, note: 'Kitchen complete', tone: 'green' },
+          { label: 'Completed checks', value: completedOrders, note: 'Paid tonight', tone: 'blue' },
+        ].map((item) => <div key={item.label} className="flex items-center gap-3 rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-sm"><span className={`flex h-10 w-10 items-center justify-center rounded-xl text-lg font-bold ${item.tone === 'green' ? 'bg-emerald-50 text-emerald-700' : item.tone === 'blue' ? 'bg-sky-50 text-sky-700' : 'bg-orange-50 text-orange-600'}`}>{item.tone === 'green' ? '✓' : item.tone === 'blue' ? '$' : '▤'}</span><span><span className="tnum block text-xl font-bold text-zinc-900">{item.value}</span><span className="mt-0.5 block text-xs font-semibold text-zinc-700">{item.label}</span><span className="block text-[10px] text-zinc-500">{item.note}</span></span></div>)}
+      </div>
 
       <div className="grid items-start gap-4 xl:grid-cols-3">
         <TicketList

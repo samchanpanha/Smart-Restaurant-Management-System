@@ -1,7 +1,21 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": ["react", "oxc"],
+  "env": {
+    "es2022": true
+  },
+  "overrides": [
+    {
+      "files": ["src/**/*.js", "src/**/*.jsx"],
+      "env": { "browser": true }
+    },
+    {
+      "files": ["server/**/*.js", "tests/**/*.js"],
+      "env": { "node": true }
+    }
+  ],
   "rules": {
+    "no-undef": "error",
     "react/rules-of-hooks": "error",
     "react/only-export-components": ["warn", { "allowConstantExport": true }]
   }

@@ -123,8 +123,8 @@ function TicketCard({ order, tableName, server, lines, now }) {
 function EightySixBoard() {
   const { state, dispatch } = useRestora()
   const menuById = useMemo(() => Object.fromEntries(state.menu.map((m) => [m.id, m])), [state.menu])
-  const off = state.menu.filter((m) => !m.available)
-  const on = state.menu.filter((m) => m.available)
+  const off = state.menu.filter((m) => m.active !== false && !m.available)
+  const on = state.menu.filter((m) => m.active !== false && m.available)
   const outStock = state.inventory.filter((i) => i.onHand <= 0)
 
   return (
@@ -199,7 +199,7 @@ export default function KitchenScreen() {
   const { state, dispatch } = useRestora()
   const now = useNow(1000)
   const [lateOnly, setLateOnly] = useState(false)
-  const offCount = state.menu.filter((m) => !m.available).length
+  const offCount = state.menu.filter((m) => m.active !== false && !m.available).length
   const [boardOpen, setBoardOpen] = useState(offCount > 0)
 
   const menuById = useMemo(() => Object.fromEntries(state.menu.map((m) => [m.id, m])), [state.menu])
@@ -271,10 +271,9 @@ export default function KitchenScreen() {
     <div className="space-y-4">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <div className="text-[11px] font-semibold uppercase tracking-widest text-amber-300">
-            Live · step 4 · kitchen: Kim · SLA {TARGETS.ticketMinutes}:00
-          </div>
-          <h1 className="mt-1 text-3xl font-bold tracking-tight">Kitchen</h1>
+          <div className="mb-1 text-xs font-semibold text-orange-600">Live kitchen display · SLA {TARGETS.ticketMinutes}:00</div>
+          <h1 className="text-3xl font-bold tracking-tight text-zinc-900">Kitchen</h1>
+          <p className="mt-1 text-sm text-zinc-500">Prioritize fired tickets, monitor prep times, and keep service moving.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button
