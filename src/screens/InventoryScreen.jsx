@@ -41,7 +41,7 @@ function StockTab() {
   const locs = useMemo(() => [...new Set(state.inventory.map((item) => item.location))], [state.inventory])
 
   const rows = state.inventory
-    .map((sku) => ({ sku, st: stockStatusFor(sku) }))
+    .map((sku) => ({ sku, st: stockStatusFor(sku, state.settings) }))
     .filter(({ sku, st }) => {
       if (loc !== 'all' && sku.location !== loc) return false
       if (query && !`${sku.name} ${sku.vendor}`.toLowerCase().includes(query.toLowerCase())) return false
@@ -497,14 +497,14 @@ export default function InventoryScreen() {
     flash._t = window.setTimeout(() => setBanner(null), 4200)
   }
 
-  const low = state.inventory.filter((item) => stockStatusFor(item) === 'low').length
-  const out = state.inventory.filter((item) => stockStatusFor(item) === 'out').length
+  const low = state.inventory.filter((item) => stockStatusFor(item, state.settings) === 'low').length
+  const out = state.inventory.filter((item) => stockStatusFor(item, state.settings) === 'out').length
   const inventoryValue = state.inventory.reduce((sum, item) => sum + Math.max(0, item.onHand) * item.lastCost, 0)
   const belowPar = state.inventory.filter((item) => item.onHand < item.par).length
 
   function downloadReport() {
     const header = ['Item', 'Location', 'On hand', 'Unit', 'Par', 'Last cost', 'Vendor', 'Status']
-    const lines = state.inventory.map((item) => [item.name, item.location, item.onHand, item.unit, item.par, item.lastCost, item.vendor, stockStatusFor(item)])
+    const lines = state.inventory.map((item) => [item.name, item.location, item.onHand, item.unit, item.par, item.lastCost, item.vendor, stockStatusFor(item, state.settings)])
     const csv = [header, ...lines].map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(',')).join('\n')
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
     const anchor = document.createElement('a')

@@ -1,5 +1,6 @@
 import AppShell from './components/AppShell'
 import { RestoraProvider, useRestora } from './lib/store'
+import CatalogScreen from './screens/CatalogScreen'
 import ComingSoon from './screens/ComingSoon'
 import CostingScreen from './screens/CostingScreen'
 import DashboardScreen from './screens/DashboardScreen'
@@ -9,6 +10,8 @@ import InventoryScreen from './screens/InventoryScreen'
 import KitchenScreen from './screens/KitchenScreen'
 import MenuScreen from './screens/MenuScreen'
 import ReportsScreen from './screens/ReportsScreen'
+import SettingsScreen from './screens/SettingsScreen'
+import SuppliersScreen from './screens/SuppliersScreen'
 import SystemScreen from './screens/SystemScreen'
 import TicketsScreen from './screens/TicketsScreen'
 
@@ -29,6 +32,9 @@ function Router() {
   if (screen === 'kitchen') return <KitchenScreen />
   if (screen === 'inventory') return <InventoryScreen />
   if (screen === 'menu') return <MenuScreen />
+  if (screen === 'catalog') return <CatalogScreen />
+  if (screen === 'suppliers') return <SuppliersScreen />
+  if (screen === 'settings') return <SettingsScreen />
   if (screen === 'costing') return <CostingScreen />
   if (screen === 'reports') return <ReportsScreen />
   return <ComingSoon screen={screen} />

@@ -12,7 +12,7 @@ One operational system of record for the ticket — floor, kitchen, stock, and o
 npm install
 npm run dev      # → http://localhost:5173 (standalone demo, localStorage)
 npm run build    # production build → dist/
-npm test         # reducer, SQLite menu catalog, and workspace tab checks
+npm test         # reducer, SQLite catalog, settings/currency/documents, screens contracts, tabs
 ```
 
 No backend needed for the demo: state persists to `localStorage`; **Reset demo data** in the sidebar restores the Friday-night seed.
@@ -92,6 +92,73 @@ Known v1 limits: actions apply optimistically — if two terminals race (same
 table), the server rejects the loser (`409`) and it resyncs. Edits made while
 offline are overwritten by the authoritative snapshot on reconnect.
 
+### Configuration, documents, catalog & suppliers
+
+**Control → Settings & Documents** is the configuration surface. Sections save
+together as one `UPDATE_SETTINGS` — or, with *Apply to all stores*, one action
+per location:
+
+- **Business profile** — company/legal name, tagline, description, address,
+  phone/email/website, tax ID, logo upload (data URL, warned above 400KB) or an
+  initials monogram, brand color, timezone
+- **Money & tax** — tax %, service charge %, custom labels, prices-include-tax,
+  bill rounding (`none` / `nearest 0.05` / `nearest whole`), tip presets,
+  auto-gratuity party size
+- **Documents & templates** — a designer for **invoice · receipt · ticket ·
+  report**: paper (A4 / A5 / Letter / 80mm / 58mm), title, accent, logo · QR ·
+  signature toggles, tax breakdown, notes, terms/bank details, footer, copies.
+  The preview is the exact HTML the printer receives; **File** registers the
+  document so it can be reprinted or voided from the registry
+- **Stock policy** — valuation (`last cost` / `weighted average`), reorder policy
+  (`par`, or `reorder point + safety days`), auto-86 on zero stock, negative
+  stock, receive rounding, cycle-count cadence, storage zones, shelf life
+- **POS & service** — ticket copies, printer routing names, guest QR ordering,
+  split/discount permissions, manager-void requirement
+- **Alerts** — low stock, late tickets, guest requests, negative margin,
+  throttle, digest time, channel
+- **Data** — JSON export, validated import (`HYDRATE`), per-section reset,
+  document registry (reprint · download · void)
+
+Documents print from where the work happens: **Tickets → Documents** bar
+(receipt — filed automatically once the check is paid — invoice, kitchen ticket,
+download), **Reports → Print report** for the shift P&L.
+
+### Multi-currency
+
+Money is stored as plain base-currency numbers and formatted through
+`src/lib/currency.js`; the store re-points the active currency whenever a
+location's settings change, so floor, tickets, reports, and CSV exports all
+follow the configured symbol, position, and decimals with no per-screen code.
+Rates are base-relative rows (`rate` = units per 1 base unit); a document can
+print in a foreign currency — the builder converts at build time and prints an
+`1 USD = …` FX note. `SET_BASE_CURRENCY` re-bases every rate and keeps the old
+base as a row. 20 currencies are pre-registered (USD, EUR, GBP, JPY, CNY, KHR,
+THB, VND, IDR, MYR, SGD, AUD, CAD, INR, KRW, AED, CHF, MXN, BRL, PHP).
+
+### Catalog & suppliers
+
+**Control → Catalog** owns the naming tree — categories *and* sub-categories for
+menus and inventory. Renaming re-labels the items; deleting a category requires
+choosing where its items go first. Products get inline price/station edits, bulk
+move, bulk 86/restore, and a full editor. Ingredients get supplier assignment,
+storage zone, par / reorder point, and a status that follows the stock policy.
+
+**Control → Suppliers** is vendor management: terms, delivery days, lead time,
+minimum order, rating, and notes; a per-supplier reorder list with copy/mailto,
+spend history from received invoices, and **Receive delivery** — which updates
+on-hand, last cost, and the weighted average used by recipe costing.
+
+### Configuration API
+
+- `GET /api/suppliers?loc=` · `GET /api/inventory?loc=&q=&supplierId=&exceptionsOnly=true`
+- `GET /api/categories?loc=` (`flat=true` for one level) · `GET /api/settings?loc=`
+- `GET /api/documents?loc=&kind=invoice|receipt|ticket|report&limit=` → summary + registry
+- `POST /api/actions` accepts the new actions — `UPDATE_SETTINGS`,
+  `RESET_SETTINGS`, `UPDATE_TEMPLATE`, `UPSERT_CATEGORY` / `DELETE_CATEGORY`,
+  `UPSERT_SUPPLIER` / `DELETE_SUPPLIER`, `ADD`/`UPDATE`/`DELETE_INVENTORY_ITEM`,
+  `SET_BASE_CURRENCY`, `RESCALE_CATALOG`, `ISSUE_DOCUMENT`, `VOID_DOCUMENT`,
+  and `RECEIVE_INVOICE` with a `supplierId`
+
 ## Guest QR ordering
 
 Each table has a QR tent card (Floor → table → 📱 Table QR code). Guests scan
@@ -140,6 +207,7 @@ Express + SQLite (`better-sqlite3`) via action log + SSE when a server is presen
 | 6 | Dashboard alerts | ✅ Done | KPIs, tappable alert rail, rush watch, sparkline, sellers/losers, SLA, floor snapshot |
 | 7 | Recipe cost + matrix | ✅ Done | Recipe coster w/ snapshots, 86 write-through, menu matrix, ingredient shocks, in-place reprice |
 | 8 | Reports | ✅ Done | Sales/hour/category/day, service, voids audit, variance, P&L-lite — every report ends in an action |
+| 9 | Configuration, documents & catalog | ✅ Done | Settings sections (identity · money · templates · stock · POS · alerts · data), invoice/receipt/ticket/report designer + print, multi-currency, document registry, category tree, suppliers, live preview/print from Tickets & Reports |
 
 ## Key rules (from spec — enforced in code)
 

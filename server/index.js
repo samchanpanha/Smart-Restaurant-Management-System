@@ -5,6 +5,12 @@
 //
 //   GET  /api/health        → { ok, seq, terminals }
 //   GET  /api/state         → { state, seq }  (boot snapshot)
+//   GET  /api/menu          → normalized catalog (loc, q, category, availableOnly)
+//   GET  /api/suppliers     → supplier directory (loc)
+//   GET  /api/inventory     → stock items joined to suppliers (loc, q, supplierId)
+//   GET  /api/categories    → category tree with sub-categories (loc)
+//   GET  /api/settings      → configuration for one location (loc)
+//   GET  /api/documents     → issued invoice/receipt/ticket/report registry (loc)
 //   POST /api/actions       → { seq } | 409 (illegal transition)
 //   GET  /api/events?since=N → SSE stream (replay + live)
 //
@@ -14,8 +20,11 @@
 import express from 'express'
 import fs from 'node:fs'
 import path from 'node:path'
-import { buildEmpire, migrateToEmpire, reducer } from '../src/lib/reducer.js'
-import { actionsSince, commitAction, getMenuCatalog, loadSnapshot, logStats, saveSnapshot, syncMenuCatalog } from './db.js'
+import { STATE_VERSION, buildEmpire, migrateToEmpire, reducer } from '../src/lib/reducer.js'
+import {
+  actionsSince, commitAction, getCategories, getDocumentTotals, getDocuments, getInventory,
+  getMenuCatalog, getSettings, getSuppliers, loadSnapshot, logStats, saveSnapshot, syncMenuCatalog,
+} from './db.js'
 
 const PORT = Number(process.env.PORT || 3001)
 const HOST = process.env.HOST || '0.0.0.0'
@@ -33,9 +42,9 @@ if (!migrated) {
   saveSnapshot(state, seq)
   console.log('[restora] seeded fresh two-store empire')
 } else {
-  if (persisted.state.version !== 2) {
+  if (persisted.state.version !== STATE_VERSION) {
     saveSnapshot(state, seq)
-    console.log('[restora] migrated v1 snapshot → two-store empire')
+    console.log(`[restora] migrated snapshot v${persisted.state.version} → v${STATE_VERSION}`)
   } else {
     console.log(`[restora] restored empire snapshot at seq=${seq}`)
   }
@@ -74,6 +83,81 @@ app.get('/api/menu', (req, res) => {
     category,
     availableOnly: req.query.availableOnly === 'true',
   }))
+})
+
+// ─── Configuration read models ──────────────────────────────────
+// Every endpoint takes ?loc=<locationId> and answers from the SQLite
+// projection, so a terminal can read configuration without the snapshot.
+
+function resolveLocation(req, res) {
+  const locationId = typeof req.query.loc === 'string' ? req.query.loc : 'downtown'
+  if (!Object.hasOwn(state.locations || {}, locationId)) {
+    res.status(400).json({ error: 'loc must name a configured restaurant location' })
+    return null
+  }
+  return locationId
+}
+
+function shortQuery(value, max) {
+  return typeof value === 'string' ? value.trim().slice(0, max) : ''
+}
+
+app.get('/api/suppliers', (req, res) => {
+  const locationId = resolveLocation(req, res)
+  if (!locationId) return
+  res.setHeader('Cache-Control', 'no-store')
+  res.json({ locationId, suppliers: getSuppliers(locationId) })
+})
+
+app.get('/api/inventory', (req, res) => {
+  const locationId = resolveLocation(req, res)
+  if (!locationId) return
+  const supplierId = shortQuery(req.query.supplierId, 60)
+  const query = shortQuery(req.query.q, 80)
+  res.setHeader('Cache-Control', 'no-store')
+  res.json({
+    locationId,
+    items: getInventory(locationId, {
+      supplierId,
+      query,
+      exceptionsOnly: req.query.exceptionsOnly === 'true',
+    }),
+  })
+})
+
+app.get('/api/categories', (req, res) => {
+  const locationId = resolveLocation(req, res)
+  if (!locationId) return
+  res.setHeader('Cache-Control', 'no-store')
+  const tree = getCategories(locationId)
+  res.json({
+    locationId,
+    categories: req.query.flat === 'true'
+      ? tree.flatMap((root) => [root, ...root.children])
+      : tree,
+  })
+})
+
+app.get('/api/settings', (req, res) => {
+  const locationId = resolveLocation(req, res)
+  if (!locationId) return
+  res.setHeader('Cache-Control', 'no-store')
+  res.json({ locationId, settings: getSettings(locationId) })
+})
+
+app.get('/api/documents', (req, res) => {
+  const locationId = resolveLocation(req, res)
+  if (!locationId) return
+  const kind = shortQuery(req.query.kind, 16)
+  if (kind && !['invoice', 'receipt', 'ticket', 'report'].includes(kind)) {
+    return res.status(400).json({ error: 'kind must be invoice, receipt, ticket, or report' })
+  }
+  res.setHeader('Cache-Control', 'no-store')
+  res.json({
+    locationId,
+    summary: getDocumentTotals(locationId),
+    documents: getDocuments(locationId, { kind, limit: Number(req.query.limit) || 50 }),
+  })
 })
 
 app.post('/api/actions', (req, res) => {

@@ -4,6 +4,8 @@
 // Table 14 is a 4-top seated 22 min · Burger $16 / plate $4.10 / 74% ·
 // Salmon 86'd mid-service.
 
+import { defaultSettings } from './settings.js'
+
 const now = () => Date.now()
 const minAgo = (m) => new Date(now() - m * 60000).toISOString()
 
@@ -29,6 +31,142 @@ export function buildSeed() {
     { id: 'inv_soda', name: 'Soda can', unit: 'can', onHand: 96, par: 48, lastCost: 0.45, vendor: 'BevCo', location: 'dry' },
     { id: 'inv_coffee', name: 'Coffee portion', unit: 'portion', onHand: 60, par: 30, lastCost: 0.55, vendor: 'BevCo', location: 'dry' },
   ]
+
+  // ─── Suppliers ─────────────────────────────────────────────────
+  const suppliers = [
+    {
+      id: 'sup_meats', name: 'Prime Meats', contactName: 'Dana Whitfield', contactRole: 'Account manager',
+      email: 'orders@primemeats.example', phone: '+1 (503) 555-0110', website: 'primemeats.example',
+      addressLine1: '44 Industrial Way', city: 'Portland', state: 'OR', postalCode: '97210', country: 'United States',
+      taxId: 'EIN 91-2201843', paymentTerms: 'net_14', leadTimeDays: 1, minOrderValue: 150, currency: 'USD',
+      deliveryDays: ['TUE', 'THU', 'SAT'], categories: ['Proteins'], status: 'active', rating: 5,
+      accountNumber: 'PM-4471', notes: 'Best beef in town. Cut sheet confirmed every Thursday by 4pm.',
+      createdAt: minAgo(400 * 1440),
+    },
+    {
+      id: 'sup_produce', name: 'Fresh Farms', contactName: 'Luis Ortega', contactRole: 'Route driver lead',
+      email: 'route@freshfarms.example', phone: '+1 (503) 555-0142', website: 'freshfarms.example',
+      addressLine1: '18 Valley Road', city: 'Hillsboro', state: 'OR', postalCode: '97123', country: 'United States',
+      taxId: 'EIN 93-5510092', paymentTerms: 'net_7', leadTimeDays: 1, minOrderValue: 75, currency: 'USD',
+      deliveryDays: ['MON', 'WED', 'FRI'], categories: ['Produce'], status: 'active', rating: 4,
+      accountNumber: 'FF-1120', notes: 'Two-day max on leafy greens — order Monday for Wednesday.',
+      createdAt: minAgo(380 * 1440),
+    },
+    {
+      id: 'sup_dairy', name: 'Dairy Direct', contactName: 'Priya Nair', contactRole: 'Sales',
+      email: 'hello@dairydirect.example', phone: '+1 (503) 555-0177', website: 'dairydirect.example',
+      addressLine1: '9 Creamery Lane', city: 'Tillamook', state: 'OR', postalCode: '97141', country: 'United States',
+      taxId: '', paymentTerms: 'net_30', leadTimeDays: 2, minOrderValue: 100, currency: 'USD',
+      deliveryDays: ['WED'], categories: ['Dairy'], status: 'active', rating: 4,
+      accountNumber: 'DD-8842', notes: '', createdAt: minAgo(360 * 1440),
+    },
+    {
+      id: 'sup_fish', name: 'Harbor Fish', contactName: 'Kai Lund', contactRole: 'Owner',
+      email: 'kai@harborfish.example', phone: '+1 (503) 555-0198', website: 'harborfish.example',
+      addressLine1: 'Pier 5, Dock C', city: 'Astoria', state: 'OR', postalCode: '97103', country: 'United States',
+      taxId: 'EIN 95-7702311', paymentTerms: 'cod', leadTimeDays: 0, minOrderValue: 0, currency: 'USD',
+      deliveryDays: ['TUE', 'FRI'], categories: ['Proteins'], status: 'active', rating: 5,
+      accountNumber: 'HF-2201', notes: 'Call before 6am for same-day salmon. Quality decides the special.',
+      createdAt: minAgo(300 * 1440),
+    },
+    {
+      id: 'sup_dry', name: 'Dry Goods Co', contactName: 'Marco Bell', contactRole: 'Inside sales',
+      email: 'orders@drygoods.example', phone: '+1 (800) 555-0165', website: 'drygoods.example',
+      addressLine1: '2200 Warehouse Blvd', city: 'Portland', state: 'OR', postalCode: '97218', country: 'United States',
+      taxId: 'EIN 92-1188437', paymentTerms: 'net_30', leadTimeDays: 3, minOrderValue: 200, currency: 'USD',
+      deliveryDays: ['THU'], categories: ['Dry goods'], status: 'active', rating: 3,
+      accountNumber: 'DG-3310', notes: 'Free freight over $400. Two substitutions last quarter worth watching.',
+      createdAt: minAgo(290 * 1440),
+    },
+    {
+      id: 'sup_bev', name: 'BevCo', contactName: 'Sam Tran', contactRole: 'Territory rep',
+      email: 'sam@bevco.example', phone: '+1 (503) 555-0121', website: 'bevco.example',
+      addressLine1: '77 Bottling Row', city: 'Portland', state: 'OR', postalCode: '97209', country: 'United States',
+      taxId: '', paymentTerms: 'net_14', leadTimeDays: 2, minOrderValue: 120, currency: 'USD',
+      deliveryDays: ['FRI'], categories: ['Beverages'], status: 'active', rating: 4,
+      accountNumber: 'BC-5590', notes: 'Soda cases are deposit-return; count returns at delivery.',
+      createdAt: minAgo(240 * 1440),
+    },
+    {
+      id: 'sup_bakery', name: 'Bakery Co', contactName: 'Ines Duarte', contactRole: 'Head baker',
+      email: 'wholesale@bakeryco.example', phone: '+1 (503) 555-0154', website: 'bakeryco.example',
+      addressLine1: '5 Flour Street', city: 'Portland', state: 'OR', postalCode: '97214', country: 'United States',
+      taxId: '', paymentTerms: 'due_on_receipt', leadTimeDays: 1, minOrderValue: 40, currency: 'USD',
+      deliveryDays: ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'], categories: ['Bakery'], status: 'active', rating: 5,
+      accountNumber: 'BK-7781', notes: 'Daily 6:30am drop. Standing order: 60 buns, 14 cake slices.',
+      createdAt: minAgo(200 * 1440),
+    },
+  ]
+
+  // ─── Category trees (menu + inventory, with sub-categories) ─────
+  const categories = [
+    { id: 'cat_starters', kind: 'menu', name: 'Starters', parentId: null, description: 'First bites and shared plates.', station: 'pantry', color: '#f59e0b', sortOrder: 1, active: true },
+    { id: 'cat_starters_salads', kind: 'menu', name: 'Salads', parentId: 'cat_starters', description: '', station: 'pantry', color: '', sortOrder: 1, active: true },
+    { id: 'cat_starters_small', kind: 'menu', name: 'Small plates', parentId: 'cat_starters', description: 'Wings, soup, and daily bites.', station: 'grill', color: '', sortOrder: 2, active: true },
+    { id: 'cat_mains', kind: 'menu', name: 'Mains', parentId: null, description: 'Entrées fired from the grill and sauté.', station: 'grill', color: '#f36a21', sortOrder: 2, active: true },
+    { id: 'cat_mains_grill', kind: 'menu', name: 'Grill', parentId: 'cat_mains', description: '', station: 'grill', color: '', sortOrder: 1, active: true },
+    { id: 'cat_mains_saute', kind: 'menu', name: 'Sauté', parentId: 'cat_mains', description: '', station: 'saute', color: '', sortOrder: 2, active: true },
+    { id: 'cat_mains_bowls', kind: 'menu', name: 'Bowls', parentId: 'cat_mains', description: '', station: 'pantry', color: '', sortOrder: 3, active: true },
+    { id: 'cat_desserts', kind: 'menu', name: 'Desserts', parentId: null, description: '', station: 'dessert', color: '#a78bfa', sortOrder: 3, active: true },
+    { id: 'cat_desserts_sweets', kind: 'menu', name: 'Cakes & ice cream', parentId: 'cat_desserts', description: '', station: 'dessert', color: '', sortOrder: 1, active: true },
+    { id: 'cat_drinks', kind: 'menu', name: 'Drinks', parentId: null, description: '', station: 'pantry', color: '#38bdf8', sortOrder: 4, active: true },
+    { id: 'cat_drinks_cold', kind: 'menu', name: 'Cold', parentId: 'cat_drinks', description: '', station: 'pantry', color: '', sortOrder: 1, active: true },
+    { id: 'cat_drinks_hot', kind: 'menu', name: 'Hot', parentId: 'cat_drinks', description: '', station: 'pantry', color: '', sortOrder: 2, active: true },
+    { id: 'cat_inv_proteins', kind: 'inventory', name: 'Proteins', parentId: null, description: '', station: 'grill', color: '#ef4444', sortOrder: 1, active: true },
+    { id: 'cat_inv_seafood', kind: 'inventory', name: 'Seafood', parentId: 'cat_inv_proteins', description: 'Harbor Fish deliveries.', station: 'saute', color: '', sortOrder: 1, active: true },
+    { id: 'cat_inv_produce', kind: 'inventory', name: 'Produce', parentId: null, description: '', station: 'pantry', color: '#22c55e', sortOrder: 2, active: true },
+    { id: 'cat_inv_dairy', kind: 'inventory', name: 'Dairy', parentId: null, description: '', station: 'pantry', color: '#eab308', sortOrder: 3, active: true },
+    { id: 'cat_inv_dry', kind: 'inventory', name: 'Dry goods', parentId: null, description: '', station: 'pantry', color: '#94a3b8', sortOrder: 4, active: true },
+    { id: 'cat_inv_beverage', kind: 'inventory', name: 'Beverages', parentId: null, description: '', station: 'pantry', color: '#0ea5e9', sortOrder: 5, active: true },
+    { id: 'cat_inv_bakery', kind: 'inventory', name: 'Bakery', parentId: null, description: '', station: 'pantry', color: '#f97316', sortOrder: 6, active: true },
+  ]
+
+  // ─── Stock-management metadata per SKU ─────────────────────────
+  const SUPPLIER_BY_VENDOR = {
+    'Prime Meats': 'sup_meats', 'Fresh Farms': 'sup_produce', 'Dairy Direct': 'sup_dairy',
+    'Harbor Fish': 'sup_fish', 'Dry Goods Co': 'sup_dry', 'BevCo': 'sup_bev', 'Bakery Co': 'sup_bakery',
+  }
+  const INVENTORY_META = {
+    inv_bun: { sku: 'SKU-1001', category: 'Bakery', dailyUse: 45 },
+    inv_patty: { sku: 'SKU-1002', category: 'Proteins', dailyUse: 32 },
+    inv_tomato: { sku: 'SKU-1003', category: 'Produce', dailyUse: 20 },
+    inv_lettuce: { sku: 'SKU-1004', category: 'Produce', dailyUse: 18 },
+    inv_cheese: { sku: 'SKU-1005', category: 'Dairy', dailyUse: 40 },
+    inv_fries: { sku: 'SKU-1006', category: 'Produce', dailyUse: 26 },
+    inv_salmon: { sku: 'SKU-1007', category: 'Proteins', subCategory: 'Seafood', dailyUse: 9 },
+    inv_chicken: { sku: 'SKU-1008', category: 'Proteins', dailyUse: 16 },
+    inv_pasta: { sku: 'SKU-1009', category: 'Dry goods', dailyUse: 14 },
+    inv_cream: { sku: 'SKU-1010', category: 'Dairy', dailyUse: 10 },
+    inv_saladmix: { sku: 'SKU-1011', category: 'Produce', dailyUse: 14 },
+    inv_dressing: { sku: 'SKU-1012', category: 'Dry goods', dailyUse: 12 },
+    inv_wings: { sku: 'SKU-1013', category: 'Proteins', dailyUse: 12 },
+    inv_steak: { sku: 'SKU-1014', category: 'Proteins', dailyUse: 7 },
+    inv_cake: { sku: 'SKU-1015', category: 'Bakery', dailyUse: 8 },
+    inv_icecream: { sku: 'SKU-1016', category: 'Dairy', dailyUse: 14 },
+    inv_soda: { sku: 'SKU-1017', category: 'Beverages', dailyUse: 52 },
+    inv_coffee: { sku: 'SKU-1018', category: 'Beverages', dailyUse: 30 },
+  }
+  inventory.forEach((item, index) => {
+    const meta = INVENTORY_META[item.id] || {}
+    // avgCost drifts a cent or two off lastCost so the weighted-average
+    // valuation method shows a different (and honest) number.
+    const drift = ((index % 5) - 2) * 0.012
+    Object.assign(item, {
+      sku: meta.sku || `SKU-${2000 + index}`,
+      supplierId: SUPPLIER_BY_VENDOR[item.vendor] || null,
+      category: meta.category || 'Dry goods',
+      subCategory: meta.subCategory || '',
+      avgCost: Math.round(item.lastCost * (1 + drift) * 10000) / 10000,
+      reorderPoint: item.par,
+      dailyUse: meta.dailyUse || 4,
+      incoming: 0,
+      lot: null,
+      expiresOn: null,
+      countDueDays: 1 + (index % 7),
+      notes: '',
+      active: true,
+    })
+  })
 
   // ─── Menu + recipes ───────────────────────────────────────────
   const menu = [
@@ -103,6 +241,24 @@ export function buildSeed() {
       dietaryTags: [], allergens: [], imageUrl: '', sortOrder: 12, substituteId: null, modifiers: [],
     },
   ]
+
+  const MENU_SUBCATEGORY = {
+    m_salad: 'Salads', m_wings: 'Small plates', m_soup: 'Small plates',
+    m_burger: 'Grill', m_steak: 'Grill', m_fishchips: 'Grill',
+    m_salmon: 'Sauté', m_chickenpasta: 'Sauté', m_vegbowl: 'Bowls',
+    m_cake: 'Cakes & ice cream', m_icecream: 'Cakes & ice cream',
+    m_soda: 'Cold', m_coffee: 'Hot',
+  }
+  const MENU_SKU = {
+    m_salad: 'M-101', m_wings: 'M-102', m_soup: 'M-103', m_burger: 'M-104', m_salmon: 'M-105',
+    m_chickenpasta: 'M-106', m_steak: 'M-107', m_fishchips: 'M-108', m_vegbowl: 'M-109',
+    m_cake: 'M-110', m_icecream: 'M-111', m_soda: 'M-112', m_coffee: 'M-113',
+  }
+  menu.forEach((item) => {
+    item.subCategory = MENU_SUBCATEGORY[item.id] || ''
+    item.sku = MENU_SKU[item.id] || ''
+    item.auto86 = false
+  })
 
   const recipes = {
     m_salad: { id: 'r_salad', yieldPortions: 1, prepNotes: 'Toss to order', ingredients: [
@@ -259,6 +415,13 @@ export function buildSeed() {
       compTotal: 0,
       covers: p.covers,
       total: p.total,
+      payMethod: i % 4 === 3 ? 'cash' : 'card',
+      tip: Math.round(p.total * 0.18 * 100) / 100,
+      payments: [{
+        method: i % 4 === 3 ? 'cash' : 'card',
+        amount: Math.round(p.total * 1.18 * 100) / 100,
+        at: minAgo(p.min),
+      }],
       items: p.items.map(([menuItemId, qty], j) => ({
         id: `op${i}_${j}`, menuItemId, qty, modifiers: [],
         station: 'expo', status: 'bump', course: 'main', notes: '',
@@ -313,8 +476,15 @@ export function buildSeed() {
     pendingUndo: null,
     // recalls: { itemKey: expiresAt } for 60s KDS recall
     recalls: {},
+    categories,
+    suppliers,
+    // Issued documents (invoices, receipts, tickets, reports) — the
+    // printed-number registry, newest last.
+    documents: [],
     settings: {
+      ...defaultSettings('Downtown'),
       restaurantName: 'Restora · Demo House',
+      locationShort: 'DT',
       targetTurnMinutes: 45,
       ticketMinutes: 18,
       foodCostCap: 0.32,
@@ -363,7 +533,7 @@ export function buildSeedRiverside() {
     inventory,
     menu,
     salesHistory,
-    settings: { ...base.settings, restaurantName: 'Restora · Riverside' },
+    settings: { ...base.settings, restaurantName: 'Restora · Riverside', locationShort: 'RV' },
     meta: { seededAt: new Date(now()).toISOString() },
   }
 }

@@ -11,6 +11,11 @@ const ICONS = {
   search: <><circle cx="10.8" cy="10.8" r="6.8" /><path d="m16 16 4.5 4.5" /></>,
   bell: <><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4" /></>,
   chevron: <path d="m7 10 5 5 5-5" />,
+  catalog: <><path d="M4 6.5 12 3l8 3.5-8 3.5-8-3.5Z" /><path d="m4 12 8 3.5 8-3.5M4 17l8 3.5 8-3.5" /></>,
+  supplier: <><path d="M3 16V7.5L12 3l9 4.5V16l-9 5-9-5Z" /><path d="M8 10.5h8M8 14h5" /></>,
+  layers: <><path d="M12 3 3 8l9 5 9-5-9-5Z" /><path d="m3 13 9 5 9-5M3 17.5l9 5 9-5" /></>,
+  printer: <><path d="M7 8V3h10v5" /><rect x="3" y="8" width="18" height="8" rx="2" /><path d="M7 16h10v5H7z" /></>,
+  doc: <><path d="M7 3h7l5 5v13H7z" /><path d="M14 3v5h5M9.5 13h5M9.5 17h5" /></>,
   plus: <path d="M12 5v14m-7-7h14" />,
   pin: <><path d="M9 4h6l-1 6 3 3v2H7v-2l3-3-1-6Z" /><path d="M12 15v6" /></>,
 }

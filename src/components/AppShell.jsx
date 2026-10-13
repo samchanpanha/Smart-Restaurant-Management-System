@@ -16,9 +16,12 @@ const NAV_ITEMS = [
   { id: 'kitchen', label: 'Kitchen', icon: 'kitchen' },
   { id: 'inventory', label: 'Inventory', icon: 'inventory' },
   { id: 'menu', label: 'Menu & Recipes', icon: 'menu' },
+  { id: 'catalog', label: 'Catalog', icon: 'catalog' },
+  { id: 'suppliers', label: 'Suppliers', icon: 'supplier' },
   { id: 'costing', label: 'Food Cost & Profit', icon: 'costing' },
   { id: 'reports', label: 'Reports', icon: 'reports' },
-  { id: 'system', label: 'Settings', icon: 'settings' },
+  { id: 'settings', label: 'Settings', icon: 'settings' },
+  { id: 'system', label: 'System & Model', icon: 'layers' },
 ]
 
 function displayOrderId(id) {

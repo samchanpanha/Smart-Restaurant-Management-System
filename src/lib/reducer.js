@@ -5,6 +5,7 @@
 
 import { STATIONS, TARGETS } from './constants.js'
 import {
+  applyAuto86,
   assertTableTransition,
   costingFor,
   minutesBetween,
@@ -12,16 +13,102 @@ import {
   orderSubtotal,
   plateCostFor,
   quoteWaitMinutes,
+  reorderPointFor,
   stockStatusFor,
+  suggestedOrderQty,
   theoreticalDecrementFor,
   ticketAgeState,
   uid,
 } from './models.js'
+import { currencyMeta } from './currency.js'
+import {
+  DOC_KINDS,
+  categoryById,
+  descendantCategoryIds,
+  defaultSettings,
+  documentNumber,
+  sanitizeSettings,
+  sanitizeSupplier,
+  sanitizeTemplate,
+} from './settings.js'
 import { buildSeed, buildSeedRiverside } from './seed.js'
 
 export { buildSeed, buildSeedRiverside }
 
 const MAX_MENU_PRICE = 999999.99
+
+/** Round a stock quantity to the configured precision (0–4 decimals). */
+function roundQty(value, precision = 2) {
+  const digits = Math.max(0, Math.min(4, Math.trunc(Number(precision) || 0)))
+  const factor = 10 ** digits
+  return Math.round((Number(value) || 0) * factor) / factor
+}
+
+/** Merge a settings patch section-by-section, then sanitize the result. */
+function mergeSettings(current, patch) {
+  const merged = {
+    ...current,
+    ...patch,
+    stock: { ...current.stock, ...(patch.stock || {}) },
+    pos: { ...current.pos, ...(patch.pos || {}) },
+    notifications: { ...current.notifications, ...(patch.notifications || {}) },
+    numbering: { ...current.numbering, ...(patch.numbering || {}) },
+    templates: { ...current.templates, ...(patch.templates || {}) },
+    currencies: Array.isArray(patch.currencies) ? patch.currencies : current.currencies,
+  }
+  const settings = sanitizeSettings(merged, current.restaurantName)
+  settings.updatedAt = new Date().toISOString()
+  settings.updatedBy = patch.updatedBy || 'owner'
+  return settings
+}
+
+/** Keep an issued document small, printable, and free of surprises. */
+function sanitizeDocument(raw, kind, number, id) {
+  const positive = (value) => {
+    const n = Number(value)
+    return Number.isFinite(n) && n >= 0 ? Math.round(n * 1000000) / 1000000 : 0
+  }
+  return {
+    id,
+    kind,
+    number,
+    title: String(raw?.title ?? '').slice(0, 40),
+    issuedAt: new Date().toISOString(),
+    reference: String(raw?.reference ?? '').slice(0, 80),
+    currency: {
+      code: String(raw?.currency?.code ?? 'USD').slice(0, 6),
+      symbol: String(raw?.currency?.symbol ?? '$').slice(0, 6),
+      decimals: Math.max(0, Math.min(4, Math.trunc(Number(raw?.currency?.decimals) || 2))),
+      rate: positive(raw?.currency?.rate) || 1,
+      baseCode: String(raw?.currency?.baseCode ?? 'USD').slice(0, 6),
+    },
+    totals: Object.fromEntries(
+      Object.entries(raw?.totals || {}).map(([key, value]) => [key, positive(value)]),
+    ),
+    lines: (Array.isArray(raw?.lines) ? raw.lines : []).slice(0, 80).map((line) => ({
+      name: String(line?.name ?? '').slice(0, 60),
+      qty: positive(line?.qty),
+      unitPrice: positive(line?.unitPrice),
+      lineTotal: positive(line?.lineTotal),
+      modifiers: (Array.isArray(line?.modifiers) ? line.modifiers : []).slice(0, 8).map((mod) => String(mod).slice(0, 48)),
+      notes: String(line?.notes ?? '').slice(0, 160),
+      station: String(line?.station ?? '').slice(0, 24),
+      course: String(line?.course ?? '').slice(0, 24),
+    })),
+    payments: (Array.isArray(raw?.payments) ? raw.payments : []).slice(0, 8).map((payment) => ({
+      method: String(payment?.method ?? 'card').slice(0, 24),
+      amount: positive(payment?.amount),
+    })),
+    meta: {
+      orderId: String(raw?.meta?.orderId ?? '').slice(0, 60),
+      tableId: String(raw?.meta?.tableId ?? '').slice(0, 60),
+      range: String(raw?.meta?.range ?? '').slice(0, 16),
+      issuedBy: String(raw?.meta?.issuedBy ?? 'owner').slice(0, 40),
+      voided: false,
+      voidReason: null,
+    },
+  }
+}
 
 function cleanLabelList(value) {
   if (!Array.isArray(value)) return []
@@ -57,23 +144,152 @@ function normalizeMenuItem(item, index = 0) {
     station: STATIONS.includes(item?.station) ? item.station : 'pantry',
     available: item?.available !== false,
     active: item?.active !== false,
+    subCategory: String(item?.subCategory ?? '').trim().slice(0, 40),
+    sku: String(item?.sku ?? '').trim().slice(0, 40),
     dietaryTags: cleanLabelList(item?.dietaryTags),
     allergens: cleanLabelList(item?.allergens),
     imageUrl: cleanImageUrl(item?.imageUrl),
     sortOrder: Number.isFinite(numericOrder) ? Math.max(0, Math.trunc(numericOrder)) : index,
     modifiers: Array.isArray(item?.modifiers) ? item.modifiers : [],
     substituteId: item?.substituteId ? String(item.substituteId) : null,
+    // Auto-86 is written by the stock policy; a manual 86 is never cleared by it.
+    auto86: item?.auto86 === true,
+    auto86At: item?.auto86 === true ? item?.auto86At || null : null,
   }
 }
 
-function withMenuDefaults(shop) {
-  if (!shop || !Array.isArray(shop.menu)) return shop
-  return { ...shop, menu: shop.menu.map((item, index) => normalizeMenuItem(item, index)) }
+function slugify(value) {
+  return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40)
+}
+
+/** Stock-management fields every SKU carries, backfilled on migration. */
+function normalizeInventoryItem(item, index = 0) {
+  const par = Number.isFinite(Number(item?.par)) ? Number(item.par) : 0
+  const lastCost = Number.isFinite(Number(item?.lastCost)) ? Number(item.lastCost) : 0
+  return {
+    ...item,
+    id: String(item?.id ?? '').trim() || `inv_${index}`,
+    name: String(item?.name ?? 'Stock item').trim().slice(0, 60) || 'Stock item',
+    unit: String(item?.unit ?? 'each').trim().slice(0, 16) || 'each',
+    onHand: Number.isFinite(Number(item?.onHand)) ? Number(item.onHand) : 0,
+    par,
+    lastCost,
+    avgCost: Number.isFinite(Number(item?.avgCost)) && Number(item.avgCost) > 0 ? Number(item.avgCost) : lastCost,
+    reorderPoint: Number.isFinite(Number(item?.reorderPoint)) ? Number(item.reorderPoint) : par,
+    dailyUse: Number.isFinite(Number(item?.dailyUse)) ? Number(item.dailyUse) : 0,
+    incoming: Number.isFinite(Number(item?.incoming)) ? Number(item.incoming) : 0,
+    vendor: String(item?.vendor ?? '').trim().slice(0, 60),
+    supplierId: item?.supplierId ? String(item.supplierId) : null,
+    sku: String(item?.sku ?? '').trim().slice(0, 40),
+    category: String(item?.category ?? 'Dry goods').trim().slice(0, 40) || 'Dry goods',
+    subCategory: String(item?.subCategory ?? '').trim().slice(0, 40),
+    location: String(item?.location ?? 'dry').trim().slice(0, 24) || 'dry',
+    countDueDays: Number.isFinite(Number(item?.countDueDays)) ? Math.max(0, Math.trunc(Number(item.countDueDays))) : 7,
+    expiresOn: item?.expiresOn || null,
+    lot: String(item?.lot ?? '').trim().slice(0, 40) || null,
+    notes: String(item?.notes ?? '').trim().slice(0, 240),
+    active: item?.active !== false,
+  }
+}
+
+function normalizeCategory(raw, index = 0) {
+  const name = String(raw?.name ?? '').trim().slice(0, 40)
+  if (!name) return null
+  const kind = raw?.kind === 'inventory' ? 'inventory' : 'menu'
+  return {
+    id: String(raw?.id ?? '').trim() || `cat_${slugify(name)}_${index}`,
+    kind,
+    name,
+    parentId: raw?.parentId ? String(raw.parentId) : null,
+    description: String(raw?.description ?? '').trim().slice(0, 200),
+    station: STATIONS.includes(raw?.station) ? raw.station : 'pantry',
+    color: /^#[0-9a-fA-F]{6}$/.test(String(raw?.color || '')) ? String(raw.color) : '',
+    sortOrder: Number.isFinite(Number(raw?.sortOrder)) ? Math.max(0, Math.trunc(Number(raw.sortOrder))) : index,
+    active: raw?.active !== false,
+  }
+}
+
+/** Legacy snapshots only had vendor strings — promote them to real suppliers. */
+function suppliersFromVendors(inventory, existing) {
+  const known = new Set(existing.map((supplier) => supplier.name.toLowerCase()))
+  const out = [...existing]
+  for (const item of inventory) {
+    const vendor = String(item?.vendor || '').trim()
+    if (!vendor || known.has(vendor.toLowerCase())) continue
+    known.add(vendor.toLowerCase())
+    out.push({
+      id: `sup_${slugify(vendor) || out.length}`,
+      name: vendor.slice(0, 60),
+      contactName: '', contactRole: '', email: '', phone: '', website: '',
+      addressLine1: '', addressLine2: '', city: '', state: '', postalCode: '', country: '',
+      taxId: '', paymentTerms: 'net_30', leadTimeDays: 2, minOrderValue: 0, currency: '',
+      deliveryDays: [], categories: [], status: 'active', rating: 0,
+      notes: 'Auto-created from an existing inventory vendor during migration.',
+      accountNumber: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    })
+  }
+  return out
+}
+
+function withShopDefaults(shop, locationLabel = 'Downtown') {
+  if (!shop) return shop
+  const settings = sanitizeSettings(shop.settings, locationLabel)
+  const menu = Array.isArray(shop.menu)
+    ? shop.menu.map((item, index) => normalizeMenuItem(item, index))
+    : []
+  const inventory = Array.isArray(shop.inventory)
+    ? shop.inventory.map((item, index) => normalizeInventoryItem(item, index))
+    : []
+  const categories = (Array.isArray(shop.categories) ? shop.categories : [])
+    .map((category, index) => normalizeCategory(category, index))
+    .filter(Boolean)
+  const suppliers = suppliersFromVendors(
+    inventory,
+    (Array.isArray(shop.suppliers) ? shop.suppliers : [])
+      .map((supplier) => sanitizeSupplier(supplier))
+      .map(({ _existing, ...supplier }) => supplier),
+  )
+  // Link SKUs to a supplier when they only had a vendor string.
+  const supplierByName = new Map(suppliers.map((supplier) => [supplier.name.toLowerCase(), supplier.id]))
+  const linkedInventory = inventory.map((item) => (
+    item.supplierId || !item.vendor
+      ? item
+      : { ...item, supplierId: supplierByName.get(item.vendor.toLowerCase()) || null }
+  ))
+  const documents = (Array.isArray(shop.documents) ? shop.documents : []).slice(-300)
+  return { ...shop, menu, inventory: linkedInventory, categories, suppliers, documents, settings }
+}
+
+/** Rebuild the category tree defaults when a legacy snapshot had none. */
+function seedCategoriesIfEmpty(shop) {
+  if (shop.categories?.length) return shop
+  return { ...shop, categories: buildSeed().categories }
 }
 
 function uniqueMenuName(menu, itemId, name) {
   const normalized = String(name ?? '').trim().toLocaleLowerCase()
   return normalized && !menu.some((item) => item.id !== itemId && item.name.toLocaleLowerCase() === normalized)
+}
+
+/** Re-label menu + inventory items when a category is renamed or merged. */
+function relabelCategoryItems(state, from, to) {
+  const sources = (Array.isArray(from) ? from : [from]).map((category) => category.name)
+  const parent = to.parentId ? categoryById(state.categories, to.parentId) : null
+  const targetName = parent ? parent.name : to.name
+  const targetSub = parent ? to.name : ''
+  const relabel = (item) => {
+    const hitTop = sources.includes(item.category)
+    const hitSub = sources.includes(item.subCategory)
+    if (!hitTop && !hitSub) return item
+    return { ...item, category: targetName, subCategory: targetSub }
+  }
+  // Menu rows are labeled by category name; stock rows carry the same
+  // category/sub-category names, so both arrays follow the rename.
+  const isStock = (item) => item.unit !== undefined
+  return {
+    menu: state.menu.filter((item) => !isStock(item)).map(relabel),
+    inventory: state.inventory.filter(isStock).map(relabel),
+  }
 }
 
 // ─── Reducer ────────────────────────────────────────────────────
@@ -93,7 +309,7 @@ function decrementInventory(inventory, decMap, sign = -1) {
   return next
 }
 
-function shopReducer(state, action) {
+function shopReducerBase(state, action) {
   switch (action.type) {
     // ── Floor ──────────────────────────────────────────────
     case 'SEAT_PARTY': {
@@ -138,7 +354,7 @@ function shopReducer(state, action) {
       const { tableId } = action
       const table = state.tables.find((t) => t.id === tableId)
       if (!table || table.status !== 'billed') return state
-      return reducer(state, { type: 'SET_TABLE_STATUS', tableId, to: 'dirty' })
+      return shopReducerBase(state, { type: 'SET_TABLE_STATUS', tableId, to: 'dirty' })
     }
 
     // ── Orders / tickets ───────────────────────────────────
@@ -552,34 +768,77 @@ function shopReducer(state, action) {
 
     // ── Inventory ──────────────────────────────────────────
     case 'RECEIVE_INVOICE': {
-      const { vendor, lines } = action // lines: [{inventoryItemId, qty, unitCost}]
+      // lines: [{inventoryItemId, qty, unitCost}] · supplierId links the
+      // delivery to a vendor row so spend and reorder lists stay honest.
+      const { vendor, lines = [], supplierId = null } = action
+      const precision = Math.trunc(Number(state.settings?.stock?.autoReceiveThousandths) || 2)
+      const received = []
       const inventory = state.inventory.map((item) => {
         const line = lines.find((l) => l.inventoryItemId === item.id)
         if (!line) return item
+        const qty = roundQty(line.qty, precision)
+        if (!(qty > 0)) return item
+        const unitCost = Number.isFinite(Number(line.unitCost)) && Number(line.unitCost) >= 0
+          ? Number(line.unitCost)
+          : Number(item.lastCost) || 0
+        const prevQty = Math.max(0, Number(item.onHand) || 0)
+        const prevAvg = Number(item.avgCost) || Number(item.lastCost) || 0
+        const nextQty = roundQty(prevQty + qty, precision)
+        // Weighted average moves on every receipt; last cost follows the invoice.
+        const avgCost = nextQty > 0
+          ? Math.round((((prevQty * prevAvg) + (qty * unitCost)) / nextQty) * 10000) / 10000
+          : unitCost
+        received.push({ inventoryItemId: item.id, qty, unitCost })
         return {
           ...item,
-          onHand: Math.round((item.onHand + Number(line.qty || 0)) * 100) / 100,
-          lastCost: Number(line.unitCost ?? item.lastCost),
+          onHand: nextQty,
+          lastCost: Math.round(unitCost * 10000) / 10000,
+          avgCost,
           vendor: vendor || item.vendor,
+          supplierId: supplierId || item.supplierId,
+          incoming: Math.max(0, roundQty((Number(item.incoming) || 0) - qty, precision)),
         }
       })
+      if (!received.length) return state
+      const supplier = state.suppliers.find((entry) => entry.id === supplierId)
       const invoiceLog = [
         ...state.invoiceLog,
-        { id: uid('invlog'), vendor, at: new Date().toISOString(), lines },
+        {
+          id: uid('invlog'),
+          vendor: vendor || supplier?.name || 'Vendor',
+          supplierId: supplierId || null,
+          at: new Date().toISOString(),
+          lines: received,
+          total: Math.round(received.reduce((sum, line) => sum + line.qty * line.unitCost, 0) * 100) / 100,
+        },
       ]
-      // Receiving stock may un-86 dishes — recompute availability for items
-      // that were auto-blocked? Manual 86 flags stay until cleared by hand.
+      // Auto-86 is re-evaluated by the shopReducer wrapper right after this
+      // case runs; manual 86 flags stay put until a manager clears them.
       return { ...state, inventory, invoiceLog }
     }
 
     case 'LOG_WASTE': {
-      const { inventoryItemId, qty, reason } = action
+      const { inventoryItemId, reason } = action
+      const item = state.inventory.find((i) => i.id === inventoryItemId)
+      if (!item) return state
+      const precision = Math.trunc(Number(state.settings?.stock?.autoReceiveThousandths) || 2)
+      const requested = roundQty(action.qty, precision)
+      if (!(requested > 0)) return state
+      // Policy: when negative stock is off, you can only waste what you have.
+      const allowNegative = state.settings?.stock?.allowNegativeStock === true
+      const qty = allowNegative ? requested : Math.min(requested, Number(item.onHand) || 0)
+      if (!(qty > 0)) return state
       const inventory = state.inventory.map((i) =>
-        i.id === inventoryItemId ? { ...i, onHand: Math.round((i.onHand - qty) * 100) / 100 } : i,
+        i.id === inventoryItemId ? { ...i, onHand: roundQty(i.onHand - qty, precision) } : i,
       )
       const wasteLog = [
         ...state.wasteLog,
-        { id: uid('w'), inventoryItemId, qty, reason, at: new Date().toISOString(), by: 'staff' },
+        {
+          id: uid('w'), inventoryItemId, qty, reason,
+          at: new Date().toISOString(),
+          by: action.by || 'staff',
+          value: Math.round(qty * (Number(item.lastCost) || 0) * 100) / 100,
+        },
       ]
       return { ...state, inventory, wasteLog }
     }
@@ -647,6 +906,260 @@ function shopReducer(state, action) {
       return { ...state, menu }
     }
 
+    // ── Configuration: settings, templates, catalog, suppliers ──
+    case 'UPDATE_SETTINGS': {
+      const patch = action.patch
+      if (!patch || typeof patch !== 'object') return state
+      const settings = mergeSettings(state.settings, patch)
+      // Saving without changing anything must not rewrite the snapshot —
+      // compare everything except the bookkeeping stamps.
+      const STAMPS = ['updatedAt', 'updatedBy']
+      const comparable = (value) => JSON.stringify(
+        Object.fromEntries(Object.entries(value).filter(([key]) => !STAMPS.includes(key))),
+      )
+      if (comparable(settings) === comparable(state.settings)) return state
+      return { ...state, settings }
+    }
+
+    case 'RESET_SETTINGS': {
+      const section = String(action.section || 'all')
+      const defaults = defaultSettings(state.settings?.locationShort || 'Downtown')
+      const keys = {
+        all: Object.keys(defaults),
+        business: ['restaurantName', 'legalName', 'tagline', 'description', 'logoUrl', 'logoInitials', 'brandColor', 'addressLine1', 'addressLine2', 'city', 'state', 'postalCode', 'country', 'phone', 'email', 'website', 'taxId'],
+        money: ['baseCurrency', 'currency', 'currencies', 'locale', 'timezone', 'dateFormat', 'timeFormat', 'numberFormat', 'measurement', 'taxLabel', 'taxPct', 'pricesIncludeTax', 'servicePct', 'serviceLabel', 'serviceTaxable', 'rounding'],
+        documents: ['templates', 'documentCurrency', 'numbering', 'footerNote'],
+        stock: ['stock'],
+        pos: ['pos'],
+        notifications: ['notifications'],
+        targets: ['targetTurnMinutes', 'ticketMinutes', 'foodCostCap', 'rushHour'],
+      }[section]
+      if (!keys) return state
+      const patch = Object.fromEntries(keys.map((key) => [key, defaults[key]]))
+      const settings = mergeSettings(state.settings, { ...patch, updatedBy: action.by || 'owner' })
+      return { ...state, settings }
+    }
+
+    case 'UPDATE_TEMPLATE': {
+      const kind = DOC_KINDS.includes(action.kind) ? action.kind : null
+      if (!kind) return state
+      const current = state.settings.templates[kind]
+      const next = sanitizeTemplate({ ...current, ...(action.patch || {}) }, kind)
+      next.updatedAt = new Date().toISOString()
+      if (JSON.stringify(next) === JSON.stringify(current)) return state
+      return {
+        ...state,
+        settings: { ...state.settings, templates: { ...state.settings.templates, [kind]: next } },
+      }
+    }
+
+    case 'UPSERT_CATEGORY': {
+      const raw = action.category
+      if (!raw || typeof raw !== 'object') return state
+      const current = raw.id ? categoryById(state.categories, raw.id) : null
+      const parentId = raw.parentId ? String(raw.parentId) : null
+      if (parentId) {
+        const parent = categoryById(state.categories, parentId)
+        if (!parent || parent.kind !== (raw.kind || current?.kind || 'menu')) return state
+        // Guard against cycles: a node can never sit under its own subtree.
+        const blocked = new Set(descendantCategoryIds(state.categories, raw.id || '__new__'))
+        if (blocked.has(parentId)) return state
+      }
+      const candidate = normalizeCategory(
+        { ...current, ...raw, parentId },
+        current?.sortOrder ?? state.categories.length,
+      )
+      if (!candidate) return state
+      candidate.id = raw.id && current ? current.id : (raw.id || candidate.id)
+      const siblings = state.categories.filter(
+        (category) => category.id !== candidate.id
+          && category.kind === candidate.kind
+          && (category.parentId || null) === (candidate.parentId || null),
+      )
+      if (siblings.some((category) => category.name.toLowerCase() === candidate.name.toLowerCase())) return state
+      const exists = state.categories.some((category) => category.id === candidate.id)
+      const categories = exists
+        ? state.categories.map((category) => (category.id === candidate.id ? candidate : category))
+        : [...state.categories, candidate]
+      if (current && current.name !== candidate.name) {
+        // Renaming a category re-labels the items that reference it.
+        return { ...state, categories, ...relabelCategoryItems(state, current, candidate) }
+      }
+      return { ...state, categories }
+    }
+
+    case 'DELETE_CATEGORY': {
+      const node = categoryById(state.categories, action.categoryId)
+      if (!node) return state
+      const ids = descendantCategoryIds(state.categories, node.id)
+      const removed = state.categories.filter((category) => ids.includes(category.id))
+      const names = new Set(removed.map((category) => category.name))
+      const target = action.moveTo ? categoryById(state.categories, action.moveTo) : null
+      if (action.moveTo && !target) return state
+      const touches = (item) => names.has(item.category) || names.has(item.subCategory)
+      if (!target && (
+        state.menu.some(touches)
+        || state.inventory.some(touches)
+        || removed.some((category) => state.categories.some((child) => child.parentId === category.id))
+      )) return state // caller must move items / children first
+      const categories = state.categories.filter((category) => !ids.includes(category.id))
+      if (!target) return { ...state, categories }
+      return { ...state, categories, ...relabelCategoryItems(state, removed, target) }
+    }
+
+    case 'UPSERT_SUPPLIER': {
+      const raw = action.supplier
+      if (!raw || typeof raw !== 'object') return state
+      const existing = state.suppliers.find((supplier) => supplier.id === raw.id)
+      const { _existing, ...cleaned } = sanitizeSupplier({ ...existing, ...raw, id: raw.id || existing?.id })
+      cleaned.createdAt = existing?.createdAt || cleaned.createdAt
+      const duplicate = state.suppliers.some(
+        (supplier) => supplier.id !== cleaned.id && supplier.name.toLowerCase() === cleaned.name.toLowerCase(),
+      )
+      if (duplicate) return state
+      const suppliers = existing
+        ? state.suppliers.map((supplier) => (supplier.id === cleaned.id ? cleaned : supplier))
+        : [...state.suppliers, cleaned]
+      return { ...state, suppliers }
+    }
+
+    case 'DELETE_SUPPLIER': {
+      const supplier = state.suppliers.find((entry) => entry.id === action.supplierId)
+      if (!supplier) return state
+      const used = state.inventory.filter((item) => item.supplierId === supplier.id)
+      const reassignTo = action.reassignTo ? String(action.reassignTo) : null
+      if (reassignTo && !state.suppliers.some((entry) => entry.id === reassignTo)) return state
+      if (used.length && !reassignTo) return state // move the SKUs first
+      const suppliers = state.suppliers.filter((entry) => entry.id !== supplier.id)
+      const affected = new Set(used.map((item) => item.id))
+      const inventory = state.inventory.map((item) => (
+        affected.has(item.id) ? { ...item, supplierId: reassignTo } : item
+      ))
+      return { ...state, suppliers, inventory }
+    }
+
+    case 'ADD_INVENTORY_ITEM': {
+      const item = normalizeInventoryItem(action.item, state.inventory.length)
+      if (!item.id || state.inventory.some((entry) => entry.id === item.id)) return state
+      if (state.inventory.some((entry) => entry.name.toLowerCase() === item.name.toLowerCase())) return state
+      if (!(Number(item.par) >= 0) || !(Number(item.lastCost) >= 0)) return state
+      if (item.supplierId && !state.suppliers.some((entry) => entry.id === item.supplierId)) item.supplierId = null
+      return { ...state, inventory: [...state.inventory, item] }
+    }
+
+    case 'UPDATE_INVENTORY_ITEM': {
+      const current = state.inventory.find((item) => item.id === action.inventoryItemId)
+      if (!current || !action.patch || typeof action.patch !== 'object') return state
+      const precision = Math.trunc(Number(state.settings?.stock?.autoReceiveThousandths) || 2)
+      const next = normalizeInventoryItem({ ...current, ...action.patch, id: current.id }, 0)
+      if (!next.name) return state
+      if (!state.settings?.stock?.allowNegativeStock && Number(next.onHand) < 0) {
+        next.onHand = 0
+      }
+      next.onHand = roundQty(next.onHand, precision)
+      next.par = roundQty(Math.max(0, next.par), precision)
+      next.reorderPoint = roundQty(Math.max(0, next.reorderPoint), precision)
+      next.lastCost = Math.max(0, Math.round(next.lastCost * 10000) / 10000)
+      next.avgCost = Math.max(0, Math.round(next.avgCost * 10000) / 10000)
+      if (next.supplierId && !state.suppliers.some((entry) => entry.id === next.supplierId)) next.supplierId = null
+      if (state.inventory.some((item) => item.id !== current.id && item.name.toLowerCase() === next.name.toLowerCase())) return state
+      return {
+        ...state,
+        inventory: state.inventory.map((item) => (item.id === current.id ? next : item)),
+      }
+    }
+
+    case 'DELETE_INVENTORY_ITEM': {
+      const item = state.inventory.find((entry) => entry.id === action.inventoryItemId)
+      if (!item) return state
+      const usedBy = Object.values(state.recipes || {}).filter((recipe) =>
+        recipe?.ingredients?.some((ing) => ing.inventoryItemId === item.id))
+      if (usedBy.length && !action.force) return state // detach from recipes first
+      return { ...state, inventory: state.inventory.filter((entry) => entry.id !== item.id) }
+    }
+
+    case 'SET_BASE_CURRENCY': {
+      const code = String(action.code || '').toUpperCase().slice(0, 6)
+      const from = state.settings.baseCurrency || state.settings.currency || 'USD'
+      if (!code || code === from) return state
+      const rateOf = (target) => (target === from
+        ? 1
+        : Number(state.settings.currencies.find((entry) => entry.code === target)?.rate) || 1)
+      const newBaseRate = rateOf(code)
+      if (!(newBaseRate > 0)) return state
+      const currencies = state.settings.currencies
+        .filter((entry) => entry.code !== code)
+        .map((entry) => ({ ...entry, rate: Math.round((rateOf(entry.code) / newBaseRate) * 1e6) / 1e6 }))
+      if (from !== code) {
+        const meta = currencyMeta(from)
+        currencies.push({
+          code: from,
+          name: meta.name,
+          symbol: meta.symbol,
+          decimals: meta.decimals,
+          symbolPosition: 'before',
+          space: false,
+          rate: Math.round((1 / newBaseRate) * 1e6) / 1e6,
+          enabled: true,
+          updatedAt: new Date().toISOString(),
+        })
+      }
+      const settings = mergeSettings(state.settings, {
+        baseCurrency: code,
+        currency: code,
+        currencies,
+        updatedBy: action.by || 'owner',
+      })
+      return { ...state, settings }
+    }
+
+    case 'RESCALE_CATALOG': {
+      // One deliberate revaluation of every catalog price and cost — used
+      // when the store re-denominates without re-entering the whole book.
+      const factor = Number(action.factor)
+      if (!Number.isFinite(factor) || factor <= 0 || factor > 1000) return state
+      const scale = (value) => Math.round((Number(value) || 0) * factor * 100) / 100
+      const menu = state.menu.map((item) => ({ ...item, price: scale(item.price) }))
+      const inventory = state.inventory.map((item) => ({
+        ...item,
+        lastCost: Math.round((Number(item.lastCost) || 0) * factor * 10000) / 10000,
+        avgCost: Math.round((Number(item.avgCost) || 0) * factor * 10000) / 10000,
+      }))
+      return { ...state, menu, inventory }
+    }
+
+    case 'ISSUE_DOCUMENT': {
+      const kind = DOC_KINDS.includes(action.kind) ? action.kind : null
+      if (!kind) return state
+      const requestedId = String(action.document?.id || '').slice(0, 60)
+      if (requestedId && state.documents.some((entry) => entry.id === requestedId)) return state
+      const counter = state.settings.numbering[kind]
+      const number = documentNumber(state.settings, kind, counter.next)
+      const document = sanitizeDocument(action.document, kind, number, requestedId || uid('doc'))
+      document.meta.issuedBy = String(action.by || 'owner').slice(0, 40)
+      return {
+        ...state,
+        documents: [...state.documents, document].slice(-300),
+        settings: {
+          ...state.settings,
+          numbering: {
+            ...state.settings.numbering,
+            [kind]: { ...counter, next: counter.next + 1 },
+          },
+        },
+      }
+    }
+
+    case 'VOID_DOCUMENT': {
+      const { documentId, reason } = action
+      const documents = state.documents.map((entry) => (
+        entry.id === documentId
+          ? { ...entry, meta: { ...entry.meta, voided: true, voidReason: String(reason || 'voided').slice(0, 120), voidedAt: new Date().toISOString() } }
+          : entry
+      ))
+      return { ...state, documents }
+    }
+
     // ── Misc ───────────────────────────────────────────────
     case 'DISMISS_ALERT':
       return state.dismissedAlerts.includes(action.key)
@@ -658,33 +1171,62 @@ function shopReducer(state, action) {
   }
 }
 
+// Automatic 86 after anything that moves stock: a dish whose recipe ran
+// out stops selling everywhere at once; receiving brings it back.
+const STOCK_ACTIONS = new Set([
+  'SEND_ORDER', 'GUEST_SEND', 'UNDO_SEND', 'LOG_WASTE', 'COUNT_STOCK',
+  'RECEIVE_INVOICE', 'ADD_INVENTORY_ITEM', 'UPDATE_INVENTORY_ITEM', 'DELETE_INVENTORY_ITEM',
+])
+
+function shopReducer(state, action) {
+  const next = shopReducerBase(state, action)
+  if (next === state) return state
+  return STOCK_ACTIONS.has(action.type) ? applyAuto86(next) : next
+}
+
 // ─── Empire router (multi-location) ───────────────────────────────
 // State shape v2: { version: 2, locations: { downtown: shop, riverside: shop } }.
 // Every shop action travels wrapped: { type: 'LOC', locId, action: inner }.
 // RESET_ALL reseeds the whole empire; HYDRATE swaps it (bootstrap only).
 
+export const STATE_VERSION = 3
+
 export function buildEmpire() {
   const downtown = buildSeed()
-  downtown.settings.restaurantName = 'Restora · Downtown'
-  return { version: 2, locations: { downtown, riverside: buildSeedRiverside() } }
+  downtown.settings = {
+    ...downtown.settings,
+    restaurantName: 'Restora · Downtown',
+    locationShort: 'DT',
+  }
+  return { version: STATE_VERSION, locations: { downtown, riverside: buildSeedRiverside() } }
 }
+
+const LOCATION_LABELS = { downtown: 'Downtown', riverside: 'Riverside' }
 
 export function migrateToEmpire(old) {
   if (!old) return null
-  if (old.version === 2 && old.locations?.downtown && old.locations?.riverside) {
+  if (old.locations && (old.version === 2 || old.version === STATE_VERSION)) {
     return {
+      version: STATE_VERSION,
       ...old,
       locations: Object.fromEntries(
-        Object.entries(old.locations).map(([id, shop]) => [id, withMenuDefaults(shop)]),
+        Object.entries(old.locations).map(([id, shop]) => [
+          id,
+          withShopDefaults(seedCategoriesIfEmpty(shop), LOCATION_LABELS[id] || id),
+        ]),
       ),
     }
   }
   if (old.version === 1 && Array.isArray(old.tables)) {
-    const downtown = withMenuDefaults({
+    const downtown = withShopDefaults(seedCategoriesIfEmpty({
       ...old,
-      settings: { ...old.settings, restaurantName: 'Restora · Downtown' },
-    })
-    return { version: 2, locations: { downtown, riverside: buildSeedRiverside() } }
+      settings: {
+        ...old.settings,
+        restaurantName: 'Restora · Downtown',
+        locationShort: 'DT',
+      },
+    }), 'Downtown')
+    return { version: STATE_VERSION, locations: { downtown, riverside: buildSeedRiverside() } }
   }
   return null
 }
@@ -716,9 +1258,12 @@ export function getAlerts(state) {
   const nowMs = Date.now()
   const menuById = Object.fromEntries(state.menu.map((m) => [m.id, m]))
   const invById = Object.fromEntries(state.inventory.map((i) => [i.id, i]))
+  // Notification preferences decide which classes of alert surface here.
+  const notify = { lowStock: true, lateTickets: true, guestRequests: true, negativeMargin: true, ...(state.settings?.notifications || {}) }
 
   // Late / warning tickets (KDS SLA)
   for (const order of state.orders) {
+    if (!notify.lateTickets) break
     if (['paid', 'void'].includes(order.status)) continue
     for (const item of order.items) {
       if (item.status !== 'fired' || !item.firedAt) continue
@@ -738,7 +1283,8 @@ export function getAlerts(state) {
 
   // Low / out stock + 86
   for (const item of state.inventory) {
-    const st = stockStatusFor(item)
+    if (!notify.lowStock) break
+    const st = stockStatusFor(item, state.settings)
     if (st === 'out') {
       const dishes = state.menu.filter((m) =>
         state.recipes[m.id]?.ingredients.some((ing) => ing.inventoryItemId === item.id),
@@ -752,19 +1298,23 @@ export function getAlerts(state) {
         entityId: item.id,
       })
     } else if (st === 'low') {
+      const threshold = reorderPointFor(item, state.settings)
+      const order = suggestedOrderQty(item, state.settings)
+      const supplier = state.suppliers?.find((entry) => entry.id === item.supplierId)
       alerts.push({
         key: `low_${item.id}`,
         type: 'low_stock',
         severity: 'med',
         label: `Low stock · ${item.name}`,
-        detail: `${item.onHand} ${item.unit} left · par ${item.par}`,
+        detail: `${item.onHand} ${item.unit} left · ${state.settings?.stock?.reorderPolicy === 'reorder_point' ? `reorder at ${threshold}` : `par ${item.par}`}${order ? ` · order ${order}` : ''}${supplier ? ` from ${supplier.name}` : ''}`,
         entityId: item.id,
       })
     }
   }
 
-  // Manual 86 flags
+  // Manual 86 flags (auto-86 is covered by the stock alerts above)
   for (const m of state.menu) {
+    if (m.available === false && m.auto86 === true) continue
     if (!m.available && m.active !== false) {
       alerts.push({
         key: `86_${m.id}`,
@@ -796,9 +1346,10 @@ export function getAlerts(state) {
 
   // Negative-margin dishes (loss band from LIVE invoice costs)
   for (const m of state.menu) {
+    if (!notify.negativeMargin) break
     const recipe = state.recipes[m.id]
     if (!recipe) continue
-    const { contribution, band } = costingFor(m, recipe, invById)
+    const { contribution, band } = costingFor(m, recipe, invById, state.settings)
     if (band === 'loss') {
       alerts.push({
         key: `margin_${m.id}`,
@@ -813,6 +1364,7 @@ export function getAlerts(state) {
 
   // Guest requests from QR ordering
   for (const order of state.orders) {
+    if (!notify.guestRequests) break
     if (order.billRequested && !['paid', 'void'].includes(order.status)) {
       alerts.push({
         key: `bill_${order.id}`,
@@ -859,8 +1411,9 @@ export function getDashboard(state) {
   for (const o of state.orders) {
     if (o.status === 'void') continue
     for (const it of o.items) {
+      if (it.voided) continue
       const snap = it.recipeSnapshot
-      const plate = snap?.plateCost ?? plateCostFor(state.recipes[it.menuItemId], invById)
+      const plate = snap?.plateCost ?? plateCostFor(state.recipes[it.menuItemId], invById, state.settings)
       tonightFood += plate * (it.qty || 0)
     }
   }
@@ -888,7 +1441,7 @@ export function getDashboard(state) {
     .filter((r) => r.menu)
     .sort((a, b) => b.qty - a.qty)
   const withMargin = sellers.map((r) => {
-    const { contribution, band } = costingFor(r.menu, state.recipes[r.menu.id], invById)
+    const { contribution, band } = costingFor(r.menu, state.recipes[r.menu.id], invById, state.settings)
     return { ...r, contribution, band }
   })
 

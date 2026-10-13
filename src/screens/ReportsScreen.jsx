@@ -5,8 +5,11 @@
 // totals, labeled wherever the two meet.
 
 import { useMemo, useState } from 'react'
+import { Icon } from '../components/Icon'
 import StatusPill from '../components/StatusPill'
+import { buildReportDocument, printHtml, renderDocumentHtml } from '../lib/documents'
 import { money, orderSubtotal, plateCostFor, theoreticalDecrementFor } from '../lib/models'
+import { sanitizeSettings } from '../lib/settings'
 import { useRestora } from '../lib/store'
 
 const TABS = [
@@ -586,8 +589,17 @@ function PnlReport() {
 // ─── Screen ─────────────────────────────────────────────────────
 
 export default function ReportsScreen() {
+  const { state } = useRestora()
   const [tab, setTab] = useState('sales')
   const [range, setRange] = useState('tonight')
+
+  // The printed report is the same aggregation the screen shows — just on
+  // paper, with the location's report template and currency.
+  function printReport() {
+    const settings = sanitizeSettings(state.settings, state.settings?.restaurantName)
+    const doc = buildReportDocument({ shop: { ...state, settings }, settings, range })
+    printHtml(renderDocumentHtml(doc, settings, {}), { title: `${doc.title} ${range}` })
+  }
 
   return (
     <div className="space-y-4">
@@ -597,6 +609,14 @@ export default function ReportsScreen() {
           <h1 className="text-3xl font-bold tracking-tight text-zinc-900">Reports &amp; Analytics</h1>
           <p className="mt-1 text-sm text-zinc-500">Turn sales, service, and cost signals into the next best action.</p>
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={printReport}
+          className="flex min-h-[44px] items-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 text-sm font-semibold text-zinc-700 shadow-sm hover:bg-zinc-50"
+        >
+          <Icon name="printer" size={16} /> Print report
+        </button>
         <div className="flex gap-1 rounded-xl bg-[var(--color-ink-900)] p-1 ring-1 ring-inset ring-[var(--color-ink-700)]" role="tablist" aria-label="Date range">
           {RANGES.map((r) => (
             <button
@@ -610,6 +630,7 @@ export default function ReportsScreen() {
               {r.label}
             </button>
           ))}
+        </div>
         </div>
       </header>
 

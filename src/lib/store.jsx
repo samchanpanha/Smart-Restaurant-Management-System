@@ -9,8 +9,10 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { ROLE_NAV } from './constants'
+import { baseCurrencyConfig, setActiveCurrency } from './currency'
 import { uid } from './models'
 import { buildEmpire, migrateToEmpire, reducer } from './reducer'
+import { DOC_KINDS, documentNumber, templateFor } from './settings'
 import {
   MAX_TABS, activeWorkspaceTab, createWorkspace, normalizeWorkspace, workspaceReducer,
 } from './workspace'
@@ -203,6 +205,12 @@ export function RestoraProvider({ children }) {
     () => empire.locations[locId] || empire.locations.downtown,
     [empire, locId],
   )
+  const emperorRef = useRef(empire)
+  emperorRef.current = empire
+  const locShopRef = useCallback(
+    (targetLocId) => emperorRef.current.locations[targetLocId] || emperorRef.current.locations.downtown,
+    [],
+  )
 
   // link: { mode: 'local'|'server', status: 'starting'|'live'|'offline'|'local' }
   const [link, setLink] = useState({ mode: 'local', status: 'starting' })
@@ -343,35 +351,17 @@ export function RestoraProvider({ children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Dispatch: HYDRATE swaps the empire; shop actions wrap in LOC;
-  // RESET_ALL reseeds every store (broadcast to all terminals).
-  const dispatch = useCallback(
-    (action) => {
-      if (!action || typeof action.type !== 'string') return
-      if (action.type === 'HYDRATE') {
-        rawDispatch(action)
-        return
-      }
+  // One location-scoped action: apply locally, then post when linked.
+  const sendAction = useCallback(
+    (locId, action) => {
       const linked = linkRef.current.mode === 'server'
-      if (action.type === 'RESET_ALL') {
-        rawDispatch(action)
-        if (!linked) return
-        const lid = uid('l')
-        lidAt.current.set(lid, Date.now())
-        fetch('/api/actions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: { ...action, _lid: lid }, clientId }),
-        }).catch(() => setLink((l) => ({ ...l, status: 'offline' })))
-        return
-      }
-      const wrapped = { type: 'LOC', locId: locRef.current, action }
+      const wrapped = { type: 'LOC', locId, action }
       if (!linked || LOCAL_ONLY.has(action.type)) {
         rawDispatch(wrapped)
         return
       }
       const lid = uid('l')
-      const tagged = { type: 'LOC', locId: locRef.current, action: { ...action, _lid: lid } }
+      const tagged = { type: 'LOC', locId, action: { ...action, _lid: lid } }
       lidAt.current.set(lid, Date.now())
       rawDispatch(tagged)
       fetch('/api/actions', {
@@ -395,6 +385,87 @@ export function RestoraProvider({ children }) {
         })
     },
     [clientId, resync],
+  )
+
+  // Dispatch: HYDRATE swaps the empire; shop actions wrap in LOC;
+  // RESET_ALL reseeds every store (broadcast to all terminals).
+  const dispatch = useCallback(
+    (action) => {
+      if (!action || typeof action.type !== 'string') return
+      if (action.type === 'HYDRATE') {
+        rawDispatch(action)
+        return
+      }
+      const linked = linkRef.current.mode === 'server'
+      if (action.type === 'RESET_ALL') {
+        rawDispatch(action)
+        if (!linked) return
+        const lid = uid('l')
+        lidAt.current.set(lid, Date.now())
+        fetch('/api/actions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: { ...action, _lid: lid }, clientId }),
+        }).catch(() => setLink((l) => ({ ...l, status: 'offline' })))
+        return
+      }
+      sendAction(locRef.current, action)
+    },
+    [sendAction],
+  )
+
+  // Same path as dispatch, but pinned to an explicit location — used to
+  // apply one settings patch to every store in the empire.
+  const dispatchTo = useCallback(
+    (locId, action) => {
+      if (!action || typeof action.type !== 'string') return
+      sendAction(locId, action)
+    },
+    [sendAction],
+  )
+
+  const dispatchEverywhere = useCallback(
+    (action) => {
+      if (!action || typeof action.type !== 'string') return
+      for (const location of LOCATIONS) sendAction(location.id, action)
+    },
+    [sendAction],
+  )
+
+  // Money prints in the active location's base currency: every existing
+  // `money(...)` call site follows settings without a single edit.
+  useEffect(() => {
+    setActiveCurrency(baseCurrencyConfig(state.settings))
+  }, [state.settings])
+
+  /**
+   * Issue a document: build it from live state, register it with the
+   * reducer (which assigns the next number) and return the printable
+   * object. `kind` is invoice · receipt · ticket · report.
+   */
+  const issueDocument = useCallback(
+    (kind, { document, number } = {}) => {
+      if (!DOC_KINDS.includes(kind)) return null
+      const shop = locShopRef.current(locRef.current)
+      const settings = shop?.settings
+      if (!settings) return null
+      const counter = settings.numbering?.[kind]
+      const nextNumber = number || documentNumber(settings, kind, counter?.next || 1)
+      sendAction(locRef.current, {
+        type: 'ISSUE_DOCUMENT',
+        kind,
+        by: role,
+        document: { ...document, id: document?.id, number: nextNumber },
+      })
+      return { ...document, kind, number: nextNumber }
+    },
+    [role, sendAction, locShopRef],
+  )
+
+  /** The template a document prints with right now. */
+  const templateForKind = useCallback(
+    (kind) => templateFor(state.settings, kind),
+    [state.settings],
   )
 
   useEffect(() => {
@@ -438,8 +509,9 @@ export function RestoraProvider({ children }) {
       tabCtx: activeCtx, setTabCtx: setTabContext,
       selectedTableId, setSelectedTableId, selectedDishId, setSelectedDishId,
       selectedOrderId, setSelectedOrderId, locId, setLocId, link, resync, notice,
+      settings: state.settings, dispatchTo, dispatchEverywhere, issueDocument, templateForKind,
     }),
-    [state, empire, dispatch, role, screen, setScreen, tabs, activeTabId, openTab, activateTab, closeTab, reorderTab, renameTab, togglePinTab, duplicateTab, closeOtherTabs, closeRightTabs, reopenClosedTab, workspace.closed.length, saveTabScroll, activeCtx, setTabContext, selectedTableId, setSelectedTableId, selectedDishId, setSelectedDishId, selectedOrderId, setSelectedOrderId, locId, setLocId, link, resync, notice],
+    [state, empire, dispatch, role, screen, setScreen, tabs, activeTabId, openTab, activateTab, closeTab, reorderTab, renameTab, togglePinTab, duplicateTab, closeOtherTabs, closeRightTabs, reopenClosedTab, workspace.closed.length, saveTabScroll, activeCtx, setTabContext, selectedTableId, setSelectedTableId, selectedDishId, setSelectedDishId, selectedOrderId, setSelectedOrderId, locId, setLocId, link, resync, notice, dispatchTo, dispatchEverywhere, issueDocument, templateForKind],
   )
 
   if (link.status === 'starting') {

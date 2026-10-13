@@ -110,7 +110,7 @@ export const ROLES = {
 
 // Role-aware nav (spec §6). Owner sees all.
 export const ROLE_NAV = {
-  owner: ['dashboard', 'floor', 'tickets', 'kitchen', 'menu', 'inventory', 'reports', 'costing', 'system'],
+  owner: ['dashboard', 'floor', 'tickets', 'kitchen', 'menu', 'catalog', 'inventory', 'suppliers', 'reports', 'costing', 'settings', 'system'],
   server: ['floor', 'tickets'],
   kitchen: ['kitchen'],
   host: ['floor', 'dashboard'],
@@ -132,7 +132,9 @@ export const NAV_SECTIONS = [
     label: 'Control',
     items: [
       { id: 'menu', label: 'Menu & Recipes', step: 7 },
+      { id: 'catalog', label: 'Catalog', step: 9 },
       { id: 'inventory', label: 'Inventory', step: 5 },
+      { id: 'suppliers', label: 'Suppliers', step: 9 },
     ],
   },
   {
@@ -146,7 +148,10 @@ export const NAV_SECTIONS = [
   {
     id: 'settings',
     label: 'Settings',
-    items: [{ id: 'system', label: 'System & Model', step: 1 }],
+    items: [
+      { id: 'settings', label: 'Settings & Documents', step: 9 },
+      { id: 'system', label: 'System & Model', step: 1 },
+    ],
   },
 ]
 
