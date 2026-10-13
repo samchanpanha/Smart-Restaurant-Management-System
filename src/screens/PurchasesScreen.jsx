@@ -15,6 +15,7 @@ import { Field, Modal, btnGhost, btnPrimary, inputCls } from '../components/ui'
 import { money, reorderPointFor, stockStatusFor, suggestedOrderQty, uid } from '../lib/models'
 import { PURCHASE_STATUS_META, PURCHASE_STATUSES } from '../lib/reducer'
 import { documentNumber, sanitizeSettings } from '../lib/settings'
+import { basePrice, describeQty, itemUnitChoices, packFactor, packPrice } from '../lib/units'
 import {
   buildPurchaseOrderDocument, documentFileName, downloadHtml, printHtml, renderDocumentHtml,
 } from '../lib/documents'
@@ -33,15 +34,22 @@ const FILTERS = [
 
 const dateLabel = (value) => (value ? new Date(value).toLocaleDateString([], { month: 'short', day: 'numeric' }) : '—')
 
-const blankLine = (item) => ({
-  id: uid('pol'),
-  inventoryItemId: item?.id || '',
-  name: item?.name || '',
-  unit: item?.unit || '',
-  qty: item ? suggestedOrderQty(item) : 1,
-  unitCost: item ? Number(item.lastCost) || 0 : 0,
-  receivedQty: 0,
-})
+const blankLine = (item) => {
+  // Order the way the item is really bought: its purchase unit when it has
+  // one, otherwise the stock unit. packSize freezes what that unit holds.
+  const unit = item?.purchaseUnit || item?.unit || ''
+  const factor = item ? packFactor(item, unit) : 1
+  return {
+    id: uid('pol'),
+    inventoryItemId: item?.id || '',
+    name: item?.name || '',
+    unit,
+    qty: item ? suggestedOrderQty(item) : 1,
+    unitCost: item ? packPrice(Number(item.lastCost) || 0, factor) : 0,
+    receivedQty: 0,
+    packSize: factor,
+  }
+}
 
 function draftFrom(purchase, defaultSupplierId = '') {
   return {
@@ -88,11 +96,14 @@ function PurchaseModal({ purchase, defaultSupplierId, onClose, onSave }) {
 
   function pickItem(id, itemId) {
     const item = (state.inventory || []).find((entry) => entry.id === itemId)
+    const unit = item?.purchaseUnit || item?.unit || ''
+    const factor = item ? packFactor(item, unit) : 1
     patchLine(id, {
       inventoryItemId: itemId,
       name: item?.name || '',
-      unit: item?.unit || '',
-      unitCost: item ? Number(item.lastCost) || 0 : 0,
+      unit,
+      packSize: factor,
+      unitCost: item ? packPrice(Number(item.lastCost) || 0, factor) : 0,
     })
   }
 
@@ -116,7 +127,12 @@ function PurchaseModal({ purchase, defaultSupplierId, onClose, onSave }) {
   }
 
   function save(status) {
-    const lines = draft.lines.filter((line) => line.inventoryItemId && (Number(line.qty) || 0) > 0)
+    const lines = draft.lines
+      .filter((line) => line.inventoryItemId && (Number(line.qty) || 0) > 0)
+      .map((line) => {
+        const item = (state.inventory || []).find((entry) => entry.id === line.inventoryItemId)
+        return { ...line, packSize: item ? packFactor(item, line.unit) : (Number(line.packSize) || 1) }
+      })
     if (!draft.supplierId) { setError('Pick the supplier this order goes to.'); return }
     if (!lines.length) { setError('Add at least one line with a quantity above zero.'); return }
     onSave({
@@ -166,8 +182,8 @@ function PurchaseModal({ purchase, defaultSupplierId, onClose, onSave }) {
           <thead className="bg-zinc-50">
             <tr>
               <th className={thCls}>Item</th>
-              <th className={`${thCls} w-24`}>Qty</th>
-              <th className={`${thCls} w-28`}>Unit cost</th>
+              <th className={`${thCls} w-40`}>Qty · unit</th>
+              <th className={`${thCls} w-32`}>Cost per unit</th>
               <th className={`${thCls} w-24 text-right`}>Amount</th>
               <th className={`${thCls} w-10`} />
             </tr>
@@ -196,12 +212,47 @@ function PurchaseModal({ purchase, defaultSupplierId, onClose, onSave }) {
                     )}
                   </td>
                   <td className={tdCls}>
-                    <input type="number" min="0" step="0.01" className={inputCls} value={line.qty} disabled={locked}
-                      onChange={(e) => patchLine(line.id, { qty: e.target.value === '' ? '' : Number(e.target.value) })} />
+                    <div className="flex gap-1.5">
+                      <input type="number" min="0" step="0.01" className={inputCls} value={line.qty} disabled={locked}
+                        aria-label={`Quantity for ${line.name || 'line'}`}
+                        onChange={(e) => patchLine(line.id, { qty: e.target.value === '' ? '' : Number(e.target.value) })} />
+                      <select
+                        className={`${inputCls} w-24`}
+                        value={line.unit || ''}
+                        disabled={locked || !item}
+                        aria-label={`Unit for ${line.name || 'line'}`}
+                        onChange={(e) => {
+                          const unit = e.target.value
+                          patchLine(line.id, {
+                            unit,
+                            packSize: item ? packFactor(item, unit) : 1,
+                            unitCost: packPrice(Number(item?.lastCost) || 0, item ? packFactor(item, unit) : 1),
+                          })
+                        }}
+                      >
+                        {(item ? itemUnitChoices(item, state.settings) : []).map((choice) => (
+                          <option key={choice.id} value={choice.id}>
+                            {choice.short}{choice.kind === 'pack' ? ` (${choice.factor})` : ''}
+                          </option>
+                        ))}
+                        {!item && <option value="">—</option>}
+                      </select>
+                    </div>
+                    {item && (Number(line.packSize) || packFactor(item, line.unit)) > 1 && (
+                      <div className="mt-1 text-[11px] text-zinc-500">
+                        {line.qty || 0} {line.unit} → {describeQty(item, (Number(line.qty) || 0) * (Number(line.packSize) || packFactor(item, line.unit)), state.settings)} of stock
+                      </div>
+                    )}
                   </td>
                   <td className={tdCls}>
                     <input type="number" min="0" step="0.01" className={inputCls} value={line.unitCost} disabled={locked}
+                      aria-label={`Unit cost for ${line.name || 'line'}`}
                       onChange={(e) => patchLine(line.id, { unitCost: e.target.value === '' ? '' : Number(e.target.value) })} />
+                    {item && (Number(line.packSize) || 1) > 1 && (
+                      <div className="mt-1 text-[11px] text-zinc-500">
+                        {money(basePrice(Number(line.unitCost) || 0, Number(line.packSize) || 1), state.settings.currency)} per {item.unit}
+                      </div>
+                    )}
                   </td>
                   <td className={`${tdCls} text-right font-medium`}>{money(lineTotalOf(line), state.settings.currency)}</td>
                   <td className={tdCls}>
@@ -307,6 +358,9 @@ function ReceiveModal({ purchase, onClose, onReceive }) {
                     <div className="font-medium text-zinc-800">{line.name || item?.name}</div>
                     <div className="text-[11px] text-zinc-500">
                       ordered {line.qty} {line.unit || item?.unit || ''} · already in {line.receivedQty || 0}
+                      {item && (Number(line.packSize) || packFactor(item, line.unit)) > 1
+                        ? ` · lands as ${describeQty(item, (Number(line.qty) || 0) * (Number(line.packSize) || packFactor(item, line.unit)), state.settings)}`
+                        : ''}
                       {' '}· on hand {item?.onHand ?? '—'}
                     </div>
                   </td>

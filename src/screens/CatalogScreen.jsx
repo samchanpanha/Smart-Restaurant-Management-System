@@ -13,7 +13,8 @@ import StatusPill from '../components/StatusPill'
 import { Field, Modal, btnGhost, btnPrimary } from '../components/ui'
 import { MARGIN_BAND_META, STATIONS, STATION_META } from '../lib/constants'
 import { costingFor, money, reorderPointFor, stockStatusFor, uid } from '../lib/models'
-import { CATEGORY_KINDS, UNIT_OPTIONS, categoryOptions, categoryPath, categoryTree } from '../lib/settings'
+import { CATEGORY_KINDS, categoryOptions, categoryPath, categoryTree } from '../lib/settings'
+import { describeQty, itemUnitChoices, slugUnitId } from '../lib/units'
 import { ChipPicker, PhotoField } from '../components/ItemPhotoField'
 import { useRestora } from '../lib/store'
 
@@ -663,6 +664,8 @@ function IngredientModal({ item, onClose, onSave }) {
     name: item?.name || '',
     sku: item?.sku || '',
     unit: item?.unit || state.settings?.stock?.defaultUnit || 'each',
+    packs: item?.packs || [],
+    purchaseUnit: item?.purchaseUnit || '',
     onHand: item ? String(item.onHand) : '0',
     par: item ? String(item.par) : '0',
     reorderPoint: item ? String(item.reorderPoint ?? item.par) : '0',
@@ -677,6 +680,44 @@ function IngredientModal({ item, onClose, onSave }) {
   }))
   const parents = options.filter((option) => option.depth === 0)
   const subs = options.filter((option) => option.depth === 1 && option.parentName === draft.category)
+
+  const units = state.settings?.units || { list: [], packNames: [] }
+  const packNames = units.packNames || []
+  const stockShort = (units.list || []).find((unit) => unit.id === draft.unit)?.short || draft.unit
+
+  function patchPack(index, patch) {
+    setDraft((current) => ({
+      ...current,
+      packs: current.packs.map((pack, position) => (position === index ? { ...pack, ...patch } : pack)),
+    }))
+  }
+  function addPack() {
+    setDraft((current) => {
+      const name = packNames.find((candidate) => !current.packs.some((pack) => pack.name.toLowerCase() === candidate.toLowerCase()))
+        || 'Pack'
+      const id = slugUnitId(name)
+      if (current.packs.some((pack) => pack.id === id)) return current
+      return { ...current, packs: [...current.packs, { id, name, qty: 1, of: null }] }
+    })
+  }
+  function removePack(index) {
+    setDraft((current) => {
+      const removed = current.packs[index]
+      return {
+        ...current,
+        packs: current.packs
+          .filter((_, position) => position !== index)
+          // A chain that pointed at the removed pack now points at the stock unit.
+          .map((pack) => (pack.of === removed?.id ? { ...pack, of: null } : pack)),
+        purchaseUnit: current.purchaseUnit === removed?.id ? '' : current.purchaseUnit,
+      }
+    })
+  }
+  function packFactorOf(pack) {
+    const inner = pack.of ? (draft.packs.find((entry) => entry.id === pack.of)?.qty || 1) : 1
+    const factor = (Number(pack.qty) || 1) * inner
+    return Math.round(factor * 1000) / 1000
+  }
 
   return (
     <Modal title={item ? `Edit ${item.name}` : 'New ingredient'} sub="Par, reorder point, and supplier drive the reorder alerts." onClose={onClose} wide>
@@ -699,9 +740,9 @@ function IngredientModal({ item, onClose, onSave }) {
             {subs.map((option) => <option key={option.id} value={option.name}>{option.name}</option>)}
           </select>
         </Field>
-        <Field label="Unit">
+        <Field label="Stock unit" hint="Every quantity in the book is counted in this unit.">
           <select value={draft.unit} onChange={(e) => setDraft((d) => ({ ...d, unit: e.target.value }))} className={smallInput}>
-            {UNIT_OPTIONS.map((unit) => <option key={unit} value={unit}>{unit}</option>)}
+            {(units.list || []).map((unit) => <option key={unit.id} value={unit.id}>{unit.label} ({unit.short})</option>)}
           </select>
         </Field>
         <Field label="Supplier">
@@ -731,6 +772,96 @@ function IngredientModal({ item, onClose, onSave }) {
           </select>
         </Field>
       </div>
+      <div className="mt-4 rounded-xl border border-zinc-200 p-3">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <div className="text-xs font-bold text-zinc-800">Packaging</div>
+            <p className="mt-0.5 text-[11px] text-zinc-500">
+              How this item is bought and stored: a case of 12, a bottle of 750 {stockShort}, a 5 kg bag.
+              Packs can be sized in the stock unit or in another pack.
+            </p>
+          </div>
+          <button type="button" onClick={addPack} className="min-h-8 rounded-lg border border-zinc-200 px-2.5 text-[11px] font-semibold text-zinc-600 hover:bg-zinc-50">
+            Add pack
+          </button>
+        </div>
+
+        {draft.packs.length === 0 && (
+          <p className="mt-2 text-[11px] text-zinc-500">No packs — this item is counted and ordered in {draft.unit} only.</p>
+        )}
+
+        <div className="mt-2 space-y-2">
+          {draft.packs.map((pack, index) => (
+            <div key={`${pack.id}-${index}`} className="grid items-end gap-2 sm:grid-cols-[1fr_5rem_1fr_auto]">
+              <Field label="Pack">
+                <select
+                  value={pack.name}
+                  aria-label={`Pack ${index + 1} name`}
+                  onChange={(e) => {
+                    const name = e.target.value
+                    patchPack(index, { name, id: slugUnitId(name) })
+                  }}
+                  className={smallInput}
+                >
+                  {[...new Set([pack.name, ...packNames])].map((name) => <option key={name} value={name}>{name}</option>)}
+                </select>
+              </Field>
+              <Field label="Holds">
+                <input
+                  type="number"
+                  min="0.001"
+                  step="any"
+                  value={pack.qty}
+                  aria-label={`Pack ${index + 1} size`}
+                  onChange={(e) => patchPack(index, { qty: Number(e.target.value) })}
+                  className={`${smallInput} tnum`}
+                />
+              </Field>
+              <Field label="…of">
+                <select
+                  value={pack.of || ''}
+                  aria-label={`Pack ${index + 1} inner unit`}
+                  onChange={(e) => patchPack(index, { of: e.target.value || null })}
+                  className={smallInput}
+                >
+                  <option value="">{draft.unit} (stock unit)</option>
+                  {draft.packs.filter((_, position) => position !== index).map((entry) => (
+                    <option key={entry.id} value={entry.id}>{entry.name}</option>
+                  ))}
+                </select>
+              </Field>
+              <div className="flex items-center gap-1 pb-1">
+                <span className="tnum text-[11px] text-zinc-500">= {packFactorOf(pack)} {stockShort}</span>
+                <button
+                  type="button"
+                  onClick={() => removePack(index)}
+                  aria-label={`Remove pack ${index + 1}`}
+                  className="rounded-lg p-1.5 text-zinc-400 hover:bg-rose-50 hover:text-rose-600"
+                >
+                  <Icon name="trash" className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {draft.packs.length > 0 && (
+          <div className="mt-3 max-w-xs">
+            <Field label="Default purchase unit" hint="What a new order line starts on.">
+              <select
+                value={draft.purchaseUnit || ''}
+                aria-label="Default purchase unit"
+                onChange={(e) => setDraft((d) => ({ ...d, purchaseUnit: e.target.value }))}
+                className={smallInput}
+              >
+                <option value="">{draft.unit} (stock unit)</option>
+                {draft.packs.map((pack) => <option key={pack.id} value={pack.id}>{pack.name}</option>)}
+              </select>
+            </Field>
+          </div>
+        )}
+      </div>
+
       <Field label="Notes">
         <textarea value={draft.notes} onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))} rows={2} maxLength={240} className={`${smallInput} mt-3 resize-y`} />
       </Field>
@@ -748,6 +879,8 @@ function IngredientModal({ item, onClose, onSave }) {
           name: draft.name.trim(),
           sku: draft.sku.trim(),
           unit: draft.unit,
+          packs: draft.packs,
+          purchaseUnit: draft.purchaseUnit || null,
           onHand: Number(draft.onHand) || 0,
           par: Number(draft.par) || 0,
           reorderPoint: Number(draft.reorderPoint) || 0,
@@ -835,13 +968,25 @@ function IngredientsTab() {
                         )}
                         <div className="min-w-0">
                           <div className="font-semibold text-zinc-800">{item.name}</div>
-                          <div className="text-[11px] text-zinc-500">{item.sku || 'no SKU'}</div>
+                          <div className="text-[11px] text-zinc-500">
+                            {item.sku || 'no SKU'}
+                            {(item.packs || []).length > 0 && (
+                              <span className="ml-1 text-zinc-400">
+                                · {itemUnitChoices(item, state.settings)
+                                  .filter((choice) => choice.kind === 'pack')
+                                  .map((choice) => `1 ${choice.label} = ${choice.factor} ${item.unit}`)
+                                  .join(' · ')}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </td>
                     <td className="px-3 py-3 text-xs text-zinc-600">{categoryPath(item)}</td>
                     <td className="tnum px-3 py-3 font-semibold text-zinc-800">
-                      {item.onHand} <span className="text-[10px] font-normal text-zinc-500">{item.unit}</span>
+                      {(item.packs || []).length && state.settings?.units?.showPackBreakdown !== false
+                        ? describeQty(item, item.onHand, state.settings)
+                        : <>{item.onHand} <span className="text-[10px] font-normal text-zinc-500">{item.unit}</span></>}
                     </td>
                     <td className="tnum px-3 py-3 text-xs text-zinc-600">
                       {item.par} / {reorderPointFor(item, state.settings)}

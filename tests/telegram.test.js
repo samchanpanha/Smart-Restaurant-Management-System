@@ -50,7 +50,7 @@ test('manager-only commands are gated and every reply is plain text', () => {
   assert.match(unknown.reply, /Unknown command/)
   assert.deepEqual(runTelegramCommand('/help', { shop }).actions, [])
 
-  assert.equal(commandsFor('staff').length, 9)
+  assert.equal(commandsFor('staff').length, 10)
   assert.equal(commandsFor('manager').length, TELEGRAM_COMMANDS.length)
   assert.ok(replyKeyboard('manager').flat().some((button) => button.text === '/po'))
   assert.ok(!replyKeyboard('staff').flat().some((button) => button.text === '/po'))
@@ -77,6 +77,44 @@ test('the numbers come from the same reports engine the screens use', () => {
 
   const orders = runTelegramCommand('/orders', { shop, role: 'staff' })
   assert.ok(orders.reply.length > 0)
+})
+
+test('/table answers with the status, the wait, and the live check', () => {
+  const shop = shopOf(buildEmpire())
+  const seated = runTelegramCommand('/table 14', { shop, role: 'staff', now: Date.now() })
+  assert.match(seated.reply, /Table 14 · seated/)
+  assert.match(seated.reply, /party 3/)
+  assert.match(seated.reply, /No open check yet\./)
+
+  const busy = runTelegramCommand('/table 3', { shop, role: 'staff', now: Date.now() })
+  assert.match(busy.reply, /Table 3 · ordered/)
+  assert.match(busy.reply, /3 lines · 3 fired · \$47\.00/)
+
+  assert.match(runTelegramCommand('/table 99', { shop, role: 'staff' }).reply, /Which table\?/)
+})
+
+test('the ticket list prices its lines from the menu', () => {
+  const shop = shopOf(buildEmpire())
+  const orders = runTelegramCommand('/orders', { shop, role: 'staff', now: Date.now() })
+  assert.match(orders.reply, /Table 3 · in_prep · \d+m · \$47\.00/)
+  assert.match(orders.reply, /Table 7 · sent · \d+m · \$26\.00/)
+})
+
+test('/buy and /digest are the manager’s view of the same numbers', () => {
+  const shop = shopOf(buildEmpire())
+  assert.match(runTelegramCommand('/buy', { shop, role: 'staff' }).reply, /for managers/)
+
+  const buy = runTelegramCommand('/buy 7d', { shop, role: 'manager' })
+  assert.match(buy.reply, /Buying · 7 days/)
+  assert.match(buy.reply, /Spent \$262\.60 · 2 invoices · 70 units/)
+  assert.match(buy.reply, /Biggest spend: Beef patty 6oz \$108\.00/)
+  assert.match(buy.reply, /Smallest buys: Salmon fillet \$69\.60/)
+  assert.match(buy.reply, /Open: PO-2026-0100 Fresh Farms \$56\.40/)
+
+  const digest = runTelegramCommand('/digest', { shop, role: 'manager' })
+  assert.match(digest.reply, /Close of day · Restora/)
+  assert.match(digest.reply, /Net sales \$425\.00/)
+  assert.match(digest.reply, /Needs ordering: OUT Salmon fillet/)
 })
 
 test('lookups answer with packs, suppliers, and what is short', () => {

@@ -23,7 +23,9 @@
 import express from 'express'
 import fs from 'node:fs'
 import path from 'node:path'
-import { createTelegramRouter } from './telegram.js'
+import { createTelegramRouter, sendTelegramMessage } from './telegram.js'
+import { createNotifier } from './notify.js'
+import { replyKeyboard } from '../src/lib/telegram.js'
 import { STATE_VERSION, buildEmpire, migrateToEmpire, reducer } from '../src/lib/reducer.js'
 import { DOC_KINDS } from '../src/lib/settings.js'
 import {
@@ -183,10 +185,13 @@ app.post('/api/actions', (req, res) => {
   }
   if (next === state) return res.json({ seq, noop: true }) // no-op action
   // Keep action log, JSON snapshot, and normalized catalog in one SQLite commit.
+  const previous = state
   const nextSeq = commitAction(clientId, action, next)
   state = next
   seq = nextSeq
   broadcast({ seq, action, clientId: clientId || 'anon' })
+  // The chat hears about what the floor just did (fire-and-forget).
+  notifier?.handleAction(previous, next, action)
   res.json({ seq })
 })
 
@@ -199,19 +204,48 @@ function applyActionServer(action, locId = 'downtown') {
   const wrapped = action.type === 'LOC' ? action : { type: 'LOC', locId, action }
   const next = reducer(state, wrapped)
   if (next === state) return false
+  const previous = state
   const nextSeq = commitAction('telegram', wrapped, next)
   state = next
   seq = nextSeq
   broadcast({ seq, action: wrapped, clientId: 'telegram' })
+  // A command from a phone can move stock or 86 a dish — the other chats
+  // should hear about it exactly like they hear about a terminal action.
+  notifier?.handleAction(previous, next, wrapped)
   return true
 }
+
+let notifier = null
 
 const telegram = createTelegramRouter({
   getState: () => state,
   applyAction: applyActionServer,
   publicUrl: process.env.RESTORA_PUBLIC_URL || '',
+  onChat: (chatId) => notifier?.registerChat(chatId),
+  notifier: () => notifier,
 })
 app.use(telegram.router)
+
+// ─── Notifications ──────────────────────────────────────────────
+// Same token, same chats, other direction: the bot pushes fires, payments,
+// 86s, low stock, purchase orders, and the close-of-day digest.
+const roleForChat = (chatId) => telegram.chatRoles?.[chatId] || telegram.chatRoles?.['*'] || 'staff'
+
+notifier = createNotifier({
+  getState: () => state,
+  chatRoles: telegram.chatRoles,
+  // Pushes arrive with the same reply keyboard the bot answers with, so the
+  // buttons in the chat match the role the chat actually has.
+  send: (chatId, text) => sendTelegramMessage(chatId, text, { keyboard: replyKeyboard(roleForChat(chatId)) }),
+})
+
+// The digest is checked once a minute; it only sends once a day, after its hour.
+const digestTimer = setInterval(() => {
+  Promise.resolve(notifier.tick()).catch((err) => {
+    console.warn('[restora] digest failed:', err?.message || err)
+  })
+}, 60_000)
+digestTimer.unref?.()
 
 // ─── SSE fan-out ────────────────────────────────────────────────
 

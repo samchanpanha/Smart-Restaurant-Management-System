@@ -326,6 +326,8 @@ export default function TabStrip({ fallbackScreen }) {
         onScroll={updateFade}
         onContextMenu={(event) => { if (event.target === event.currentTarget) openMenu(event, null) }}
         onAuxClick={(event) => {
+          // Middle-clicking the empty part of the strip opens a tab, the way
+          // Chrome does; middle-clicking a tab closes it (handled per tab).
           if (event.button === 1 && event.target === event.currentTarget) {
             event.preventDefault()
             openTab()
@@ -425,7 +427,7 @@ export default function TabStrip({ fallbackScreen }) {
         {drag?.over === visibleTabs.length && <span aria-hidden="true" className="tab-drop" />}
       </div>
 
-      <div className="flex shrink-0 items-center gap-0.5 pb-1 pl-1">
+      <div className="flex shrink-0 items-end gap-0.5 pb-1 pl-1">
         {canReopenClosed && (
           <button
             type="button"

@@ -11,6 +11,7 @@
 import { money, pct, reorderPointFor, stockStatusFor, suggestedOrderQty } from './models.js'
 import { RANGES, buildReports, rangeBounds } from './reports.js'
 import { describeQty, itemUnitChoices, unitShort } from './units.js'
+import { dailyDigest } from './telegram-digest.js'
 
 export const TELEGRAM_ROLES = ['staff', 'manager']
 
@@ -24,12 +25,15 @@ export const TELEGRAM_COMMANDS = [
   { command: '/menu', args: '[term]', role: 'staff', blurb: 'Menu prices, and what is currently 86’d.' },
   { command: '/orders', args: '', role: 'staff', blurb: 'Open tickets with age and value.' },
   { command: '/qr', args: '<table>', role: 'staff', blurb: 'Guest QR / mini app link for a table.' },
+  { command: '/table', args: '<n>', role: 'staff', blurb: 'One table: status, wait, and the live check.' },
   { command: '/pnl', args: '', role: 'manager', blurb: 'Rolling-month profit and loss.' },
   { command: '/report', args: '[tonight|7d|30d]', role: 'manager', blurb: 'Sell vs buy, top and bottom items.' },
   { command: '/86', args: '<item>', role: 'manager', blurb: 'Take a dish off the menu everywhere.' },
   { command: '/un86', args: '<item>', role: 'manager', blurb: 'Put a dish back on.' },
   { command: '/po', args: '', role: 'manager', blurb: 'Open purchase orders and what is waiting.' },
   { command: '/receive', args: '<PO number>', role: 'manager', blurb: 'Receive a purchase order into stock.' },
+  { command: '/buy', args: '[tonight|7d|30d]', role: 'manager', blurb: 'What the kitchen bought: spend, units, and the small stuff.' },
+  { command: '/digest', args: '', role: 'manager', blurb: 'The close-of-day note the bot pushes to the chat.' },
 ]
 
 const COMMAND_INDEX = Object.fromEntries(
@@ -205,17 +209,73 @@ function menuText(shop, arg) {
   ].join('\n')
 }
 
+/** Line prices live on the menu, not on the ticket — resolve them here. */
+function orderTotal(shop, order) {
+  const priceById = new Map((shop.menu || []).map((item) => [item.id, Number(item.price) || 0]))
+  return (order?.items || [])
+    .filter((item) => !item.voided)
+    .reduce((sum, item) => sum + (priceById.get(item.menuItemId) || 0) * (Number(item.qty) || 1), 0)
+}
+
+function openOrderFor(shop, table) {
+  return (shop.orders || []).find((order) => order.id === table?.currentCheckId)
+    || (shop.orders || []).find((order) => order.tableId === table?.id && !['paid', 'void'].includes(order.status))
+}
+
 function ordersText(shop, now) {
-  const open = (shop.orders || []).filter((order) => ['open', 'in_prep', 'ready'].includes(order.status))
+  const open = (shop.orders || []).filter((order) => ['open', 'in_prep', 'ready', 'sent'].includes(order.status))
   if (!open.length) return 'No open tickets.'
   return [
     heading(`Open tickets · ${open.length}`),
     ...open.slice(0, 12).map((order) => {
       const minutes = Math.max(0, Math.round((now - new Date(order.openedAt || order.firedAt || now).getTime()) / 60000))
-      const total = (order.items || []).filter((item) => !item.voided).reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.qty) || 1), 0)
-      return `${tableName(shop, order.tableId)} · ${order.status} · ${minutes}m · ${money(total)}`
+      return `${tableName(shop, order.tableId)} · ${order.status} · ${minutes}m · ${money(orderTotal(shop, order))}`
     }),
   ].join('\n')
+}
+
+function tableText(shop, arg, now = Date.now()) {
+  const table = matchByName(arg, shop.tables, 'name')
+    || (shop.tables || []).find((entry) => String(entry.id).endsWith(String(arg)))
+  if (!table) return 'Which table? Try /table 12.'
+  const order = openOrderFor(shop, table)
+  const minutes = table.seatedAt ? Math.max(0, Math.round((now - new Date(table.seatedAt).getTime()) / 60000)) : null
+  const lines = (order?.items || []).filter((item) => !item.voided)
+  const fired = lines.filter((item) => item.status !== 'held')
+  return [
+    heading(`${table.name} · ${table.status}`),
+    line(
+      `${table.seats} seats · ${table.zone}`,
+      table.partySize ? `party ${table.partySize}` : '',
+      minutes != null && ['seated', 'ordered', 'billed'].includes(table.status) ? `seated ${minutes}m` : '',
+    ),
+    order
+      ? line(`${lines.length} line${lines.length === 1 ? '' : 's'}`, `${fired.length} fired`, money(orderTotal(shop, order)))
+      : 'No open check yet.',
+    order?.status ? `Check is ${order.status}${order.billRequested ? ' · bill requested' : ''}` : '',
+    table.status === 'seated' ? 'Tip: /qr ' + String(table.id).replace(/\D/g, '') + ' for the guest menu link.' : '',
+  ].join('\n')
+}
+
+function buyText(shop, range, now = Date.now()) {
+  const reports = buildReports(shop, range, now)
+  const buy = reports.rankings.buy
+  const spend = (rows) => rows.map((row) => `${row.name} ${money(row.value)}`).join(', ') || 'nothing yet'
+  const units = (rows) => rows.map((row) => `${row.name} ${Math.round(row.qty * 10) / 10}`).join(', ') || 'nothing yet'
+  return [
+    heading(`Buying · ${rangeLabel(range)}`),
+    line(`Spent ${money(reports.purchases.spend)}`, `${reports.purchases.orders} invoices`, `${reports.purchases.units} units`),
+    `Biggest spend: ${spend(buy.bySpend)}`,
+    `Biggest units: ${units(buy.byQty)}`,
+    `Smallest buys: ${spend(buy.least)}`,
+    (reports.purchases.openOrders || []).length
+      ? `Open: ${reports.purchases.openOrders.map((po) => `${po.number} ${po.vendor} ${money(po.total)}`).join(' · ')}`
+      : 'No open purchase orders.',
+  ].join('\n')
+}
+
+function digestText(shop, now = Date.now()) {
+  return dailyDigest(shop, now).text
 }
 
 function qrText(shop, arg, miniAppUrl) {
@@ -327,6 +387,8 @@ export function runTelegramCommand(input, context = {}) {
       return done(ordersText(shop, now))
     case 'qr':
       return done(qrText(shop, parsed.arg, miniAppUrl))
+    case 'table':
+      return done(tableText(shop, parsed.arg, now))
     case 'pnl':
       if (!manager) return needsManager(unknownText('pnl', role))
       return done(pnlText(shop, now))
@@ -336,6 +398,12 @@ export function runTelegramCommand(input, context = {}) {
     case 'po':
       if (!manager) return needsManager(unknownText('po', role))
       return done(poText(shop))
+    case 'buy':
+      if (!manager) return needsManager(unknownText('buy', role))
+      return done(buyText(shop, RANGES.some((entry) => entry.id === parsed.arg) ? parsed.arg : '30d', now))
+    case 'digest':
+      if (!manager) return needsManager(unknownText('digest', role))
+      return done(digestText(shop, now))
     case 'receive': {
       if (!manager) return needsManager(unknownText('receive', role))
       const result = receiveText(shop, parsed.arg)

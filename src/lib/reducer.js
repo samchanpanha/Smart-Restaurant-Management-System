@@ -55,6 +55,7 @@ function mergeSettings(current, patch) {
     stock: { ...current.stock, ...(patch.stock || {}) },
     pos: { ...current.pos, ...(patch.pos || {}) },
     notifications: { ...current.notifications, ...(patch.notifications || {}) },
+    telegram: { ...current.telegram, ...(patch.telegram || {}) },
     numbering: { ...current.numbering, ...(patch.numbering || {}) },
     templates: { ...current.templates, ...(patch.templates || {}) },
     currencies: Array.isArray(patch.currencies) ? patch.currencies : current.currencies,

@@ -10,6 +10,11 @@
 //   TELEGRAM_CHAT_ROLES   "12345:manager,67890:staff,*:staff" (default *:staff)
 //   TELEGRAM_WEBHOOK_SECRET  optional; when set, Telegram must echo it back
 //   RESTORA_PUBLIC_URL    used for the guest / mini app links in replies
+//
+// The router also owns the two things the push side needs: every chat that
+// messages the bot is remembered (so it can be notified later without anyone
+// copying ids into env files), and the bot's own notification stats are
+// reported through /api/telegram/status.
 
 import express from 'express'
 import { runTelegramCommand, parseTelegramUpdate, replyKeyboard, TELEGRAM_COMMANDS } from '../src/lib/telegram.js'
@@ -53,7 +58,13 @@ export async function sendTelegramMessage(chatId, text, { token = process.env.TE
   }
 }
 
-export function createTelegramRouter({ getState, applyAction, publicUrl = process.env.RESTORA_PUBLIC_URL || '' }) {
+export function createTelegramRouter({
+  getState,
+  applyAction,
+  publicUrl = process.env.RESTORA_PUBLIC_URL || '',
+  onChat = null,
+  notifier = null,
+}) {
   const router = express.Router()
   const chatRoles = parseChatRoles()
   const stats = { updates: 0, commands: 0, actions: 0, replies: 0, lastUpdateAt: null, lastText: null, lastError: null, sent: 0, skipped: 0 }
@@ -96,6 +107,13 @@ export function createTelegramRouter({ getState, applyAction, publicUrl = proces
     }
     const message = parseTelegramUpdate(req.body, chatRoles)
     if (!message) return res.json({ ok: true, ignored: 'no text message' })
+    // A chat that talks to the bot may now be pushed to. This is how a new
+    // phone is wired up: say /start once, no env file needed.
+    try {
+      onChat?.(message.chatId, message.role)
+    } catch {
+      /* remembering a chat must never fail the command */
+    }
 
     stats.updates += 1
     stats.lastUpdateAt = new Date().toISOString()
@@ -153,6 +171,28 @@ export function createTelegramRouter({ getState, applyAction, publicUrl = proces
       chatRoles,
       commands: TELEGRAM_COMMANDS,
       stats,
+      push: notifier?.()?.stats || null,
+    })
+  })
+
+  // The Telegram screen's "send the digest now" button. Preview first
+  // (dryRun), then send: it goes to every configured chat.
+  router.post('/api/telegram/digest', async (req, res) => {
+    const active = notifier?.()
+    if (!active) return res.status(503).json({ error: 'notifications are not running' })
+    const dryRun = (req.body || {}).dryRun !== false
+    const digest = dryRun ? active.preview(Date.now()) : await active.tick(Date.now(), { force: true })
+    if (!digest) return res.json({ ok: false, error: 'no location configured' })
+    if (!dryRun && digest.sent == null) {
+      return res.json({ ok: false, error: digest.blocked || 'nothing to send', text: digest.text, targets: digest.targets || [] })
+    }
+    res.json({
+      ok: true,
+      dryRun,
+      key: digest.key,
+      text: digest.text,
+      sent: digest.sent ?? 0,
+      targets: digest.targets ?? [],
     })
   })
 

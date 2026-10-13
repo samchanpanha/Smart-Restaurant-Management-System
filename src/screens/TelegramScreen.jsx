@@ -14,9 +14,22 @@ import { Icon } from '../components/Icon'
 import StatusPill from '../components/StatusPill'
 import { btnGhost, btnPrimary, inputCls } from '../components/ui'
 import { runTelegramCommand, TELEGRAM_COMMANDS, commandsFor } from '../lib/telegram'
+import { dailyDigest } from '../lib/telegram-digest'
 import { useRestora } from '../lib/store'
 
 const cardCls = 'rounded-2xl border border-zinc-200/80 bg-white shadow-sm'
+
+// Push side: which events are worth a message. The last column is the
+// default, because "what should a new restaurant get?" is a real question.
+const NOTIFY_TOGGLES = [
+  ['notifyOrders', 'A check is fired', 'table, lines, and value as it lands — guest QR orders included', true],
+  ['notify86', 'A dish is 86’d — or comes back', 'from any terminal, including the bot itself', true],
+  ['notifyLowStock', 'Stock drops under par', 'only on the crossing, not on every sale', true],
+  ['notifyPurchases', 'A purchase order is placed or received', 'what was sent to the supplier and what actually landed', true],
+  ['notifyDailyDigest', 'Close-of-day digest', 'sales, food cost, buying, and what to order — once a day', false],
+]
+
+const HOURS = Array.from({ length: 24 }, (_, hour) => hour)
 
 const WEBAPP_APIS = [
   ['Telegram.WebApp.ready()', 'tells Telegram the page loaded — called on mount'],
@@ -35,6 +48,9 @@ export default function TelegramScreen() {
   const [draft, setDraft] = useState('')
   const [busy, setBusy] = useState(false)
   const [tableId, setTableId] = useState(state.tables[0]?.id || '')
+  const [digest, setDigest] = useState(null)
+  const [digestNote, setDigestNote] = useState('')
+  const [digestBusy, setDigestBusy] = useState(false)
   const [transcript, setTranscript] = useState([{
     id: 'hello',
     from: 'bot',
@@ -106,6 +122,45 @@ export default function TelegramScreen() {
 
   const configured = Boolean(status?.configured)
   const stats = status?.stats
+  const push = status?.push
+  const telegramSettings = state.settings?.telegram || {}
+  const pushChats = push?.lastTargets?.length
+    ? push.lastTargets
+    : (telegramSettings.chatId ? [telegramSettings.chatId] : [])
+
+  function patchTelegram(patch) {
+    dispatch({ type: 'UPDATE_SETTINGS', patch: { telegram: { ...telegramSettings, ...patch } }, by: role })
+  }
+
+  /** Preview the digest (never sends), or push it to every reachable chat. */
+  async function digestRun(dry) {
+    if (digestBusy) return
+    setDigestBusy(true)
+    setDigestNote('')
+    try {
+      if (link.status !== 'live') {
+        const local = dailyDigest(state, Date.now())
+        setDigest(local)
+        setDigestNote(dry
+          ? 'Local preview — the API is offline, so nothing was sent.'
+          : 'Local demo — the API is offline, so the digest stayed on this machine.')
+      } else {
+        const res = await fetch('/api/telegram/digest', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dryRun: dry }),
+        })
+        const json = await res.json()
+        setDigest(json)
+        if (dry) setDigestNote(`Preview · would go to ${json.targets?.length || 0} chat${json.targets?.length === 1 ? '' : 's'}.`)
+        else if (json.ok) setDigestNote(`Sent to ${json.sent} chat${json.sent === 1 ? '' : 's'} at ${new Date().toLocaleTimeString()}.`)
+        else setDigestNote(json.error || 'Nothing was sent.')
+      }
+    } catch (err) {
+      setDigestNote(`Could not reach the API: ${err.message}`)
+    }
+    setDigestBusy(false)
+  }
 
   return (
     <div className="space-y-4">
@@ -219,6 +274,109 @@ export default function TelegramScreen() {
           </ul>
         </section>
       </div>
+
+      {/* ── notifications ────────────────────────────────────── */}
+      <section className={`${cardCls} p-5`}>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-bold text-zinc-900">What the bot tells you</h2>
+            <p className="mt-0.5 max-w-2xl text-xs text-zinc-500">
+              The bot does not wait to be asked. Switch on the events worth a ping and it pushes them to every chat it
+              can reach — the ones that message it, and the id below.
+            </p>
+          </div>
+          <StatusPill tone={pushChats.length ? 'ok' : 'muted'} size="sm">
+            {pushChats.length ? `${pushChats.length} chat${pushChats.length === 1 ? '' : 's'} reachable` : 'no chat yet'}
+          </StatusPill>
+        </div>
+
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <div className="space-y-2">
+            {NOTIFY_TOGGLES.map(([key, label, blurb, fallback]) => (
+              <label key={key} className="flex items-start gap-3 rounded-xl border border-zinc-200 px-3 py-2 hover:border-orange-200">
+                <input
+                  type="checkbox"
+                  aria-label={label}
+                  checked={telegramSettings[key] === undefined ? fallback : telegramSettings[key] !== false}
+                  onChange={(event) => patchTelegram({ [key]: event.target.checked })}
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-orange-500"
+                />
+                <span className="min-w-0">
+                  <span className="block text-xs font-semibold text-zinc-800">{label}</span>
+                  <span className="mt-0.5 block text-[11px] text-zinc-500">{blurb}</span>
+                </span>
+              </label>
+            ))}
+            <div className="flex flex-wrap items-center gap-3 rounded-xl bg-zinc-50 px-3 py-2">
+              <label className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500" htmlFor="tg-digest-hour">
+                Digest hour
+              </label>
+              <select
+                id="tg-digest-hour"
+                value={Number(telegramSettings.digestHour ?? 22)}
+                onChange={(event) => patchTelegram({ digestHour: Number(event.target.value) })}
+                className={`${inputCls} w-28`}
+              >
+                {HOURS.map((hour) => (
+                  <option key={hour} value={hour}>{String(hour).padStart(2, '0')}:00</option>
+                ))}
+              </select>
+              <span className="text-[11px] text-zinc-500">One digest per day, once this hour has passed.</span>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <div className="rounded-xl border border-zinc-200 px-3 py-2">
+              <label className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500" htmlFor="tg-chat">
+                Chat to report to
+              </label>
+              <input
+                id="tg-chat"
+                value={telegramSettings.chatId || ''}
+                onChange={(event) => patchTelegram({ chatId: event.target.value.trim() })}
+                placeholder="-1001234567890"
+                className={`${inputCls} mt-1 font-mono text-xs`}
+              />
+              <p className="mt-1 text-[11px] text-zinc-500">
+                Any chat that messages the bot is remembered automatically — send it <code className="rounded bg-zinc-100 px-1">/start</code> once.
+              </p>
+              {push?.lastText ? (
+                <div className="mt-2 rounded-lg bg-zinc-50 px-2.5 py-2">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+                    Last push · {push.lastTargets?.join(', ') || 'no targets'}
+                  </div>
+                  <pre className="mt-1 whitespace-pre-wrap font-sans text-[11px] text-zinc-600">{push.lastText}</pre>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="rounded-xl bg-zinc-50 px-3 py-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Close-of-day digest</div>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => digestRun(true)} className={`${btnGhost} px-2.5 py-1 text-[11px]`}>
+                    Preview
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => digestRun(false)}
+                    disabled={digestBusy}
+                    className={`${btnPrimary} px-2.5 py-1 text-[11px]`}
+                  >
+                    <Icon name="send" size={13} /> Send now
+                  </button>
+                </div>
+              </div>
+              {digest ? (
+                <pre data-testid="digest-preview" className="mt-2 whitespace-pre-wrap font-sans text-[11px] text-zinc-700">{digest.text}</pre>
+              ) : (
+                <p className="mt-1 text-[11px] text-zinc-500">Preview what tonight looked like, then send it to the chats above.</p>
+              )}
+              {digestNote ? <p className="mt-1.5 text-[11px] text-zinc-500">{digestNote}</p> : null}
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* ── console ──────────────────────────────────────────── */}
       <section className={`${cardCls} p-5`}>

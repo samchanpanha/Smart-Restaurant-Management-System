@@ -454,6 +454,19 @@ export function defaultSettings(locationLabel = 'Downtown') {
     foodCostCap: 0.32,
     rushHour: 18,
 
+    // Telegram: the chat the bot talks to, and which events are worth a
+    // message. The token is an environment secret, never state.
+    telegram: {
+      chatId: '',
+      notifyOrders: true,
+      notify86: true,
+      notifyLowStock: true,
+      notifyPurchases: true,
+      notifyDailyDigest: false,
+      digestHour: 22,
+      welcome: 'Restora is watching the floor with you.',
+    },
+
     notifications: {
       lowStock: true,
       lateTickets: true,
@@ -732,6 +745,17 @@ export function sanitizeSettings(raw, locationLabel = 'Downtown') {
     foodCostCap: clampRatio(source.foodCostCap, base.foodCostCap),
     rushHour: Math.trunc(clampNumber(source.rushHour, 0, 23, base.rushHour)),
 
+    telegram: {
+      chatId: clampText(source.telegram?.chatId, 40),
+      notifyOrders: source.telegram?.notifyOrders !== false,
+      notify86: source.telegram?.notify86 !== false,
+      notifyLowStock: source.telegram?.notifyLowStock !== false,
+      notifyPurchases: source.telegram?.notifyPurchases !== false,
+      notifyDailyDigest: source.telegram?.notifyDailyDigest === true,
+      digestHour: Math.trunc(clampNumber(source.telegram?.digestHour, 0, 23, base.telegram.digestHour)),
+      welcome: clampText(source.telegram?.welcome, 160) || base.telegram.welcome,
+    },
+
     notifications: {
       lowStock: source.notifications?.lowStock !== false,
       lateTickets: source.notifications?.lateTickets !== false,
@@ -962,6 +986,14 @@ export function configurationAudit(shop) {
       })(),
       fix: 'Tell the app what a case or a bottle holds, so a purchase becomes the right amount of stock.',
       section: 'stock',
+    },
+    {
+      id: 'telegram',
+      label: 'Telegram bot has a chat to talk to',
+      ok: Boolean(settings.telegram?.chatId)
+        || Object.values(settings.telegram || {}).some((value) => value === true),
+      fix: 'Add the chat id the bot should report to (Settings → Telegram & Mini App).',
+      section: 'channels',
     },
     {
       id: 'stations',

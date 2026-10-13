@@ -108,6 +108,7 @@ export default function AppShell({ children }) {
     setProfileOpen(false)
   }
 
+
   const linkPill = link.status === 'live'
     ? { tone: 'ok', label: 'Live · server' }
     : link.status === 'offline'
