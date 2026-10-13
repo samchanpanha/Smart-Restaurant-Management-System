@@ -33,6 +33,25 @@ export function buildSeed() {
     { id: 'inv_coffee', name: 'Coffee portion', unit: 'portion', onHand: 60, par: 30, lastCost: 0.55, vendor: 'BevCo', location: 'dry' },
   ]
 
+  // Food detail per dish: the course it belongs to, when it sells, how hot
+  // it is, and a demo photo. Owners edit all of it in Catalog → Products,
+  // and the vocabulary behind it lives in Settings → Food & menu.
+  const MENU_DETAIL = {
+    m_salad: { course: 'Appetizer', menuWindow: 'lunch', dietaryTags: ['Vegetarian', 'Gluten-free'] },
+    m_wings: { course: 'Appetizer', menuWindow: 'dinner', spiceLevel: 'Medium', dietaryTags: ['Spicy'] },
+    m_soup: { course: 'Appetizer', menuWindow: 'lunch' },
+    m_burger: { course: 'Main', menuWindow: 'dinner', imageUrl: '/photos/burger.svg', allergens: ['Gluten', 'Dairy', 'Sesame'] },
+    m_salmon: { course: 'Main', menuWindow: 'dinner', imageUrl: '/photos/salmon.svg' },
+    m_chickenpasta: { course: 'Main', menuWindow: 'dinner' },
+    m_steak: { course: 'Main', menuWindow: 'dinner' },
+    m_fishchips: { course: 'Main', menuWindow: 'dinner' },
+    m_vegbowl: { course: 'Main', menuWindow: 'lunch', dietaryTags: ['Vegan', 'Dairy-free'] },
+    m_cake: { course: 'Dessert', menuWindow: 'dinner' },
+    m_icecream: { course: 'Dessert', menuWindow: 'dinner', dietaryTags: ['Vegetarian'] },
+    m_soda: { course: 'Drink', menuWindow: '', spiceLevel: '' },
+    m_coffee: { course: 'Drink', menuWindow: '' },
+  }
+
   // ─── Suppliers ─────────────────────────────────────────────────
   const suppliers = [
     {
@@ -572,6 +591,14 @@ export function buildSeed() {
     { id: 'invlog_2', vendor: 'Prime Meats', supplierId: 'sup_meats', purchaseId: 'po_seed_2', reference: 'PM-88410', at: minAgo(2 * 1440), total: 193, lines: [{ inventoryItemId: 'inv_steak', qty: 10, unitCost: 8.5 }, { inventoryItemId: 'inv_patty', qty: 48, unitCost: 2.25 }] },
   ]
 
+  const menuWithDetail = menu.map((item) => ({
+    course: 'Main',
+    menuWindow: '',
+    spiceLevel: '',
+    ...item,
+    ...(MENU_DETAIL[item.id] || {}),
+  }))
+
   const settings = {
     ...defaultSettings('Downtown'),
     restaurantName: 'Restora · Demo House',
@@ -602,7 +629,7 @@ export function buildSeed() {
     tables,
     reservations,
     waitlist,
-    menu,
+    menu: menuWithDetail,
     recipes,
     inventory,
     orders: frozenOrders,

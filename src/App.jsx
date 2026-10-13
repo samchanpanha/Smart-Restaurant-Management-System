@@ -4,6 +4,7 @@ import { NAV_SECTIONS, ROLE_NAV } from './lib/constants'
 import { RestoraProvider, useRestora } from './lib/store'
 import CatalogScreen from './screens/CatalogScreen'
 import ComingSoon from './screens/ComingSoon'
+import NewTabPicker from './components/NewTabPicker'
 import CostingScreen from './screens/CostingScreen'
 import DashboardScreen from './screens/DashboardScreen'
 import FloorScreen from './screens/FloorScreen'
@@ -65,6 +66,8 @@ function RestrictedScreen({ screen, role }) {
 export function Router() {
   const { screen, role } = useRestora()
   const allowed = ROLE_NAV[role] || ROLE_NAV.owner
+  // A tab that has not picked a screen yet shows the picker.
+  if (!screen) return <NewTabPicker />
   if (!allowed.includes(screen)) return <RestrictedScreen screen={screen} role={role} />
   if (screen === 'system') return <SystemScreen />
   if (screen === 'dashboard') return <DashboardScreen />

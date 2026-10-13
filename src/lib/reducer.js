@@ -30,6 +30,8 @@ import {
   sanitizeSettings,
   sanitizeSupplier,
   sanitizeTemplate,
+  MAX_IMAGE_CHARS,
+  sanitizeImageRef,
 } from './settings.js'
 import { buildSeed, buildSeedRiverside } from './seed.js'
 
@@ -117,16 +119,9 @@ function cleanLabelList(value) {
     .filter(Boolean))].slice(0, 12)
 }
 
-function cleanImageUrl(value) {
-  const url = String(value ?? '').trim().slice(0, 500)
-  if (!url) return ''
-  if (url.startsWith('/') && !url.startsWith('//')) return url
-  try {
-    const parsed = new URL(url)
-    return ['https:', 'http:'].includes(parsed.protocol) ? url : ''
-  } catch {
-    return ''
-  }
+/** Photos may be a URL, a local path, or a small uploaded data URL. */
+function cleanImageUrl(value, maxChars = MAX_IMAGE_CHARS) {
+  return sanitizeImageRef(value, maxChars)
 }
 
 function normalizeMenuItem(item, index = 0) {
@@ -149,6 +144,9 @@ function normalizeMenuItem(item, index = 0) {
     dietaryTags: cleanLabelList(item?.dietaryTags),
     allergens: cleanLabelList(item?.allergens),
     imageUrl: cleanImageUrl(item?.imageUrl),
+    course: String(item?.course ?? '').trim().slice(0, 24),
+    menuWindow: String(item?.menuWindow ?? '').trim().slice(0, 24),
+    spiceLevel: String(item?.spiceLevel ?? '').trim().slice(0, 20),
     sortOrder: Number.isFinite(numericOrder) ? Math.max(0, Math.trunc(numericOrder)) : index,
     modifiers: Array.isArray(item?.modifiers) ? item.modifiers : [],
     substituteId: item?.substituteId ? String(item.substituteId) : null,
@@ -178,6 +176,7 @@ function normalizeInventoryItem(item, index = 0) {
     reorderPoint: Number.isFinite(Number(item?.reorderPoint)) ? Number(item.reorderPoint) : par,
     dailyUse: Number.isFinite(Number(item?.dailyUse)) ? Number(item.dailyUse) : 0,
     incoming: Number.isFinite(Number(item?.incoming)) ? Number(item.incoming) : 0,
+    imageUrl: cleanImageUrl(item?.imageUrl),
     vendor: String(item?.vendor ?? '').trim().slice(0, 60),
     supplierId: item?.supplierId ? String(item.supplierId) : null,
     sku: String(item?.sku ?? '').trim().slice(0, 40),

@@ -21,9 +21,13 @@ function tabLabel(tab) {
   return tab.title || TAB_LABELS[tab.screen] || 'New tab'
 }
 
+function tabIcon(tab) {
+  return tab.screen ? (SCREEN_ICONS[tab.screen] || 'dashboard') : 'plus'
+}
+
 export default function TabStrip({ fallbackScreen }) {
   const {
-    role, state, tabs, activeTabId, activateTab, closeTab, openTab, reorderTab, renameTab,
+    role, state, tabs, activeTabId, activateTab, closeTab, openTab, openScreenInTab, reorderTab, renameTab,
     togglePinTab, duplicateTab, closeOtherTabs, closeRightTabs, reopenClosedTab, canReopenClosed,
   } = useRestora()
   const allowed = ROLE_NAV[role] || ROLE_NAV.owner
@@ -31,7 +35,6 @@ export default function TabStrip({ fallbackScreen }) {
   // switch is a change of who is driving, not a reason to hide the road.
   // The role only gates which screens can be *opened* from here.
   const visibleTabs = tabs
-  const newTabScreen = allowed[0] || 'floor'
   const pinnedVisible = tabs.filter((tab) => tab.pinned).length
 
   const badges = useMemo(() => {
@@ -48,10 +51,19 @@ export default function TabStrip({ fallbackScreen }) {
   const listRef = useRef(null)
   const tabEls = useRef(new Map())
   const dragRef = useRef(null)
+  const ignoreClickRef = useRef(null)
   const [drag, setDrag] = useState(null)
   const [menu, setMenu] = useState(null)
   const [renaming, setRenaming] = useState(null)
   const [fade, setFade] = useState({ left: false, right: false })
+
+  function setIgnoreClick(tabId) {
+    ignoreClickRef.current = tabId
+    // Safety net: a dropped drag sometimes ends without a click at all.
+    window.setTimeout(() => {
+      if (ignoreClickRef.current === tabId) ignoreClickRef.current = null
+    }, 250)
+  }
 
   // ── drag to reorder ───────────────────────────────────────────────
   function gapAtPointer(clientX, dragId) {
@@ -70,49 +82,73 @@ export default function TabStrip({ fallbackScreen }) {
     return Math.min(Math.max(gap, lo), hi)
   }
 
+  // A press only *may* become a drag: nothing is captured and nothing is
+  // suppressed until the pointer really travels DRAG_THRESHOLD_PX. The old
+  // code grabbed the pointer as soon as a tab moved 5px, which retargeted
+  // the following click to the tab shell — the inner button never fired, so
+  // activating a tab and opening another one looked dead.
   function onTabPointerDown(event, tab) {
     if (event.button !== 0 || renaming) return
-    dragRef.current = { id: tab.id, el: event.currentTarget, startX: event.clientX, live: false }
-  }
-
-  function onTabPointerMove(event) {
-    const held = dragRef.current
-    if (!held) return
-    const dx = event.clientX - held.startX
-    if (!held.live) {
-      if (Math.abs(dx) < DRAG_THRESHOLD_PX) return
-      held.live = true
-      try {
-        held.el.setPointerCapture(event.pointerId)
-      } catch {
-        /* pointer already released — drag continues without capture */
-      }
-    }
-    held.dx = dx
-    held.gap = gapAtPointer(event.clientX, held.id)
-    setDrag({ id: held.id, dx, over: held.gap })
-  }
-
-  function onTabPointerUp() {
-    const held = dragRef.current
-    dragRef.current = null
-    setDrag(null)
-    if (!held?.live) return
-    const from = visibleTabs.findIndex((tab) => tab.id === held.id)
-    if (from < 0 || held.gap === from || held.gap === from + 1) return
-    reorderTab(held.id, visibleTabs[held.gap]?.id ?? null)
+    // The close button and the rename field own their presses.
+    if (event.target.closest('button[aria-label^="Close"], input')) return
+    dragRef.current = { id: tab.id, startX: event.clientX, live: false }
   }
 
   useEffect(() => {
+    function onMove(event) {
+      const held = dragRef.current
+      if (!held) return
+      const dx = event.clientX - held.startX
+      if (!held.live) {
+        if (Math.abs(dx) < DRAG_THRESHOLD_PX) return
+        held.live = true
+        held.dx = dx
+      }
+      held.dx = dx
+      held.gap = gapAtPointer(event.clientX, held.id)
+      setDrag({ id: held.id, dx, over: held.gap })
+    }
+
+    function onRelease() {
+      const held = dragRef.current
+      dragRef.current = null
+      setDrag(null)
+      if (!held?.live) return
+      // A live drag focuses the tab it moved, and the click that follows is
+      // ignored: dropping a tab is not a request to open the one underneath.
+      setIgnoreClick(held.id)
+      activateTab(held.id)
+      const from = visibleTabs.findIndex((tab) => tab.id === held.id)
+      if (from < 0 || held.gap == null || held.gap === from || held.gap === from + 1) return
+      reorderTab(held.id, visibleTabs[held.gap]?.id ?? null)
+    }
+
     function cancelDrag(event) {
       if (event.key === 'Escape' && dragRef.current?.live) {
         dragRef.current = null
         setDrag(null)
       }
     }
+
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onRelease)
+    window.addEventListener('pointercancel', onRelease)
     window.addEventListener('keydown', cancelDrag)
-    return () => window.removeEventListener('keydown', cancelDrag)
-  }, [])
+    return () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onRelease)
+      window.removeEventListener('pointercancel', onRelease)
+      window.removeEventListener('keydown', cancelDrag)
+    }
+  }, [activateTab, gapAtPointer, reorderTab, visibleTabs])
+
+  // Window-level pointer tracking cannot tell which element the click will
+  // land on, so the one click that follows a real drag is dropped here.
+  function suppressed(tabId) {
+    if (ignoreClickRef.current !== tabId) return false
+    ignoreClickRef.current = null
+    return true
+  }
 
   // ── overflow: fades, wheel, scroll active into view ───────────────
   const updateFade = useMemo(() => () => {
@@ -198,11 +234,28 @@ export default function TabStrip({ fallbackScreen }) {
         cycle((event.shiftKey ? !forward : forward) ? 1 : -1)
         return
       }
+      // Chrome claims Ctrl+T / Ctrl+W / Ctrl+1…9 before the page sees them,
+      // so the same actions are also on Alt chords that always arrive here.
+      if (event.altKey && lower === 't' && !event.shiftKey) {
+        event.preventDefault()
+        openTab()
+        return
+      }
+      if (event.altKey && lower === 'w' && !event.shiftKey) {
+        event.preventDefault()
+        closeTab(activeTabId, fallbackScreen)
+        return
+      }
+      if (event.altKey && lower === '1' && event.shiftKey) {
+        event.preventDefault()
+        reopenClosedTab()
+        return
+      }
       if (!mod) return
       if (lower === 't') {
         event.preventDefault()
         if (event.shiftKey) reopenClosedTab()
-        else openTab(newTabScreen)
+        else openTab()
       } else if (lower === 'w' && !event.shiftKey) {
         event.preventDefault()
         closeTab(activeTabId, fallbackScreen)
@@ -213,7 +266,7 @@ export default function TabStrip({ fallbackScreen }) {
     }
     window.addEventListener('keydown', handleShortcut)
     return () => window.removeEventListener('keydown', handleShortcut)
-  }, [activeTabId, activateTab, closeTab, fallbackScreen, newTabScreen, openTab, reopenClosedTab, visibleTabs])
+  }, [activeTabId, activateTab, closeTab, fallbackScreen, openTab, openScreenInTab, reopenClosedTab, visibleTabs])
 
   // ── context menu ──────────────────────────────────────────────────
   useEffect(() => {
@@ -275,13 +328,15 @@ export default function TabStrip({ fallbackScreen }) {
         onAuxClick={(event) => {
           if (event.button === 1 && event.target === event.currentTarget) {
             event.preventDefault()
-            openTab(newTabScreen)
+            openTab()
           }
         }}
       >
         {visibleTabs.map((tab, index) => {
           const selected = tab.id === activeTabId
-          const locked = !allowed.includes(tab.screen)
+          // A blank tab is waiting for a screen: never locked, never named
+          // after a screen it does not hold yet.
+          const locked = Boolean(tab.screen) && !allowed.includes(tab.screen)
           const badge = badges[tab.screen]
           const label = tabLabel(tab)
           const locShort = LOCATIONS.find((item) => item.id === tab.locId)?.short || tab.locId
@@ -295,9 +350,6 @@ export default function TabStrip({ fallbackScreen }) {
                   else tabEls.current.delete(tab.id)
                 }}
                 onPointerDown={(event) => onTabPointerDown(event, tab)}
-                onPointerMove={onTabPointerMove}
-                onPointerUp={onTabPointerUp}
-                onPointerCancel={onTabPointerUp}
                 onAuxClick={(event) => {
                   if (event.button === 1) { event.preventDefault(); closeTab(tab.id, fallbackScreen) }
                 }}
@@ -332,13 +384,13 @@ export default function TabStrip({ fallbackScreen }) {
                     role="tab"
                     aria-selected={selected}
                     aria-controls="workspace-panel"
-                    onClick={() => activateTab(tab.id)}
+                    onClick={() => { if (!suppressed(tab.id)) activateTab(tab.id) }}
                     title={`${label} · ${locShort}${tab.pinned ? ' · pinned' : ''}${locked ? ` · not available to ${role}` : ''}`}
                     className={`flex h-full min-w-0 flex-1 items-center gap-2 rounded-tl-lg text-left text-xs font-semibold ${tab.pinned ? 'justify-center px-0' : 'px-3'}`}
                   >
                     <span className="relative shrink-0">
                       <Icon
-                        name={locked ? 'lock' : (SCREEN_ICONS[tab.screen] || 'dashboard')}
+                        name={locked ? 'lock' : tabIcon(tab)}
                         size={15}
                         className={locked ? 'text-amber-500' : selected ? 'text-orange-600' : 'text-zinc-400'}
                       />
@@ -391,11 +443,12 @@ export default function TabStrip({ fallbackScreen }) {
         <button
           type="button"
           aria-label="Open a new tab"
-          title="New tab (Ctrl/⌘+T)"
-          onClick={() => openTab(newTabScreen)}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 hover:bg-white hover:text-zinc-900"
+          title="New tab (Alt+T) — Chrome keeps Ctrl+T for its own tabs"
+          onClick={() => openTab()}
+          className="flex h-8 items-center gap-1 rounded-lg px-2 text-xs font-semibold text-zinc-500 hover:bg-white hover:text-zinc-900"
         >
-          <Icon name="plus" size={18} />
+          <Icon name="plus" size={16} />
+          <span className="hidden lg:inline">New tab</span>
         </button>
       </div>
 
@@ -405,7 +458,7 @@ export default function TabStrip({ fallbackScreen }) {
           className="tab-menu fixed z-50 w-[216px] rounded-xl border border-zinc-200 bg-white p-1.5 shadow-[0_18px_45px_rgba(22,30,40,.18)]"
           style={{ left: menu.x, top: menu.y }}
         >
-          <MenuItem label="New tab" hint="⌘T" onPick={menuAction(() => openTab(newTabScreen))} />
+          <MenuItem label="New tab" hint="⌥T" onPick={menuAction(() => openTab())} />
           {canReopenClosed && <MenuItem label="Reopen closed tab" hint="⌘⇧T" onPick={menuAction(reopenClosedTab)} />}
           {menuTab && (
             <>

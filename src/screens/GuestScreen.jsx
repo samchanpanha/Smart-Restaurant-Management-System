@@ -39,7 +39,7 @@ function paidOrderFor(state, tableId) {
 
 // ─── Dish detail (modifiers, qty) ─────────────────────────────────
 
-function DishModal({ item, onAdd, onClose }) {
+function DishModal({ item, onAdd, onClose, showImages = true }) {
   const [picks, setPicks] = useState({})
   const [qty, setQty] = useState(1)
   const [notes, setNotes] = useState('')
@@ -49,7 +49,7 @@ function DishModal({ item, onAdd, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label={item.name} onClick={onClose}>
       <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-3xl bg-white p-6 shadow-2xl sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
-        {item.imageUrl && (
+        {showImages && item.imageUrl && (
           <img
             src={item.imageUrl}
             alt=""
@@ -233,6 +233,10 @@ export default function GuestScreen({ tableId }) {
     window.setTimeout(() => setJustSent(false), 5000)
   }
 
+  // Photo policy lives in Settings → Food & menu so a slow connection can
+  // keep the guest page lean.
+  const guestPhotos = state.settings?.food?.imagesOnGuestMenu !== false
+
   const shell = (inner) => (
     <div className="min-h-screen bg-[#faf6ef] text-stone-900">
       <div className="mx-auto max-w-md px-4 pb-32 pt-6">{inner}</div>
@@ -333,7 +337,7 @@ export default function GuestScreen({ tableId }) {
                     type="button" onClick={() => setDetail(m)}
                     className="w-full rounded-3xl bg-white p-4 text-left shadow-sm transition-transform active:scale-[0.99]"
                   >
-                    {m.imageUrl && (
+                    {guestPhotos && m.imageUrl && (
                       <img
                         src={m.imageUrl}
                         alt=""
@@ -484,7 +488,7 @@ export default function GuestScreen({ tableId }) {
         </nav>
 
         {detail && (
-          <DishModal item={detail} onClose={() => setDetail(null)} onAdd={(extra) => addToCart(detail, extra)} />
+          <DishModal item={detail} showImages={guestPhotos} onClose={() => setDetail(null)} onAdd={(extra) => addToCart(detail, extra)} />
         )}
 
         {cartOpen && (

@@ -24,6 +24,7 @@ function displayOrderId(id) {
 export default function AppShell({ children }) {
   const {
     state, dispatch, role, setRole, screen, setScreen, link, resync, notice, locId, setLocId,
+    openScreenInTab,
     tabs, activeTabId, saveTabScroll, setSelectedTableId, setSelectedDishId, setSelectedOrderId,
   } = useRestora()
   const now = useNow(30000)
@@ -136,11 +137,24 @@ export default function AppShell({ children }) {
           <div className="space-y-1">
             {NAV_ITEMS.filter((item) => allowed.includes(item.id)).map((item) => {
               const active = screen === item.id
+              // Chrome semantics on the rail: a plain click edits the tab you
+              // are on, Ctrl/⌘-click opens (or jumps to) its own tab, and a
+              // middle-click opens it in the background.
               return (
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() => setScreen(item.id)}
+                  onClick={(event) => {
+                    if (event.ctrlKey || event.metaKey) openScreenInTab(item.id)
+                    else setScreen(item.id)
+                  }}
+                  onAuxClick={(event) => {
+                    if (event.button === 1) {
+                      event.preventDefault()
+                      openScreenInTab(item.id, { activate: false })
+                    }
+                  }}
+                  title={`${item.label} · Ctrl/⌘+click for a new tab`}
                   aria-current={active ? 'page' : undefined}
                   className={`group flex min-h-[46px] w-full items-center gap-3 rounded-xl px-3.5 text-left text-sm transition-colors ${
                     active

@@ -240,7 +240,10 @@ test('report document carries the range, KPIs, and the food-cost cap', () => {
 test('configuration audit tracks the sections the settings screen edits', () => {
   let empire = buildEmpire()
   const before = configurationAudit(shopOf(empire))
-  assert.equal(before.total, 10)
+  // Sections the Settings screen edits: identity, documents, catalog,
+  // stock, food, and item media.
+  assert.equal(before.total, 12)
+  assert.ok(before.checks.some((check) => check.section === 'food'))
 
   // Blank out the identity, then audit again — the check flips, and
   // restoring the name flips it back.
@@ -248,5 +251,5 @@ test('configuration audit tracks the sections the settings screen edits', () => 
   assert.equal(shopOf(empire).settings.restaurantName, 'Restora · Downtown')   // sanitizer keeps a usable name, never double-prefixed
   empire = act(empire, 'downtown', { type: 'UPDATE_SETTINGS', patch: { logoUrl: '' } })
   assert.equal(shopOf(empire), shopOf(empire))                                 // still a usable shop object
-  assert.equal(configurationAudit(shopOf(empire)).total, 10)
+  assert.equal(configurationAudit(shopOf(empire)).total, 12)
 })

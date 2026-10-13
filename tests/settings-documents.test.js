@@ -142,8 +142,13 @@ test('supplier sanitizer trims, validates lists, and defaults terms', () => {
 test('configuration audit reports what still needs attention', () => {
   const empire = buildEmpire()
   const audit = configurationAudit(shopOf(empire))
-  assert.equal(audit.total, 10)
-  assert.ok(audit.done >= 8)
+  // The audit grows as the configuration surface grows: assert the shape and
+  // that the seed is nearly finished, not a frozen count.
+  assert.equal(audit.checks.length, audit.total)
+  assert.ok(audit.total >= 10)
+  assert.ok(audit.done >= audit.total - 2)
+  assert.ok(audit.checks.some((check) => check.id === 'food'))
+  assert.ok(audit.checks.some((check) => check.id === 'itemmedia'))
   const empty = configurationAudit({ settings: defaultSettings('X'), menu: [], inventory: [], suppliers: [], categories: [] })
   assert.equal(empty.ready, false)
   assert.ok(empty.checks.some((check) => !check.ok && check.id === 'suppliers'))

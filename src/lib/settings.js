@@ -85,6 +85,60 @@ export const STORAGE_LOCATIONS = [
 
 export const NOTIFICATION_CHANNELS = ['in_app', 'email', 'sms', 'webhook']
 
+// Food settings: the vocabulary the menu, the guest app and the printed
+// documents all read. Owners edit these lists; items just reference them.
+export const DEFAULT_DIETARY_TAGS = [
+  'Vegetarian', 'Vegan', 'Gluten-free', 'Dairy-free', 'Contains nuts', 'Spicy', 'Halal', 'Kid-friendly',
+]
+export const DEFAULT_ALLERGENS = [
+  'Gluten', 'Dairy', 'Eggs', 'Nuts', 'Peanuts', 'Shellfish', 'Fish', 'Soy', 'Sesame', 'Celery', 'Mustard',
+]
+export const DEFAULT_COURSES = ['Appetizer', 'Main', 'Side', 'Dessert', 'Drink']
+export const FOOD_STATIONS = ['grill', 'saute', 'pantry', 'fry', 'dessert', 'bar', 'expo']
+export const DEFAULT_MENU_WINDOWS = [
+  { id: 'breakfast', label: 'Breakfast', from: '06:00', to: '11:00', enabled: false },
+  { id: 'lunch', label: 'Lunch', from: '11:00', to: '16:00', enabled: true },
+  { id: 'dinner', label: 'Dinner', from: '16:00', to: '23:00', enabled: true },
+  { id: 'late', label: 'Late night', from: '23:00', to: '02:00', enabled: false },
+]
+/** Longest image we will keep in state: ~190 KB of base64 photo. */
+export const MAX_IMAGE_CHARS = 260000
+export const IMAGE_DATA_PREFIXES = ['data:image/png', 'data:image/jpeg', 'data:image/jpg', 'data:image/webp', 'data:image/gif', 'data:image/avif']
+
+/** Items can carry a photo; the reducer and the settings editor share this. */
+export function sanitizeImageRef(value, maxChars = MAX_IMAGE_CHARS) {
+  const raw = String(value ?? '').trim()
+  if (!raw) return ''
+  if (raw.length > maxChars) return ''
+  if (raw.startsWith('/') && !raw.startsWith('//')) return raw
+  if (raw.startsWith('data:')) {
+    return IMAGE_DATA_PREFIXES.some((prefix) => raw.startsWith(prefix)) ? raw : ''
+  }
+  try {
+    const parsed = new URL(raw)
+    return ['https:', 'http:'].includes(parsed.protocol) ? raw : ''
+  } catch {
+    return ''
+  }
+}
+
+/** Clean, de-duplicated, length-capped label list (tags, allergens, …). */
+export function sanitizeLabelList(value, max = 24, maxLength = 40) {
+  const list = Array.isArray(value) ? value : []
+  const seen = new Set()
+  const out = []
+  for (const entry of list) {
+    const label = String(entry ?? '').trim().slice(0, maxLength)
+    if (!label) continue
+    const key = label.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(label)
+    if (out.length >= max) break
+  }
+  return out
+}
+
 export const UNIT_OPTIONS = ['each', 'portion', 'slice', 'cup', 'oz', 'lb', 'g', 'kg', 'ml', 'l', 'bottle', 'can', 'case', 'scoop', 'sheet']
 
 // ─── Document design templates ─────────────────────────────────────
@@ -357,6 +411,25 @@ export function defaultSettings(locationLabel = 'Downtown') {
       printerKitchen: '',
     },
 
+    // Food: what the menu is made of and how it is sold. Lists are
+    // editable in Settings; items reference them by name.
+    food: {
+      dietaryTags: [...DEFAULT_DIETARY_TAGS],
+      allergens: [...DEFAULT_ALLERGENS],
+      courses: [...DEFAULT_COURSES],
+      stations: [...FOOD_STATIONS],
+      menuWindows: DEFAULT_MENU_WINDOWS.map((window) => ({ ...window })),
+      showImages: true,
+      imagesOnGuestMenu: true,
+      imagesInPrint: false,
+      imageMaxKb: 180,
+      allergenAlerts: true,
+      auto86MissingIngredient: true,
+      defaultCourse: 'Main',
+      childrenMenu: false,
+      spiceLevels: ['Mild', 'Medium', 'Hot'],
+    },
+
     // Documents
     templates: defaultTemplates(),
     documentCurrency: 'base',
@@ -394,6 +467,21 @@ const clampNumber = (value, min, max, fallback = 0) => {
   return Math.min(max, Math.max(min, n))
 }
 const clampRatio = (value, fallback = 0) => clampNumber(value, 0, 1, fallback)
+
+/** Service windows: 06:00–11:00 style, de-duplicated, at most 6. */
+export function sanitizeMenuWindows(value, fallback) {
+  const list = Array.isArray(value) ? value : []
+  const time = (input, alt) => (/^([01]\d|2[0-3]):[0-5]\d$/.test(String(input)) ? String(input) : alt)
+  const out = []
+  for (const entry of list.slice(0, 6)) {
+    const id = String(entry?.id || entry?.label || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 24)
+    const label = String(entry?.label || '').trim().slice(0, 24)
+    if (!id || !label) continue
+    if (out.some((window) => window.id === id)) continue
+    out.push({ id, label, from: time(entry?.from, '06:00'), to: time(entry?.to, '23:00'), enabled: entry?.enabled === true })
+  }
+  return out.length ? out : fallback.map((window) => ({ ...window }))
+}
 
 export function sanitizeTemplate(raw, kind) {
   const base = defaultTemplates()[kind] || defaultTemplates().invoice
@@ -568,6 +656,24 @@ export function sanitizeSettings(raw, locationLabel = 'Downtown') {
       storageLocations: storageSpaces,
       requireCountReason: source.stock?.requireCountReason !== false,
       autoReceiveThousandths: Math.trunc(clampNumber(source.stock?.autoReceiveThousandths, 0, 4, base.stock.autoReceiveThousandths)),
+    },
+
+    food: {
+      dietaryTags: sanitizeLabelList(source.food?.dietaryTags?.length ? source.food.dietaryTags : base.food.dietaryTags),
+      allergens: sanitizeLabelList(source.food?.allergens?.length ? source.food.allergens : base.food.allergens),
+      courses: sanitizeLabelList(source.food?.courses?.length ? source.food.courses : base.food.courses, 12, 24),
+      stations: sanitizeLabelList(source.food?.stations?.length ? source.food.stations : base.food.stations, 12, 24)
+        .map((station) => station.toLowerCase()),
+      menuWindows: sanitizeMenuWindows(source.food?.menuWindows, base.food.menuWindows),
+      showImages: source.food?.showImages !== false,
+      imagesOnGuestMenu: source.food?.imagesOnGuestMenu !== false,
+      imagesInPrint: source.food?.imagesInPrint === true,
+      imageMaxKb: Math.trunc(clampNumber(source.food?.imageMaxKb, 20, 600, base.food.imageMaxKb)),
+      allergenAlerts: source.food?.allergenAlerts !== false,
+      auto86MissingIngredient: source.food?.auto86MissingIngredient !== false,
+      defaultCourse: sanitizeLabelList([source.food?.defaultCourse], 1, 24)[0] || base.food.defaultCourse,
+      childrenMenu: source.food?.childrenMenu === true,
+      spiceLevels: sanitizeLabelList(source.food?.spiceLevels?.length ? source.food.spiceLevels : base.food.spiceLevels, 8, 20),
     },
 
     pos: {
@@ -807,6 +913,25 @@ export function configurationAudit(shop) {
       label: 'Every menu item has a kitchen station',
       ok: (shop?.menu || []).every((item) => STATIONS.includes(item.station)),
       fix: 'Route each dish to grill, sauté, pantry, dessert, or expo.',
+      section: 'catalog',
+    },
+    {
+      id: 'food',
+      label: 'Food vocabulary and guest-facing detail configured',
+      ok: Boolean(settings.food?.dietaryTags?.length
+        && settings.food?.allergens?.length
+        && settings.food?.courses?.length
+        && settings.food?.menuWindows?.length
+        && (shop?.menu || []).every((item) => item.dietaryTags && item.allergens)),
+      fix: 'Keep the dietary tag, allergen, and course lists populated so items can be tagged.',
+      section: 'food',
+    },
+    {
+      id: 'itemmedia',
+      label: 'Menu items have photos and courses',
+      ok: (shop?.menu || []).some((item) => item.imageUrl)
+        && (shop?.menu || []).every((item) => Boolean(item.course)),
+      fix: 'Add a photo and a course to each dish — the guest menu and ticket order read both.',
       section: 'catalog',
     },
   ]

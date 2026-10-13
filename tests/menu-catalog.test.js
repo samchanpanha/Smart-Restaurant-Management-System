@@ -33,7 +33,7 @@ test('catalog is normalized in SQLite and independent per location', () => {
   assert.equal(grill.parentId, 'cat_mains')
   assert.equal(downtown.items.find((item) => item.id === 'm_burger').subCategory, 'Grill')
   assert.deepEqual(salad.modifiers[0].options, ['Ranch', 'Vinaigrette', 'Blue cheese'])
-  assert.deepEqual(salad.dietaryTags, ['Vegetarian'])
+  assert.deepEqual(salad.dietaryTags, ['Vegetarian', 'Gluten-free'])
   assert.equal(getMenuCatalog('downtown', { availableOnly: true }).items.some((item) => item.id === 'm_salmon'), false)
 })
 

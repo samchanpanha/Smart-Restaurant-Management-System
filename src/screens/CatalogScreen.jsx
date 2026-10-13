@@ -14,6 +14,7 @@ import { Field, Modal, btnGhost, btnPrimary } from '../components/ui'
 import { MARGIN_BAND_META, STATIONS, STATION_META } from '../lib/constants'
 import { costingFor, money, reorderPointFor, stockStatusFor, uid } from '../lib/models'
 import { CATEGORY_KINDS, UNIT_OPTIONS, categoryOptions, categoryPath, categoryTree } from '../lib/settings'
+import { ChipPicker, PhotoField } from '../components/ItemPhotoField'
 import { useRestora } from '../lib/store'
 
 const TABS = [
@@ -278,18 +279,30 @@ function CategoriesTab({ banner }) {
 // ─── Products (menu items) ─────────────────────────────────────────
 
 function ProductModal({ dish, categories, onClose, onSave }) {
+  const { state } = useRestora()
+  const food = state.settings.food
   const [draft, setDraft] = useState(() => ({
     name: dish?.name || '',
     description: dish?.description || '',
     category: dish?.category || 'Mains',
     subCategory: dish?.subCategory || '',
     price: dish ? String(dish.price) : '',
-    station: dish?.station || 'grill',
+    station: dish?.station || food.stations[0] || 'grill',
     sku: dish?.sku || '',
     active: dish?.active !== false,
+    imageUrl: dish?.imageUrl || '',
+    dietaryTags: dish?.dietaryTags || [],
+    allergens: dish?.allergens || [],
+    course: dish?.course || food.defaultCourse,
+    menuWindow: dish?.menuWindow || '',
+    spiceLevel: dish?.spiceLevel || '',
   }))
   const [error, setError] = useState('')
   const options = categoryOptions(categories, 'menu')
+  const toggleIn = (key, value) => setDraft((current) => ({
+    ...current,
+    [key]: current[key].includes(value) ? current[key].filter((entry) => entry !== value) : [...current[key], value],
+  }))
   const parents = options.filter((option) => option.depth === 0)
   const subs = options.filter((option) => option.depth === 1 && option.parentName === draft.category)
   const subOptions = subs.length
@@ -315,6 +328,12 @@ function ProductModal({ dish, categories, onClose, onSave }) {
       station: draft.station,
       sku: draft.sku.trim(),
       active: draft.active,
+      imageUrl: draft.imageUrl.trim(),
+      dietaryTags: draft.dietaryTags,
+      allergens: draft.allergens,
+      course: draft.course,
+      menuWindow: draft.menuWindow,
+      spiceLevel: draft.spiceLevel,
     })
   }
 
@@ -349,9 +368,48 @@ function ProductModal({ dish, categories, onClose, onSave }) {
         </Field>
         <Field label="Kitchen station">
           <select value={draft.station} onChange={(e) => setDraft((d) => ({ ...d, station: e.target.value }))} className={smallInput}>
-            {STATIONS.map((station) => <option key={station} value={station}>{STATION_META[station].label}</option>)}
+            {food.stations.map((station) => <option key={station} value={station}>{STATION_META[station]?.label || station}</option>)}
           </select>
         </Field>
+        <Field label="Course">
+          <select value={draft.course} onChange={(e) => setDraft((d) => ({ ...d, course: e.target.value }))} className={smallInput}>
+            <option value="">— none —</option>
+            {food.courses.map((course) => <option key={course} value={course}>{course}</option>)}
+          </select>
+        </Field>
+        <Field label="Served during">
+          <select value={draft.menuWindow} onChange={(e) => setDraft((d) => ({ ...d, menuWindow: e.target.value }))} className={smallInput}>
+            <option value="">All service</option>
+            {food.menuWindows.map((window) => (
+              <option key={window.id} value={window.id}>{window.label} · {window.from}–{window.to}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Spice level">
+          <select value={draft.spiceLevel} onChange={(e) => setDraft((d) => ({ ...d, spiceLevel: e.target.value }))} className={smallInput}>
+            <option value="">— none —</option>
+            {food.spiceLevels.map((level) => <option key={level} value={level}>{level}</option>)}
+          </select>
+        </Field>
+      </div>
+      <div className="mt-3">
+        <PhotoField value={draft.imageUrl} onChange={(value) => setDraft((current) => ({ ...current, imageUrl: value }))} maxKb={food.imageMaxKb} />
+      </div>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <ChipPicker
+          label="Dietary tags"
+          options={food.dietaryTags}
+          selected={draft.dietaryTags}
+          onToggle={(value) => toggleIn('dietaryTags', value)}
+          empty="Add tags in Settings → Food & menu."
+        />
+        <ChipPicker
+          label="Allergens"
+          options={food.allergens}
+          selected={draft.allergens}
+          onToggle={(value) => toggleIn('allergens', value)}
+          empty="Add allergens in Settings → Food & menu."
+        />
       </div>
       <Field label="Guest-facing description">
         <textarea value={draft.description} onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))} rows={3} maxLength={240} className={`${smallInput} mt-3 min-h-[84px] resize-y`} />
@@ -487,8 +545,22 @@ function ProductsTab() {
                     />
                   </td>
                   <td className="px-3 py-3">
-                    <div className="font-semibold text-zinc-800">{dish.name}</div>
-                    <div className="text-[11px] text-zinc-500">{dish.sku || 'no SKU'}{dish.description ? ` · ${dish.description.slice(0, 48)}` : ''}</div>
+                    <div className="flex items-center gap-3">
+                      {dish.imageUrl ? (
+                        <img src={dish.imageUrl} alt="" className="h-10 w-10 shrink-0 rounded-lg object-cover ring-1 ring-zinc-200" />
+                      ) : (
+                        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-zinc-100 text-[9px] uppercase tracking-wide text-zinc-400" aria-hidden>no photo</span>
+                      )}
+                      <div className="min-w-0">
+                        <div className="font-semibold text-zinc-800">{dish.name}</div>
+                        <div className="text-[11px] text-zinc-500">{dish.sku || 'no SKU'}{dish.description ? ` · ${dish.description.slice(0, 40)}` : ''}</div>
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {dish.course && <StatusPill tone="muted" size="sm">{dish.course}</StatusPill>}
+                          {dish.dietaryTags.slice(0, 2).map((tag) => <StatusPill key={tag} tone="ok" size="sm">{tag}</StatusPill>)}
+                          {dish.allergens.length > 0 && <StatusPill tone="warn" size="sm">{dish.allergens.length} allergen(s)</StatusPill>}
+                        </div>
+                      </div>
+                    </div>
                   </td>
                   <td className="px-3 py-3 text-xs text-zinc-600">{categoryPath(dish)}</td>
                   <td className="px-3 py-3">
@@ -558,9 +630,6 @@ function ProductsTab() {
                 id: uid('m'),
                 ...values,
                 available: true,
-                dietaryTags: [],
-                allergens: [],
-                imageUrl: '',
                 sortOrder: state.menu.length,
                 substituteId: null,
                 modifiers: [],
@@ -604,6 +673,7 @@ function IngredientModal({ item, onClose, onSave }) {
     supplierId: item?.supplierId || '',
     location: item?.location || 'dry',
     notes: item?.notes || '',
+    imageUrl: item?.imageUrl || '',
   }))
   const parents = options.filter((option) => option.depth === 0)
   const subs = options.filter((option) => option.depth === 1 && option.parentName === draft.category)
@@ -664,6 +734,14 @@ function IngredientModal({ item, onClose, onSave }) {
       <Field label="Notes">
         <textarea value={draft.notes} onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))} rows={2} maxLength={240} className={`${smallInput} mt-3 resize-y`} />
       </Field>
+      <div className="mt-3">
+        <PhotoField
+          value={draft.imageUrl}
+          onChange={(value) => setDraft((current) => ({ ...current, imageUrl: value }))}
+          maxKb={state.settings.food.imageMaxKb}
+          hint="Useful for spotting the right pack in a walk-in photo — resized and stored with the item."
+        />
+      </div>
       <button
         type="button"
         onClick={() => onSave({
@@ -680,6 +758,7 @@ function IngredientModal({ item, onClose, onSave }) {
           supplierId: draft.supplierId || null,
           location: draft.location,
           notes: draft.notes.trim(),
+          imageUrl: draft.imageUrl.trim(),
         })}
         className={`${btnPrimary} mt-4`}
       >
@@ -748,8 +827,17 @@ function IngredientsTab() {
                 return (
                   <tr key={item.id} className="hover:bg-orange-50/30">
                     <td className="px-4 py-3">
-                      <div className="font-semibold text-zinc-800">{item.name}</div>
-                      <div className="text-[11px] text-zinc-500">{item.sku || 'no SKU'}</div>
+                      <div className="flex items-center gap-3">
+                        {item.imageUrl ? (
+                          <img src={item.imageUrl} alt="" className="h-10 w-10 shrink-0 rounded-lg object-cover ring-1 ring-zinc-200" />
+                        ) : (
+                          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-zinc-100 text-[9px] uppercase tracking-wide text-zinc-400" aria-hidden>no photo</span>
+                        )}
+                        <div className="min-w-0">
+                          <div className="font-semibold text-zinc-800">{item.name}</div>
+                          <div className="text-[11px] text-zinc-500">{item.sku || 'no SKU'}</div>
+                        </div>
+                      </div>
                     </td>
                     <td className="px-3 py-3 text-xs text-zinc-600">{categoryPath(item)}</td>
                     <td className="tnum px-3 py-3 font-semibold text-zinc-800">

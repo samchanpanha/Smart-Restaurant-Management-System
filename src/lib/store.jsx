@@ -14,7 +14,8 @@ import { uid } from './models'
 import { buildEmpire, migrateToEmpire, reducer } from './reducer'
 import { DOC_KINDS, documentNumber, templateFor } from './settings'
 import {
-  MAX_TABS, activeWorkspaceTab, createWorkspace, normalizeWorkspace, workspaceReducer,
+  MAX_TABS, activeWorkspaceTab, createWorkspace, normalizeWorkspace, tabIdForScreen,
+  workspaceReducer,
 } from './workspace'
 
 // Re-exported so screens keep importing from one place.
@@ -99,7 +100,7 @@ function loadWorkspace(kiosk) {
     const restored = normalizeWorkspace(JSON.parse(raw))
     if (!restored) return null
     const tabs = restored.tabs
-      .filter((tab) => VALID_SCREENS.has(tab.screen))
+      .filter((tab) => !tab.screen || VALID_SCREENS.has(tab.screen))
       .map((tab) => (LOCATIONS.some((l) => l.id === tab.locId) ? tab : { ...tab, locId: 'downtown' }))
     if (!tabs.length) return null
     return { ...restored, tabs }
@@ -133,7 +134,9 @@ export function RestoraProvider({ children }) {
   const activeTab = activeWorkspaceTab(workspace)
   const { tabs, activeTabId } = workspace
   const locId = activeTab?.locId || 'downtown'
-  const screen = activeTab?.screen || 'floor'
+  // A blank ("New tab") tab keeps its null screen all the way to the router,
+  // which is what puts the new-tab picker on screen.
+  const screen = activeTab ? (activeTab.screen || null) : 'floor'
   const activeTabIdRef = useRef(activeTabId)
   activeTabIdRef.current = activeTabId
   const setScreen = useCallback((nextScreen) => {
@@ -142,13 +145,31 @@ export function RestoraProvider({ children }) {
   const setLocId = useCallback((nextLocId) => {
     workspaceDispatch({ type: 'SET_LOCATION', locId: nextLocId })
   }, [])
-  const openTab = useCallback((nextScreen = 'floor') => {
+  // openTab() with no screen opens the new-tab picker; pass a screen to
+  // open that screen directly and { activate:false } for a background tab.
+  const openTab = useCallback((nextScreen = null, options = {}) => {
     if (tabs.length >= MAX_TABS) {
       flashNotice(`Tab limit reached (${MAX_TABS}) — close a tab to open another.`)
       return
     }
-    workspaceDispatch({ type: 'OPEN_TAB', id: uid('tab'), screen: nextScreen })
+    workspaceDispatch({
+      type: 'OPEN_TAB',
+      id: uid('tab'),
+      screen: nextScreen || null,
+      activate: options.activate !== false,
+    })
   }, [tabs.length])
+  // Ctrl/⌘-click and middle-click on a nav item: focus the tab that already
+  // shows the screen, otherwise open one. Never stacks duplicates.
+  const openScreenInTab = useCallback((nextScreen, options = {}) => {
+    if (!nextScreen) return
+    const existing = tabIdForScreen(workspace, nextScreen)
+    if (existing) {
+      if (options.activate !== false) workspaceDispatch({ type: 'ACTIVATE_TAB', tabId: existing })
+      return
+    }
+    openTab(nextScreen, options)
+  }, [openTab, workspace])
   const activateTab = useCallback((tabId) => {
     workspaceDispatch({ type: 'ACTIVATE_TAB', tabId })
   }, [])
@@ -503,7 +524,7 @@ export function RestoraProvider({ children }) {
   const value = useMemo(
     () => ({
       state, empire, dispatch, role, setRole, screen, setScreen,
-      tabs, activeTabId, openTab, activateTab, closeTab,
+      tabs, activeTabId, openTab, openScreenInTab, activateTab, closeTab,
       reorderTab, renameTab, togglePinTab, duplicateTab, closeOtherTabs, closeRightTabs,
       reopenClosedTab, canReopenClosed: workspace.closed.length > 0, saveTabScroll,
       tabCtx: activeCtx, setTabCtx: setTabContext,
@@ -511,7 +532,7 @@ export function RestoraProvider({ children }) {
       selectedOrderId, setSelectedOrderId, locId, setLocId, link, resync, notice,
       settings: state.settings, dispatchTo, dispatchEverywhere, issueDocument, templateForKind,
     }),
-    [state, empire, dispatch, role, screen, setScreen, tabs, activeTabId, openTab, activateTab, closeTab, reorderTab, renameTab, togglePinTab, duplicateTab, closeOtherTabs, closeRightTabs, reopenClosedTab, workspace.closed.length, saveTabScroll, activeCtx, setTabContext, selectedTableId, setSelectedTableId, selectedDishId, setSelectedDishId, selectedOrderId, setSelectedOrderId, locId, setLocId, link, resync, notice, dispatchTo, dispatchEverywhere, issueDocument, templateForKind],
+    [state, empire, dispatch, role, screen, setScreen, tabs, activeTabId, openTab, openScreenInTab, activateTab, closeTab, reorderTab, renameTab, togglePinTab, duplicateTab, closeOtherTabs, closeRightTabs, reopenClosedTab, workspace.closed.length, saveTabScroll, activeCtx, setTabContext, selectedTableId, setSelectedTableId, selectedDishId, setSelectedDishId, selectedOrderId, setSelectedOrderId, locId, setLocId, link, resync, notice, dispatchTo, dispatchEverywhere, issueDocument, templateForKind],
   )
 
   if (link.status === 'starting') {
