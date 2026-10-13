@@ -104,11 +104,14 @@ test('/buy and /digest are the manager’s view of the same numbers', () => {
   const shop = shopOf(buildEmpire())
   assert.match(runTelegramCommand('/buy', { shop, role: 'staff' }).reply, /for managers/)
 
-  const buy = runTelegramCommand('/buy 7d', { shop, role: 'manager' })
-  assert.match(buy.reply, /Buying · 7 days/)
-  assert.match(buy.reply, /Spent \$262\.60 · 2 invoices · 70 units/)
-  assert.match(buy.reply, /Biggest spend: Beef patty 6oz \$108\.00/)
-  assert.match(buy.reply, /Smallest buys: Salmon fillet \$69\.60/)
+  // 30 days covers every seeded purchase, so the window cannot slide under the
+  // assertion the way a rolling 7 days can.
+  const buy = runTelegramCommand('/buy 30d', { shop, role: 'manager' })
+  assert.match(buy.reply, /Buying · 30 days/)
+  assert.match(buy.reply, /Spent \$324\.76 · 2 invoices · 82 units/)
+  assert.match(buy.reply, /Biggest spend: Salmon fillet \$131\.76/)
+  assert.match(buy.reply, /Biggest units: Beef patty 6oz 48/)
+  assert.match(buy.reply, /Smallest buys: Ribeye steak \$85\.00/)
   assert.match(buy.reply, /Open: PO-2026-0100 Fresh Farms \$56\.40/)
 
   const digest = runTelegramCommand('/digest', { shop, role: 'manager' })
