@@ -9,6 +9,7 @@
 
 import { convertAmount, currencyConfig, formatMoney, roundMoney } from './currency.js'
 import { DOC_KIND_META, PAPER_SIZES, templateFor } from './settings.js'
+import { itemRankings, movementSummary, purchaseSummary, rangeBounds, stockFlow } from './reports.js'
 import { orderBillable, orderCharges, plateCostFor, stockStatusFor } from './models.js'
 
 const MAX_LINES = 80
@@ -245,6 +246,13 @@ function categoryOf(shop, menuItemId) {
  * renderer formats them in the report's chosen currency.
  */
 export function buildShiftReport(shop, { range = 'tonight', now = Date.now() } = {}) {
+  // The buy side reads from the same engine the screens use, so the paper
+  // and the screen can never disagree about what was bought or moved.
+  const bounds = rangeBounds(range, now)
+  const buys = purchaseSummary(shop, bounds)
+  const stock = movementSummary(shop, bounds)
+  const flow = stockFlow(shop, bounds)
+  const ranks = itemRankings(shop, bounds, 6)
   const menuById = Object.fromEntries((shop.menu || []).map((item) => [item.id, item]))
   const invById = Object.fromEntries((shop.inventory || []).map((item) => [item.id, item]))
   const paid = (shop.orders || []).filter((order) => order.status === 'paid')
@@ -378,6 +386,38 @@ export function buildShiftReport(shop, { range = 'tonight', now = Date.now() } =
       netAfterWaste: roundMoney(sales - foodCost - waste),
     },
     sellers,
+    // Buy side: what left the bank, from whom, and what the store room did
+    // in the same window.
+    purchases: {
+      spend: buys.spend,
+      orders: buys.orders,
+      quickReceipts: buys.quickReceipts,
+      openValue: buys.openValue,
+      openOrders: buys.openOrders.slice(0, 8),
+      suppliers: buys.bySupplier.slice(0, 8),
+      items: buys.byItem.slice(0, 8),
+    },
+    stock: {
+      inValue: stock.inValue,
+      outValue: stock.outValue,
+      netValue: stock.netValue,
+      openingValue: stock.openingValue,
+      inUnits: stock.inUnits,
+      outUnits: stock.outUnits,
+      byKind: stock.byKind,
+      flow: flow.slice(0, 10).map((row) => ({
+        name: row.name, unit: row.unit, opening: row.opening, inQty: row.inQty,
+        outQty: row.outQty, onHand: row.onHand, bookValue: row.bookValue,
+      })),
+    },
+    topLow: {
+      sellByRevenue: ranks.sell.byRevenue,
+      sellByMargin: ranks.sell.byMargin,
+      sellWorst: ranks.sell.worst,
+      unsoldCount: ranks.sell.unsoldCount,
+      buyBySpend: ranks.buy.bySpend,
+      buyByQty: ranks.buy.byQty,
+    },
     inventoryValue: roundMoney((shop.inventory || []).reduce((sum, item) => sum + Math.max(0, Number(item.onHand) || 0) * (Number(item.lastCost) || 0), 0)),
   }
 }
@@ -785,6 +825,52 @@ function renderReportBody(doc, template, options) {
       <tr><td>Comps + voids</td><td class="num">−${fmt(pnl.comps + pnl.voids)}</td></tr>
       <tr class="grand"><td>Net after waste</td><td class="num">${fmt(pnl.netAfterWaste)}</td></tr>
     </table></section>`)
+  }
+  if (template.showPurchases !== false && report.purchases && (report.purchases.spend || report.purchases.openOrders.length)) {
+    const buy = report.purchases
+    sections.push(`<section class="report-section"><h2>Buying · ${fmt(buy.spend)}</h2>
+      <table>
+        <tr><td>Receipts booked</td><td class="num">${buy.orders} · ${fmt(buy.spend)}</td></tr>
+        <tr><td>Quick receipts at the door</td><td class="num">${buy.quickReceipts}</td></tr>
+        <tr><td>Still on order</td><td class="num">${buy.openOrders.length} · ${fmt(buy.openValue)}</td></tr>
+      </table>
+      ${buy.suppliers.length ? `<table><thead><tr><th>Supplier</th><th class="num">Orders</th><th class="num">Spend</th></tr></thead><tbody>
+        ${buy.suppliers.map((row) => `<tr><td>${escapeHtml(row.name)}</td><td class="num">${row.orders}</td><td class="num">${fmt(row.value)}</td></tr>`).join('')}
+      </tbody></table>` : ''}
+      ${buy.items.length ? `<table><thead><tr><th>Bought</th><th class="num">Qty</th><th class="num">Cost</th></tr></thead><tbody>
+        ${buy.items.map((row) => `<tr><td>${escapeHtml(row.name)}</td><td class="num">${row.qty}</td><td class="num">${fmt(row.value)}</td></tr>`).join('')}
+      </tbody></table>` : ''}
+      <div class="muted">Newest receipt ${buy.orders ? 'booked' : 'none'} · ${buy.openOrders.length} order(s) awaiting delivery.</div>
+    </section>`)
+  }
+  if (template.showStockFlow !== false && report.stock) {
+    const stock = report.stock
+    sections.push(`<section class="report-section"><h2>Stock in / out · net ${fmt(stock.netValue)}</h2>
+      <table>
+        <tr><td>Stock in</td><td class="num">${fmt(stock.inValue)} <span class="muted">(${stock.inUnits} units)</span></td></tr>
+        <tr><td>Stock out</td><td class="num">−${fmt(stock.outValue)} <span class="muted">(${stock.outUnits} units)</span></td></tr>
+        <tr><td>Opening baseline (excluded)</td><td class="num">${fmt(stock.openingValue)}</td></tr>
+      </table>
+      ${stock.byKind.length ? `<table><thead><tr><th>Reason</th><th>Direction</th><th class="num">Movements</th><th class="num">Value</th></tr></thead><tbody>
+        ${stock.byKind.map((row) => `<tr><td>${escapeHtml(row.kind)}${row.baseline ? ' <span class="muted">(baseline)</span>' : ''}</td><td>${row.baseline ? 'baseline' : row.kind === 'buy' || row.kind === 'return' || row.kind === 'opening' ? 'in' : 'out'}</td><td class="num">${row.count}</td><td class="num">${fmt(row.value)}</td></tr>`).join('')}
+      </tbody></table>` : ''}
+      ${stock.flow.length ? `<table><thead><tr><th>Item</th><th class="num">Opening</th><th class="num">In</th><th class="num">Out</th><th class="num">On hand</th></tr></thead><tbody>
+        ${stock.flow.map((row) => `<tr><td>${escapeHtml(row.name)}</td><td class="num">${row.opening}</td><td class="num">${row.inQty}</td><td class="num">${row.outQty}</td><td class="num">${row.onHand} ${escapeHtml(row.unit || '')}</td></tr>`).join('')}
+      </tbody></table>` : '<div class="muted">No stock moved in this window.</div>'}
+    </section>`)
+  }
+  if (template.showTopLow !== false && report.topLow) {
+    const top = report.topLow
+    const rowsFor = (title, rows, valueOf) => (rows?.length ? `<table><thead><tr><th>${escapeHtml(title)}</th><th class="num">Qty</th><th class="num">Value</th></tr></thead><tbody>
+      ${rows.map((row) => `<tr><td>${escapeHtml(row.name)}</td><td class="num">${row.qty}</td><td class="num">${fmt(valueOf(row))}</td></tr>`).join('')}
+    </tbody></table>` : '')
+    sections.push(`<section class="report-section"><h2>Top &amp; bottom</h2>
+      ${rowsFor('Best sellers · revenue', top.sellByRevenue, (row) => row.revenue)}
+      ${rowsFor('Best movers · units', top.sellByMargin, (row) => row.margin)}
+      ${rowsFor('Weakest sellers', top.sellWorst, (row) => row.margin)}
+      ${rowsFor('Biggest buys', top.buyBySpend, (row) => row.value)}
+      <div class="muted">${top.unsoldCount} menu item(s) sold nothing in this window.</div>
+    </section>`)
   }
   if (template.showNotes && options.notes) {
     sections.push(`<section class="report-section"><h2>Notes</h2><div>${escapeHtml(options.notes)}</div></section>`)

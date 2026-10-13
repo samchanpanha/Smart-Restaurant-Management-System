@@ -689,6 +689,9 @@ function DocumentsSection({ draft, patch, state, locId, issueDocument }) {
                     ['showVariance', 'Stock variance'],
                     ['showTopSellers', 'Top sellers'],
                     ['showPnl', 'P&L-lite'],
+                    ['showPurchases', 'Purchases & suppliers'],
+                    ['showStockFlow', 'Stock in / out'],
+                    ['showTopLow', 'Top & bottom on both sides'],
                   ].map(([key, label]) => (
                     <Toggle key={key} label={label} checked={template[key]} onChange={(value) => updateTemplate(key, value)} />
                   ))}

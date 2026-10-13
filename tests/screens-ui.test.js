@@ -152,7 +152,53 @@ test('the movements screen reconciles opening + in − out', async () => {
   assert.ok(panel().textContent.includes('On hand'), 'by-item table shows on hand')
 })
 
+test('the report tabs read the ledger: sell/buy, P&L, top & bottom', async () => {
+  clickNav('Reports')
+  await settle()
+  const reportTab = (label) => $$('[aria-label="Reports"] [role="tab"]').find((tab) => (tab.textContent || '').includes(label))
+  const rangeTab = (label) => $$('[aria-label="Date range"] [role="tab"]').find((tab) => (tab.textContent || '').includes(label))
+
+  // The seeded receipts landed two days ago, so the buying side is empty
+  // tonight and populated on the 7-day range — prove the range is real.
+  act(() => { rangeTab('7 days').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+  act(() => { reportTab('Sell & buy in/out').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+  let copy = text()
+  assert.ok(copy.includes('Stock in / out'), 'in/out card')
+  assert.ok(copy.includes('Spend by supplier'), 'buy side by supplier')
+  assert.ok(copy.includes('Opening baseline'), 'the baseline leg is labelled')
+
+  act(() => { reportTab('Profit & loss').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+  copy = text()
+  assert.ok(copy.includes('Cost of goods sold'), 'COGS line')
+  assert.ok(copy.includes('Gross profit') && copy.includes('Operating result'), 'the ladder')
+  assert.ok(copy.includes('Cash movement'), 'cash in/out')
+  assert.ok(copy.includes('food cost'), 'food cost against the cap')
+
+  act(() => { reportTab('Top & bottom').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+  copy = text()
+  assert.ok(copy.includes('Top sellers · revenue'), 'selling side rankings')
+  const buySide = $$('button').find((entry) => entry.textContent.trim() === 'Buying side')
+  act(() => { buySide.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+  assert.ok(text().includes('Biggest buys · spend'), 'buying side rankings')
+
+  // Back to tonight: no receipts in this window, so the buy cards say so
+  // instead of inventing spend.
+  act(() => { rangeTab('Tonight').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+  act(() => { reportTab('Sell & buy in/out').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+  assert.ok(text().includes('Nothing was received in this window'), 'tonight has no receipts')
+  assert.ok(text().includes('Stock in / out'), 'the ledger legs still render')
+})
+
 test('the movements screen can open the count sheet', async () => {
+  clickNav('Stock movements')
+  await settle(60)
   const count = $$('button').find((entry) => entry.textContent.trim() === 'Count stock')
   assert.ok(count, 'count stock action exists')
   act(() => { count.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
