@@ -33,6 +33,8 @@ dom.window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEv
 globalThis.matchMedia = dom.window.matchMedia
 globalThis.fetch = async () => { throw new Error('offline') }
 globalThis.EventSource = class { constructor() { this.readyState = 0 } addEventListener() {} close() {} }
+dom.window.print = () => {}
+dom.window.open = () => null
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const React = (await import('react')).default
@@ -230,4 +232,95 @@ test('the movements screen can open the count sheet', async () => {
   const cancel = $$('button').find((entry) => entry.textContent.trim() === 'Cancel')
   act(() => { cancel.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
   await settle()
+})
+
+// ─── Tickets & floor interactions ───────────────────────────────────
+
+// React tracks the input's value itself; assigning `.value` directly is
+// invisible to it. Go through the native setter so onChange fires.
+function setValue(input, value) {
+  const setter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set
+  setter.call(input, value)
+  act(() => { input.dispatchEvent(new dom.window.Event('input', { bubbles: true })) })
+}
+
+test('filing a receipt from a paid ticket prints it and stamps a number', async () => {
+  await freshApp()
+  clickNav('Tickets')
+  await settle()
+
+  const paidTab = document.querySelector('[aria-label="Paid"]')
+  assert.ok(paidTab, 'a Paid tab exists')
+  act(() => { paidTab.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+
+  const row = $$('ul button[aria-current]')[0]
+  assert.ok(row, 'a paid ticket is listed')
+  act(() => { row.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+
+  const fileBtn = $$('button').find((b) => (b.textContent || '').includes('Print & file receipt'))
+  assert.ok(fileBtn, 'the Print & file receipt button is on the paid ticket')
+  act(() => { fileBtn.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+
+  assert.ok(/sent to the printer/.test(text()), `a print confirmation flashed — saw: ${text().slice(0, 160)}`)
+  assert.ok(/filed as RCT-/.test(text()), `the receipt number is filed — saw: ${text().slice(0, 200)}`)
+  assert.ok($$('iframe').length >= 1, 'the print iframe was created')
+})
+
+test('a takeout order starts without a table and shows its customer', async () => {
+  await freshApp()
+  clickNav('Tickets')
+  await settle()
+
+  const newBtn = document.querySelector('[aria-label="New check"]')
+  assert.ok(newBtn, 'the New check button exists')
+  act(() => { newBtn.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+
+  const takeout = $$('button').find((b) => b.textContent.trim() === 'Takeout')
+  assert.ok(takeout, 'the Takeout order type is offered')
+  act(() => { takeout.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+
+  const nameInput = $$('input').find((i) => i.getAttribute('aria-label') === 'Customer name')
+  assert.ok(nameInput, 'the customer name field appears for takeout')
+  setValue(nameInput, 'Nita Sok')
+  await settle()
+
+  const startBtn = document.querySelector('[aria-label="Start check"]')
+  assert.ok(startBtn, 'the start-check button exists')
+  act(() => { startBtn.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+
+  assert.ok(text().includes('Takeout · Nita Sok'), `the ticket names the takeout customer — saw: ${text().slice(0, 240)}`)
+})
+
+test('the floor manage mode adds a table', async () => {
+  await freshApp()
+  clickNav('Floor')
+  await settle()
+
+  const manage = document.querySelector('[aria-label="Manage tables"]')
+  assert.ok(manage, 'the Manage tables control exists')
+  act(() => { manage.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+
+  const addBtn = document.querySelector('[aria-label="Add table"]')
+  assert.ok(addBtn, 'the add-table control appears in manage mode')
+  act(() => { addBtn.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+
+  const nameInput = document.querySelector('[aria-label="Table name"]')
+  assert.ok(nameInput, 'the table editor opened')
+  setValue(nameInput, 'Table 99')
+  await settle()
+
+  const saveBtn = document.querySelector('[aria-label="Save table"]')
+  assert.ok(saveBtn, 'the Add table submit exists')
+  act(() => { saveBtn.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+
+  assert.ok(text().includes('Table 99'), 'the new table is listed on the floor')
 })

@@ -12,8 +12,6 @@ import { translateTableName, translateTableStatus, translateZone, useI18n } from
 import { formatClock, isSeatBlocked, minutesBetween, needsOverSeatConfirm } from '../lib/models'
 import { quoteWait, useNow, useRestora } from '../lib/store'
 
-const ZONES = ['Bar', 'Main', 'Patio']
-
 // ─── Seat dialog ────────────────────────────────────────────────
 // Seats walk-ins, reservations, or waitlist parties. Over-capacity
 // requires explicit confirm; dirty/occupied tables are unpickable.
@@ -304,11 +302,11 @@ function TableDetail({ table, onClose, onSeat, onError }) {
         )}
 
         {table.status === 'billed' && (
-          <button
-            type="button"
-            className={btnPrimary}
-            onClick={() => { dispatch({ type: 'BUS_TABLE', tableId: table.id }); onClose() }}
-          >
+        <button
+          type="button"
+          className={btnPrimary}
+          onClick={() => { dispatch({ type: 'BUS_TABLE', tableId: table.id }); onClose() }}
+        >
             Bus table → dirty
           </button>
         )}
@@ -645,6 +643,79 @@ function WaitlistPanel({ onSeatWl, onError }) {
   )
 }
 
+// ─── Table editor (add / edit) ──────────────────────────────────
+// Tables are configuration: name, seats, and zone. Status still moves
+// through the status machine — never through this form.
+
+function TableEditorModal({ table = null, zones, onClose }) {
+  const { dispatch } = useRestora()
+  const { lang } = useI18n()
+  const editing = Boolean(table)
+  const [name, setName] = useState(table?.name || '')
+  const [seats, setSeats] = useState(table?.seats || 2)
+  const [zone, setZone] = useState(table?.zone || zones[0] || 'Main')
+  const [error, setError] = useState('')
+
+  function save() {
+    if (!name.trim()) {
+      setError(lang === 'km' ? 'សូមដាក់ឈ្មោះតុ។' : 'Give the table a name.')
+      return
+    }
+    if (editing) dispatch({ type: 'UPDATE_TABLE', tableId: table.id, patch: { name, seats, zone } })
+    else dispatch({ type: 'ADD_TABLE', table: { name, seats, zone } })
+    onClose()
+  }
+
+  return (
+    <Modal
+      title={editing ? `Edit ${table.name}` : (lang === 'km' ? 'បន្ថែមតុ' : 'Add table')}
+      sub={editing ? 'Rename, reseat, or move it to another zone.' : 'Create a new table on the floor.'}
+      onClose={onClose}
+    >
+      <div className="mt-3 space-y-4">
+        <Field label="Name">
+          <input
+            value={name}
+            onChange={(e) => { setName(e.target.value); setError('') }}
+            placeholder="Table 17"
+            className={inputCls}
+            maxLength={40}
+            aria-label="Table name"
+            autoFocus
+          />
+        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Seats">
+            <Stepper value={seats} onChange={setSeats} min={1} max={24} />
+          </Field>
+          <Field label="Zone">
+            <input
+              value={zone}
+              onChange={(e) => setZone(e.target.value)}
+              placeholder="Main"
+              className={inputCls}
+              maxLength={32}
+            />
+          </Field>
+        </div>
+        {error && (
+          <div className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-300 ring-1 ring-inset ring-red-500/30" role="alert">
+            {error}
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={save}
+          aria-label="Save table"
+          className="min-h-[44px] w-full rounded-lg bg-amber-500 py-2.5 text-sm font-bold text-black hover:bg-amber-400"
+        >
+          {editing ? 'Save table' : 'Add table'}
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
 function FloorMap({ tables, onOpen }) {
   const { lang, dict } = useI18n()
   const f = dict.floor || {}
@@ -714,13 +785,16 @@ function FloorMap({ tables, onOpen }) {
 // ─── Screen ─────────────────────────────────────────────────────
 
 export default function FloorScreen() {
-  const { state, selectedTableId, setSelectedTableId, tabCtx, setTabCtx } = useRestora()
+  const { state, dispatch, selectedTableId, setSelectedTableId, tabCtx, setTabCtx } = useRestora()
   const { lang, dict } = useI18n()
   const f = dict.floor || {}
   const [detailTableId, setDetailTableId] = useState(tabCtx.floorTable || null)
   const [seatCtx, setSeatCtx] = useState(null) // { tableId, party, name, reservationId, waitlistId }
   const [banner, setBanner] = useState(null)
   const [view, setView] = useState('map')
+  const [managing, setManaging] = useState(false)
+  const [editor, setEditor] = useState(null) // { table } to edit, {} to add
+
 
   function flash(msg) {
     setBanner(msg)
@@ -731,10 +805,28 @@ export default function FloorScreen() {
   const occupied = state.tables.filter((t) => ['seated', 'ordered', 'billed'].includes(t.status)).length
   const freeCount = state.tables.filter((t) => t.status === 'free').length
   const dirtyCount = state.tables.filter((t) => t.status === 'dirty').length
+  const zones = [...new Set(state.tables.map((t) => t.zone))]
+
+  function removeTable(table) {
+    const hasOpenCheck = state.orders.some(
+      (o) => o.tableId === table.id && !['paid', 'void'].includes(o.status),
+    )
+    if (hasOpenCheck || ['seated', 'ordered', 'billed'].includes(table.status)) {
+      flash(`${table.name} still has an open check or party — clear it before deleting.`)
+      return
+    }
+    if (typeof window !== 'undefined' && !window.confirm(`Delete ${table.name}?`)) return
+    dispatch({ type: 'DELETE_TABLE', tableId: table.id })
+  }
+
   const activeDetailId = detailTableId || selectedTableId
   const detailTable = activeDetailId ? state.tables.find((t) => t.id === activeDetailId) : null
 
   function openTable(table) {
+    if (managing) {
+      setEditor({ table })
+      return
+    }
     if (table.status === 'free') {
       // Fast path: tap a free table to seat immediately
       setSeatCtx({ tableId: table.id, party: Math.min(table.seats, 4), name: '' })
@@ -770,6 +862,15 @@ export default function FloorScreen() {
               {lang === 'km' ? 'បញ្ជី' : lang === 'zh' ? '列表' : 'List'}
             </button>
           </div>
+          <button
+            type="button"
+            onClick={() => setManaging((v) => { const next = !v; if (next) setView('list'); return next })}
+            aria-pressed={managing}
+            aria-label="Manage tables"
+            className={`min-h-10 rounded-xl border px-4 text-sm font-semibold shadow-sm transition-colors ${managing ? 'border-orange-500 bg-orange-500 text-white hover:bg-orange-600' : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50'}`}
+          >
+            {managing ? (lang === 'km' ? 'រួចរាល់' : 'Done') : (lang === 'km' ? 'គ្រប់គ្រងតុ' : 'Manage tables')}
+          </button>
         </div>
       </header>
 
@@ -792,10 +893,49 @@ export default function FloorScreen() {
         <div className="space-y-4 xl:col-span-8">
           {view === 'map' ? <FloorMap tables={state.tables} onOpen={openTable} /> : (
             <div className="space-y-4">
-              {ZONES.map((zone) => {
+              {managing && (
+                <button
+                  type="button"
+                  onClick={() => setEditor({})}
+                  className="w-full rounded-2xl border-2 border-dashed border-orange-300 bg-orange-50/60 px-4 py-3 text-sm font-bold text-orange-600 hover:bg-orange-50"
+                  aria-label="Add table"
+                >
+                  + {lang === 'km' ? 'បន្ថែមតុ' : 'Add table'}
+                </button>
+              )}
+              {zones.map((zone) => {
                 const tables = state.tables.filter((table) => table.zone === zone)
-                return <section key={zone} className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm"><h2 className="mb-3 text-xs font-bold uppercase tracking-widest text-zinc-500">{translateZone(zone, lang)} · {tables.length}</h2><div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">{tables.map((table) => <TableCard key={table.id} table={table} onOpen={openTable} />)}</div></section>
+                return (
+                  <section key={zone} className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+                    <h2 className="mb-3 text-xs font-bold uppercase tracking-widest text-zinc-500">{translateZone(zone, lang)} · {tables.length}</h2>
+                    {managing ? (
+                      <ul className="space-y-2">
+                        {tables.map((table) => (
+                          <li key={table.id} className="flex items-center justify-between gap-2 rounded-xl bg-[var(--color-ink-800)] p-3 ring-1 ring-inset ring-[var(--color-ink-600)]">
+                            <div>
+                              <div className="text-sm font-semibold text-zinc-100">{table.name}</div>
+                              <div className="text-[11px] text-zinc-500">{table.seats} seats · {TABLE_STATUS_META[table.status].label}</div>
+                            </div>
+                            <div className="flex gap-2">
+                              <button type="button" onClick={() => setEditor({ table })} className="min-h-[36px] rounded-lg border border-[var(--color-ink-600)] px-3 text-xs font-semibold text-zinc-200 hover:bg-white/5">
+                                {lang === 'km' ? 'កែ' : 'Edit'}
+                              </button>
+                              <button type="button" onClick={() => removeTable(table)} className="min-h-[36px] rounded-lg border border-red-500/40 px-3 text-xs font-semibold text-red-300 hover:bg-red-500/10">
+                                {lang === 'km' ? 'លុប' : 'Delete'}
+                              </button>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">{tables.map((table) => <TableCard key={table.id} table={table} onOpen={openTable} />)}</div>
+                    )}
+                  </section>
+                )
               })}
+              {managing && zones.length === 0 && (
+                <p className="text-sm text-zinc-500">{lang === 'km' ? 'មិនមានតុនៅឡើយទេ។ បន្ថែមតុដំបូងរបស់អ្នក។' : 'No tables yet. Add your first one.'}</p>
+              )}
             </div>
           )}
         </div>
@@ -830,6 +970,9 @@ export default function FloorScreen() {
           onClose={() => setSeatCtx(null)}
           onError={flash}
         />
+      )}
+      {editor && (
+        <TableEditorModal table={editor.table || null} zones={zones} onClose={() => setEditor(null)} />
       )}
     </div>
   )

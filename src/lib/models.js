@@ -279,7 +279,8 @@ export function orderCharges(order, menuById, settings = {}, options = {}) {
   const tax = settings.pricesIncludeTax
     ? roundMoney(taxBase * (taxPct / (1 + (taxPct || 1))))
     : roundMoney(taxBase * taxPct)
-  const { total, adjustment } = applyRounding(roundMoney(netSubtotal + service + tax), settings.rounding || 'none')
+  const delivery = roundMoney(Number(order?.deliveryFee) || 0)
+  const { total, adjustment } = applyRounding(roundMoney(netSubtotal + service + tax + delivery), settings.rounding || 'none')
   const tip = roundMoney(Number(options.tip ?? order?.tip ?? 0) || 0)
   const compTotal = roundMoney((order?.items || [])
     .filter((item) => item.comped && !item.voided)
@@ -299,6 +300,7 @@ export function orderCharges(order, menuById, settings = {}, options = {}) {
     discount,
     service,
     servicePct,
+    delivery,
     tax,
     taxPct,
     taxLabel: settings.taxLabel || 'Tax',
@@ -322,6 +324,7 @@ export function orderTotals(order, menuById, taxPct = 0) {
     lines: charges.lines,
     subtotal: charges.subtotal,
     compTotal: charges.compTotal,
+    delivery: charges.delivery,
     tax: charges.tax,
     total: charges.total,
   }

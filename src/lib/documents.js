@@ -18,6 +18,17 @@ function clampText(value, max) {
   return String(value ?? '').trim().slice(0, max)
 }
 
+const OFF_TABLE_LABEL = { takeout: 'Takeout', delivery: 'Delivery' }
+
+/** Who the order is for: table party, named customer, or walk-in. */
+function customerLabel(order, table) {
+  if (table) return `${table.name} · party of ${table.partySize || '—'}`
+  const name = order?.customer?.name
+  const type = OFF_TABLE_LABEL[order?.type] || 'Walk-in'
+  return name ? `${type} · ${name}` : `${type} guest`
+}
+
+
 function money(amount, currency) {
   return formatMoney(amount, currency)
 }
@@ -76,6 +87,7 @@ function convertTotals(totals, currency) {
     subtotal: convert(totals.subtotal),
     discount: convert(totals.discount),
     service: convert(totals.service),
+    delivery: convert(totals.delivery),
     tax: convert(totals.tax),
     rounding: convert(totals.rounding),
     total: convert(totals.total),
@@ -106,9 +118,12 @@ export function buildInvoiceDocument({ shop, order, settings, paymentTermsDays =
     currency,
     seller: sellerBlock(settings),
     customer: {
-      label: order?.guestName || (table ? `${table.name} · party of ${table.partySize || '—'}` : 'Walk-in guest'),
+      label: customerLabel(order, table),
       lines: [
-        table ? `Table ${String(table.name).replace('Table ', '')} · ${table.zone}` : 'Counter order',
+        table ? `Table ${String(table.name).replace('Table ', '')} · ${table.zone}` : OFF_TABLE_LABEL[order?.type] || 'Counter order',
+        order?.customer?.phone ? `Phone: ${order.customer.phone}` : '',
+        order?.customer?.address ? `Deliver to: ${order.customer.address}` : '',
+        order?.eta ? `ETA: ${new Date(order.eta).toLocaleString()}` : '',
         order?.serverId ? `Server: ${order.serverId}` : '',
         table?.partySize ? `Guests: ${table.partySize}` : '',
       ].filter(Boolean),
@@ -135,10 +150,11 @@ export function buildReceiptDocument({ shop, order, settings } = {}) {
   const currency = documentCurrency(settings, template)
   const menuById = Object.fromEntries((shop.menu || []).map((item) => [item.id, item]))
   const table = (shop.tables || []).find((entry) => entry.id === order?.tableId)
+  const computed = convertTotals(computeOrderTotals(order, menuById, settings), currency)
   const payments = (order?.payments || []).length
     ? order.payments
     : order?.status === 'paid'
-      ? [{ method: order.payMethod || 'card', amount: roundMoney(Number(order.total) || 0 + (Number(order.tip) || 0)) }]
+      ? [{ method: order.payMethod || 'card', amount: computed.grandTotal }]
       : []
   const totals = convertTotals(computeOrderTotals(order, menuById, settings, { payments }), currency)
 
@@ -150,8 +166,11 @@ export function buildReceiptDocument({ shop, order, settings } = {}) {
     currency,
     seller: sellerBlock(settings),
     customer: {
-      label: table ? `${table.name} · party of ${table.partySize || '—'}` : 'Walk-in guest',
+      label: customerLabel(order, table),
       lines: [
+        order?.customer?.phone ? `Phone: ${order.customer.phone}` : '',
+        order?.customer?.address ? `Deliver to: ${order.customer.address}` : '',
+        order?.eta ? `ETA: ${new Date(order.eta).toLocaleString()}` : '',
         order?.serverId ? `Server: ${order.serverId}` : '',
         order?.paidAt ? `Paid ${new Date(order.paidAt).toLocaleString()}` : '',
       ].filter(Boolean),
@@ -213,9 +232,12 @@ export function buildTicketDocument({ shop, order, settings, station = null } = 
     currency,
     seller: sellerBlock(settings),
     customer: {
-      label: table ? table.name : 'Takeout',
+      label: table ? table.name : customerLabel(order, table),
       lines: [
         table?.zone ? `Zone: ${table.zone}` : '',
+        !table && OFF_TABLE_LABEL[order?.type] ? OFF_TABLE_LABEL[order.type] : '',
+        !table && order?.customer?.phone ? `Phone: ${order.customer.phone}` : '',
+        !table && order?.customer?.address ? `Deliver to: ${order.customer.address}` : '',
         order?.serverId ? `Server: ${order.serverId}` : '',
         order?.covers || table?.partySize ? `Guests: ${order?.covers || table?.partySize}` : '',
       ].filter(Boolean),
@@ -572,6 +594,9 @@ function totalsRows(doc, template) {
   }
   if (t.shipping) {
     rows.push(`<tr><td>Delivery</td><td class="num">${escapeHtml(money(t.shipping, doc.currency))}</td></tr>`)
+  }
+  if (t.delivery) {
+    rows.push(`<tr><td>Delivery</td><td class="num">${escapeHtml(money(t.delivery, doc.currency))}</td></tr>`)
   }
   if (t.rounding) {
     rows.push(`<tr><td>Rounding</td><td class="num">${escapeHtml(money(t.rounding, doc.currency))}</td></tr>`)

@@ -21,7 +21,7 @@ import {
   ticketAgeState,
   uid,
 } from './models.js'
-import { currencyMeta } from './currency.js'
+import { currencyMeta, roundMoney } from './currency.js'
 import {
   DOC_KINDS,
   categoryById,
@@ -532,6 +532,53 @@ function decrementInventory(inventory, decMap, sign = -1) {
   return next
 }
 
+// ── Table CRUD helpers ─────────────────────────────────────
+// Tables are editable config: name, seats, zone, and target turn. Status
+// moves through the status machine, never through editing.
+
+function targetTurnMinutesFor(seats) {
+  return seats <= 2 ? 35 : seats <= 4 ? 45 : 60
+}
+
+function sanitizeTableFields(raw, existing = {}) {
+  const name = String(raw?.name ?? existing.name ?? '').trim().slice(0, 40)
+  const seatsRaw = Math.round(Number(raw?.seats ?? existing.seats))
+  const seats = Number.isFinite(seatsRaw) ? Math.max(1, Math.min(24, seatsRaw)) : 2
+  const zone = String(raw?.zone ?? existing.zone ?? '').trim().slice(0, 32)
+  const targetRaw = Math.round(Number(raw?.targetTurnMinutes ?? existing.targetTurnMinutes))
+  const targetTurnMinutes = Number.isFinite(targetRaw)
+    ? Math.max(10, Math.min(300, targetRaw))
+    : targetTurnMinutesFor(seats)
+  return {
+    name: name || existing.name || 'Table',
+    seats,
+    zone: zone || existing.zone || 'Main',
+    targetTurnMinutes,
+  }
+}
+
+/** Keep table names unique so two tables never print the same label. */
+function uniqueTableName(tables, name, exceptId = null) {
+  const base = String(name || 'Table').trim() || 'Table'
+  const taken = new Set(tables.filter((t) => t.id !== exceptId).map((t) => String(t.name).toLowerCase()))
+  if (!taken.has(base.toLowerCase())) return base
+  let n = 2
+  while (taken.has(`${base} ${n}`.toLowerCase())) n += 1
+  return `${base} ${n}`
+}
+
+/** Off-table orders carry a customer block; inline orders do not. */
+function sanitizeCustomer(raw) {
+  if (!raw || typeof raw !== 'object') return null
+  const name = String(raw.name || '').trim().slice(0, 60)
+  const phone = String(raw.phone || '').trim().slice(0, 30)
+  const address = String(raw.address || '').trim().slice(0, 160)
+  if (!name && !phone && !address) return null
+  return { name, phone, address }
+}
+
+const OFF_TABLE_TYPES = ['takeout', 'delivery']
+
 function shopReducerBase(state, action) {
   switch (action.type) {
     // ── Floor ──────────────────────────────────────────────
@@ -580,18 +627,64 @@ function shopReducerBase(state, action) {
       return shopReducerBase(state, { type: 'SET_TABLE_STATUS', tableId, to: 'dirty' })
     }
 
-    // ── Orders / tickets ───────────────────────────────────
-    case 'CREATE_ORDER': {
-      const { tableId, orderType = 'dine_in' } = action
-      const existing = state.orders.find(
+    case 'ADD_TABLE': {
+      const fields = sanitizeTableFields(action.table || {})
+      const table = {
+        id: action.id || uid('t'),
+        ...fields,
+        name: uniqueTableName(state.tables, fields.name),
+        status: 'free',
+        currentCheckId: null,
+        seatedAt: null,
+        partySize: null,
+      }
+      return { ...state, tables: [...state.tables, table] }
+    }
+
+    case 'UPDATE_TABLE': {
+      const { tableId } = action
+      const table = state.tables.find((t) => t.id === tableId)
+      if (!table) return state
+      const fields = sanitizeTableFields(action.patch || {}, table)
+      fields.name = uniqueTableName(state.tables, fields.name, tableId)
+      const tables = state.tables.map((t) => (t.id === tableId ? { ...t, ...fields } : t))
+      return { ...state, tables }
+    }
+
+    case 'DELETE_TABLE': {
+      const { tableId } = action
+      const table = state.tables.find((t) => t.id === tableId)
+      if (!table) return state
+      // Never delete a table that still has an open check or occupied party.
+      const openCheck = state.orders.some(
         (o) => o.tableId === tableId && !['paid', 'void'].includes(o.status),
       )
-      if (existing) return state
+      if (openCheck || ['seated', 'ordered', 'billed'].includes(table.status)) return state
+      const tables = state.tables.filter((t) => t.id !== tableId)
+      // Orphaned reservations fall back to unassigned rather than dangling.
+      const reservations = state.reservations.map((r) =>
+        r.tableId === tableId ? { ...r, tableId: null } : r,
+      )
+      return { ...state, tables, reservations }
+    }
+
+    // ── Orders / tickets ───────────────────────────────────
+    case 'CREATE_ORDER': {
+      const { orderType = 'dine_in', customer = null, deliveryFee = 0, eta = null } = action
+      const offTable = OFF_TABLE_TYPES.includes(orderType)
+      const tableId = offTable ? null : action.tableId
+      // Dine-in: one open check per table. Takeout/delivery: many can coexist.
+      if (!offTable) {
+        const existing = state.orders.find(
+          (o) => o.tableId === tableId && !['paid', 'void'].includes(o.status),
+        )
+        if (existing) return state
+      }
       const order = {
         id: action.id || uid('o'),
         tableId,
         type: orderType,
-        serverId: 'server',
+        serverId: action.serverId || 'server',
         status: 'open',
         createdAt: new Date().toISOString(),
         sentAt: null,
@@ -599,11 +692,37 @@ function shopReducerBase(state, action) {
         voidReason: null,
         compTotal: 0,
         items: [],
+        ...(offTable
+          ? {
+            customer: sanitizeCustomer(customer),
+            ...(orderType === 'delivery'
+              ? { deliveryFee: Math.max(0, roundMoney(Number(deliveryFee) || 0)) }
+              : {}),
+            eta: eta || null,
+          }
+          : {}),
       }
-      const tables = state.tables.map((t) =>
-        t.id === tableId && t.currentCheckId == null ? { ...t, currentCheckId: order.id } : t,
-      )
+      const tables = offTable
+        ? state.tables
+        : state.tables.map((t) =>
+          t.id === tableId && t.currentCheckId == null ? { ...t, currentCheckId: order.id } : t,
+        )
       return { ...state, orders: [...state.orders, order], tables }
+    }
+
+    case 'SET_ORDER_DETAILS': {
+      // Edit the customer/fulfilment block on a takeout or delivery order.
+      const { orderId, customer, deliveryFee, eta } = action
+      const order = state.orders.find((o) => o.id === orderId)
+      if (!order || !OFF_TABLE_TYPES.includes(order.type)) return state
+      const orders = state.orders.map((o) => {
+        if (o.id !== orderId) return o
+        const next = { ...o, customer: sanitizeCustomer(customer) }
+        if (o.type === 'delivery') next.deliveryFee = Math.max(0, roundMoney(Number(deliveryFee) || 0))
+        if (eta !== undefined) next.eta = eta || null
+        return next
+      })
+      return { ...state, orders }
     }
 
     case 'ADD_ITEM': {
@@ -924,7 +1043,7 @@ function shopReducerBase(state, action) {
       const order = state.orders.find((o) => o.id === orderId)
       if (!order || !['ready', 'served', 'in_prep', 'sent'].includes(order.status)) return state
       const menuById = Object.fromEntries(state.menu.map((m) => [m.id, m]))
-      const total = orderSubtotal(order, menuById)
+      const total = roundMoney(orderSubtotal(order, menuById) + (Number(order.deliveryFee) || 0))
       const orders = state.orders.map((o) =>
         o.id === orderId
           ? { ...o, status: 'paid', paidAt: new Date().toISOString(), payMethod: method, split, tip: Number(tip) || 0, total, billRequested: null }

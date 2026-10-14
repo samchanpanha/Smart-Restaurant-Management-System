@@ -21,7 +21,7 @@ import {
   translateTicketStatus,
   useI18n,
 } from '../lib/i18n'
-import { formatClock, minutesBetween, money, orderTotals } from '../lib/models'
+import { formatClock, minutesBetween, money, orderTotals, uid } from '../lib/models'
 import { documentNumber, sanitizeSettings } from '../lib/settings'
 import { useNow, useRestora } from '../lib/store'
 
@@ -39,6 +39,20 @@ const TABS = [
 ]
 
 const serverName = (id) => (id === 'server' ? 'Jordan' : id)
+
+const ORDER_TYPES = [
+  { id: 'dine_in', label: 'Dine-in' },
+  { id: 'takeout', label: 'Takeout' },
+  { id: 'delivery', label: 'Delivery' },
+]
+const ORDER_TYPE_LABEL = { takeout: 'Takeout', delivery: 'Delivery' }
+
+/** A ticket's display name: table party, or an off-table customer label. */
+function orderLabel(order, table) {
+  if (table) return table.name
+  const base = ORDER_TYPE_LABEL[order.type] || (order.type === 'dine_in' ? 'Dine-in' : order.type)
+  return order.customer?.name ? `${base} · ${order.customer.name}` : base
+}
 
 function openOrderForTable(orders, tableId) {
   return orders.find((o) => o.tableId === tableId && !['paid', 'void'].includes(o.status))
@@ -114,6 +128,7 @@ function TicketList({ tab, setTab, tableFilter, setTableFilter, serverFilter, se
             key={t.id}
             role="tab"
             aria-selected={tab === t.id}
+            aria-label={t.label}
             type="button"
             onClick={() => setTab(t.id)}
             className={`min-h-[44px] flex-1 rounded-lg px-2 text-sm font-semibold transition-colors ${
@@ -140,7 +155,7 @@ function TicketList({ tab, setTab, tableFilter, setTableFilter, serverFilter, se
         </select>
       </div>
 
-      <button type="button" onClick={onNew} className={btnGhost}>
+      <button type="button" onClick={onNew} className={btnGhost} aria-label="New check">
         + {tk.newOrder || 'New check'}
       </button>
 
@@ -167,7 +182,7 @@ function TicketList({ tab, setTab, tableFilter, setTableFilter, serverFilter, se
                 }`}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-bold">{translateTableName(tableById[o.tableId]?.name || o.type, lang)}</span>
+                  <span className="font-bold">{orderLabel(o, tableById[o.tableId])}</span>
                   <StatusPill tone={meta.tone} size="sm">
                     {translateTicketStatus(o.status, lang)}
                   </StatusPill>
@@ -742,6 +757,7 @@ function TicketWorkspace({ orderId, onError }) {
   useNow(15000)
   const [paying, setPaying] = useState(false)
   const [banner, setBanner] = useState(null)
+  const [detailsOpen, setDetailsOpen] = useState(false)
   const [reasonCtx, setReasonCtx] = useState(null) // { kind: 'comp'|'voidItem'|'voidOrder', item? }
 
   const order = state.orders.find((o) => o.id === orderId)
@@ -833,7 +849,7 @@ function TicketWorkspace({ orderId, onError }) {
       <div className="rounded-2xl border border-[var(--color-ink-700)] bg-[var(--color-ink-900)] p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h2 className="text-xl font-bold tracking-tight">{table?.name || order.type}</h2>
+            <h2 className="text-xl font-bold tracking-tight">{orderLabel(order, table)}</h2>
             <div className="mt-0.5 text-xs text-zinc-400">
               {serverName(order.serverId)} · opened {formatClock(order.createdAt)} · {minutesBetween(order.createdAt)}m ago
               {order.sentAt && <> · sent {formatClock(order.sentAt)}</>}
@@ -881,6 +897,25 @@ function TicketWorkspace({ orderId, onError }) {
               className="min-h-[36px] shrink-0 rounded-lg bg-emerald-500 px-3 text-xs font-bold text-black hover:bg-emerald-400"
             >
               Print &amp; file receipt
+            </button>
+          </div>
+        )}
+
+        {['takeout', 'delivery'].includes(order.type) && (
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl bg-[var(--color-ink-800)] px-3.5 py-2.5 text-xs text-zinc-300 ring-1 ring-inset ring-[var(--color-ink-600)]">
+            <span className="rounded-md bg-amber-500/15 px-2 py-0.5 font-bold uppercase tracking-wider text-amber-200">
+              {ORDER_TYPE_LABEL[order.type]}
+            </span>
+            {order.customer?.phone && <span>📞 {order.customer.phone}</span>}
+            {order.customer?.address && <span className="min-w-0 truncate">📍 {order.customer.address}</span>}
+            {order.eta && <span>🕑 {formatClock(order.eta)}</span>}
+            {order.deliveryFee > 0 && <span className="tnum">Fee {money(order.deliveryFee)}</span>}
+            <button
+              type="button"
+              onClick={() => setDetailsOpen(true)}
+              className="ml-auto min-h-[32px] shrink-0 rounded-lg border border-[var(--color-ink-600)] px-3 text-xs font-semibold text-zinc-200 hover:bg-white/5"
+            >
+              Edit details
             </button>
           </div>
         )}
@@ -967,6 +1002,8 @@ function TicketWorkspace({ orderId, onError }) {
 
       {paying && <PayModal order={order} onClose={() => setPaying(false)} />}
 
+      {detailsOpen && <OrderDetailsModal order={order} onClose={() => setDetailsOpen(false)} />}
+
       {reasonCtx?.kind === 'comp' && (
         <ReasonModal
           title={`Comp ${state.menu.find((m) => m.id === reasonCtx.item.menuItemId)?.name}`}
@@ -1016,37 +1053,174 @@ function NewCheckModal({ onClose, onCreated }) {
   const candidates = state.tables.filter(
     (t) => (t.status === 'seated' || t.status === 'ordered') && !openOrderForTable(state.orders, t.id),
   )
+  const [orderType, setOrderType] = useState('dine_in')
   const [tableId, setTableId] = useState(candidates[0]?.id || '')
+  const [name, setName] = useState('')
+  const [phone, setPhone] = useState('')
+  const [address, setAddress] = useState('')
+  const [fee, setFee] = useState('2.00')
+  const [eta, setEta] = useState('')
+  const [error, setError] = useState('')
 
-  if (!candidates.length) {
-    return (
-      <Modal title="New check" sub="No tables are waiting for a check." onClose={onClose}>
-        <p className="mt-2 text-sm text-zinc-400">Seat a party on the Floor first — checks attach to seated tables.</p>
-        <button type="button" onClick={onClose} className={`${btnGhost} mt-4`}>Back</button>
-      </Modal>
-    )
+  const offTable = orderType !== 'dine_in'
+
+  function start() {
+    const orderId = uid('o')
+    if (orderType === 'dine_in') {
+      if (!tableId) {
+        setError('Pick a seated table.')
+        return
+      }
+      dispatch({ type: 'CREATE_ORDER', id: orderId, tableId })
+    } else {
+      if (!name.trim()) {
+        setError('Add a customer name.')
+        return
+      }
+      dispatch({
+        type: 'CREATE_ORDER',
+        id: orderId,
+        orderType,
+        customer: { name, phone, address: orderType === 'delivery' ? address : '' },
+        deliveryFee: orderType === 'delivery' ? Number(fee) || 0 : 0,
+        eta: eta ? new Date(eta).toISOString() : null,
+      })
+    }
+    onCreated(orderId)
   }
 
   return (
-    <Modal title="New check" sub="Attach a ticket to a seated table." onClose={onClose}>
-      <div className="mt-3 space-y-3">
-        <Field label="Table">
-          <select value={tableId} onChange={(e) => setTableId(e.target.value)} className={inputCls}>
-            {candidates.map((t) => (
-              <option key={t.id} value={t.id}>{t.name} · party of {t.partySize} · {t.status}</option>
-            ))}
-          </select>
-        </Field>
+    <Modal
+      title="New check"
+      sub={offTable ? 'Start a takeout or delivery order — no table needed.' : 'Attach a ticket to a seated table.'}
+      onClose={onClose}
+    >
+      <div className="mt-3 space-y-4">
+        <div className="flex gap-1.5 rounded-xl bg-[var(--color-ink-800)] p-1.5 ring-1 ring-inset ring-[var(--color-ink-600)]" role="group" aria-label="Order type">
+          {ORDER_TYPES.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => { setOrderType(t.id); setError('') }}
+              aria-pressed={orderType === t.id}
+              className={`min-h-[40px] flex-1 rounded-lg text-sm font-semibold transition-colors ${orderType === t.id ? 'bg-amber-500 text-black' : 'text-zinc-300 hover:bg-white/5'}`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {orderType === 'dine_in' ? (
+          candidates.length ? (
+            <Field label="Table">
+              <select value={tableId} onChange={(e) => setTableId(e.target.value)} className={inputCls}>
+                {candidates.map((t) => (
+                  <option key={t.id} value={t.id}>{t.name} · party of {t.partySize} · {t.status}</option>
+                ))}
+              </select>
+            </Field>
+          ) : (
+            <p className="text-sm text-zinc-400">
+              No seated tables are waiting for a check. Seat a party on the Floor, or start a takeout/delivery order.
+            </p>
+          )
+        ) : (
+          <>
+            <Field label="Customer name">
+              <input value={name} onChange={(e) => { setName(e.target.value); setError('') }} placeholder="Ava Chen" className={inputCls} maxLength={60} aria-label="Customer name" autoFocus />
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Phone">
+                <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="012 345 678" className={inputCls} maxLength={30} />
+              </Field>
+              <Field label="ETA / pickup time">
+                <input type="datetime-local" value={eta} onChange={(e) => setEta(e.target.value)} className={inputCls} />
+              </Field>
+            </div>
+            {orderType === 'delivery' && (
+              <>
+                <Field label="Delivery address">
+                  <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="12 Riverside Rd" className={inputCls} maxLength={160} />
+                </Field>
+                <Field label="Delivery fee">
+                  <input type="number" min="0" step="0.01" value={fee} onChange={(e) => setFee(e.target.value)} className={inputCls} />
+                </Field>
+              </>
+            )}
+          </>
+        )}
+
+        {error && (
+          <div className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-300 ring-1 ring-inset ring-red-500/30" role="alert">
+            {error}
+          </div>
+        )}
+
         <button
           type="button"
           className={btnPrimary}
-          onClick={() => {
-            dispatch({ type: 'CREATE_ORDER', tableId })
-            onCreated(tableId)
-          }}
+          onClick={start}
+          aria-label="Start check"
+          disabled={orderType === 'dine_in' && !candidates.length}
         >
-          Start check
+          {orderType === 'dine_in' ? 'Start check' : `Start ${ORDER_TYPE_LABEL[orderType].toLowerCase()} order`}
         </button>
+      </div>
+    </Modal>
+  )
+}
+
+// ─── Off-table order details ────────────────────────────────────
+
+function OrderDetailsModal({ order, onClose }) {
+  const { dispatch } = useRestora()
+  const isDelivery = order.type === 'delivery'
+  const [name, setName] = useState(order.customer?.name || '')
+  const [phone, setPhone] = useState(order.customer?.phone || '')
+  const [address, setAddress] = useState(order.customer?.address || '')
+  const [fee, setFee] = useState(String(order.deliveryFee ?? 0))
+  const [eta, setEta] = useState(order.eta ? order.eta.slice(0, 16) : '')
+
+  function save() {
+    dispatch({
+      type: 'SET_ORDER_DETAILS',
+      orderId: order.id,
+      customer: { name, phone, address: isDelivery ? address : '' },
+      deliveryFee: isDelivery ? Number(fee) || 0 : 0,
+      eta: eta ? new Date(eta).toISOString() : null,
+    })
+    onClose()
+  }
+
+  return (
+    <Modal
+      title="Order details"
+      sub={isDelivery ? 'Delivery customer, address, and fee.' : 'Takeout customer and pickup time.'}
+      onClose={onClose}
+    >
+      <div className="mt-3 space-y-4">
+        <Field label="Customer name">
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ava Chen" className={inputCls} maxLength={60} aria-label="Order customer name" autoFocus />
+        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Phone">
+            <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="012 345 678" className={inputCls} maxLength={30} />
+          </Field>
+          <Field label="ETA / pickup time">
+            <input type="datetime-local" value={eta} onChange={(e) => setEta(e.target.value)} className={inputCls} />
+          </Field>
+        </div>
+        {isDelivery && (
+          <>
+            <Field label="Delivery address">
+              <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="12 Riverside Rd" className={inputCls} maxLength={160} />
+            </Field>
+            <Field label="Delivery fee">
+              <input type="number" min="0" step="0.01" value={fee} onChange={(e) => setFee(e.target.value)} className={inputCls} />
+            </Field>
+          </>
+        )}
+        <button type="button" className={btnPrimary} onClick={save}>Save details</button>
       </div>
     </Modal>
   )

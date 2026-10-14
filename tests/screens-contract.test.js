@@ -254,6 +254,117 @@ test('configuration audit tracks the sections the settings screen edits', () => 
   empire = act(empire, 'downtown', { type: 'UPDATE_SETTINGS', patch: { restaurantName: '' } })
   assert.equal(shopOf(empire).settings.restaurantName, 'Restora · Downtown')   // sanitizer keeps a usable name, never double-prefixed
   empire = act(empire, 'downtown', { type: 'UPDATE_SETTINGS', patch: { logoUrl: '' } })
-  assert.equal(shopOf(empire), shopOf(empire))                                 // still a usable shop object
+  assert.equal(shopOf(empire), shopOf(empire))                                 // still a safe shop object
   assert.equal(configurationAudit(shopOf(empire)).total, before.total)
 })
+
+// Floor screen — table CRUD (create, rename/move, delete)
+test('floor screen add / edit / delete tables round-trip through the reducer', () => {
+  let empire = buildEmpire()
+  const before = shopOf(empire).tables.length
+
+  empire = act(empire, 'downtown', { type: 'ADD_TABLE', table: { name: 'Patio 21', seats: 2, zone: 'Patio' } })
+  const added = shopOf(empire).tables.at(-1)
+  assert.equal(shopOf(empire).tables.length, before + 1)
+  assert.equal(added.name, 'Patio 21')
+  assert.equal(added.status, 'free')
+
+  // A blank name still lands with a usable label.
+  empire = act(empire, 'downtown', { type: 'ADD_TABLE', table: { name: '   ', seats: 2, zone: 'Main' } })
+  assert.ok(shopOf(empire).tables.at(-1).name.trim().length > 0)
+
+  // Duplicate names are disambiguated so two tables never share a label.
+  empire = act(empire, 'downtown', { type: 'ADD_TABLE', table: { name: 'Bar stool', seats: 1, zone: 'Bar' } })
+  empire = act(empire, 'downtown', { type: 'ADD_TABLE', table: { name: 'Bar stool', seats: 1, zone: 'Bar' } })
+  const names = shopOf(empire).tables.map((t) => t.name)
+  assert.equal(new Set(names).size, names.length)
+
+  // Edit: rename, reseat, and move to a new zone.
+  const target = shopOf(empire).tables.find((t) => t.name === 'Patio 21')
+  empire = act(empire, 'downtown', { type: 'UPDATE_TABLE', tableId: target.id, patch: { name: 'Patio 9', seats: 6, zone: 'Patio' } })
+  const updated = shopOf(empire).tables.find((t) => t.id === target.id)
+  assert.equal(updated.name, 'Patio 9')
+  assert.equal(updated.seats, 6)
+  assert.equal(updated.zone, 'Patio')
+
+  // Delete frees the slot.
+  const countBeforeDelete = shopOf(empire).tables.length
+  empire = act(empire, 'downtown', { type: 'DELETE_TABLE', tableId: target.id })
+  assert.equal(shopOf(empire).tables.length, countBeforeDelete - 1)
+})
+
+test('a table with an open check or a party cannot be deleted until cleared', () => {
+  let empire = buildEmpire()
+  const busy = shopOf(empire).tables.find((t) => t.status === 'ordered')
+  const before = shopOf(empire).tables.length
+  const same = act(empire, 'downtown', { type: 'DELETE_TABLE', tableId: busy.id })
+  assert.equal(shopOf(same).tables.length, before)          // open check blocks it
+
+  // A free table seats instantly and resists deletion until it is cleared.
+  empire = act(empire, 'downtown', { type: 'ADD_TABLE', table: { name: 'Temp 1', seats: 2, zone: 'Main' } })
+  const id = shopOf(empire).tables.at(-1).id
+  const count = shopOf(empire).tables.length
+  empire = act(empire, 'downtown', { type: 'SET_TABLE_STATUS', tableId: id, to: 'seated' })
+  assert.equal(shopOf(act(empire, 'downtown', { type: 'DELETE_TABLE', tableId: id })).tables.length, count)
+  empire = act(empire, 'downtown', { type: 'SET_TABLE_STATUS', tableId: id, to: 'free', force: true })
+  assert.equal(shopOf(act(empire, 'downtown', { type: 'DELETE_TABLE', tableId: id })).tables.length, count - 1)
+})
+
+// TicketsScreen — New check: Dine-in / Takeout / Delivery
+test('off-table orders carry customer, delivery fee, and ETA through to totals', () => {
+  let empire = buildEmpire()
+  const before = shopOf(empire).orders.length
+
+  empire = act(empire, 'downtown', {
+    type: 'CREATE_ORDER',
+    orderType: 'delivery',
+    customer: { name: 'Ava Chen', phone: '012-345-678', address: '12 Riverside Rd' },
+    deliveryFee: 2.5,
+    eta: new Date(Date.now() + 45 * 60000).toISOString(),
+  })
+  const delivery = shopOf(empire).orders.at(-1)
+  assert.equal(shopOf(empire).orders.length, before + 1)
+  assert.equal(delivery.tableId, null)
+  assert.equal(delivery.type, 'delivery')
+  assert.equal(delivery.customer.name, 'Ava Chen')
+  assert.equal(delivery.deliveryFee, 2.5)
+
+  // A second delivery is allowed (no one-check-per-table rule off the floor).
+  empire = act(empire, 'downtown', { type: 'CREATE_ORDER', orderType: 'delivery', customer: { name: 'Sam' } })
+  assert.equal(shopOf(empire).orders.filter((o) => o.type === 'delivery').length, 2)
+
+  // Takeout also works and carries no delivery fee.
+  empire = act(empire, 'downtown', { type: 'CREATE_ORDER', orderType: 'takeout', customer: { name: 'Nita' } })
+  const takeout = shopOf(empire).orders.at(-1)
+  assert.equal(takeout.type, 'takeout')
+  assert.equal(takeout.deliveryFee, undefined)
+
+  // The delivery fee lands in the receipt total and prints as its own line.
+  const shop = shopOf(empire)
+  const settings = sanitizeSettings(shop.settings)
+  const order = shop.orders.find((o) => o.id === delivery.id)
+  order.items = [{ id: 'i1', menuItemId: shop.menu[0].id, qty: 2, modifiers: [], course: 'main', status: 'bumped' }]
+  const receipt = buildReceiptDocument({ shop, order, settings })
+  assert.equal(receipt.totals.delivery, 2.5)
+  assert.equal(receipt.customer.label, 'Delivery · Ava Chen')
+  assert.ok(receipt.customer.lines.some((line) => line.includes('12 Riverside Rd')))
+  const html = renderDocumentHtml(receipt, settings)
+  assert.match(html, /Delivery/)
+})
+
+test('editing a delivery order updates the customer block and fee', () => {
+  let empire = buildEmpire()
+  empire = act(empire, 'downtown', { type: 'CREATE_ORDER', orderType: 'delivery', customer: { name: 'Old' }, deliveryFee: 1 })
+  const id = shopOf(empire).orders.at(-1).id
+  empire = act(empire, 'downtown', {
+    type: 'SET_ORDER_DETAILS',
+    orderId: id,
+    customer: { name: 'New Name', phone: '099', address: '9 Lane' },
+    deliveryFee: 4,
+  })
+  const order = shopOf(empire).orders.find((o) => o.id === id)
+  assert.equal(order.customer.name, 'New Name')
+  assert.equal(order.customer.address, '9 Lane')
+  assert.equal(order.deliveryFee, 4)
+})
+

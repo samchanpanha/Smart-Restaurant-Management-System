@@ -486,7 +486,7 @@ export function RestoraProvider({ children }) {
   const issueDocument = useCallback(
     (kind, { document, number } = {}) => {
       if (!DOC_KINDS.includes(kind)) return null
-      const shop = locShopRef.current(locRef.current)
+      const shop = locShopRef(locRef.current)
       const settings = shop?.settings
       if (!settings) return null
       const counter = settings.numbering?.[kind]
