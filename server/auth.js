@@ -293,13 +293,9 @@ function startSession(userId) {
 // ─── Seed ────────────────────────────────────────────────────────
 
 export function seedAuth() {
-  const created = nowIso()
-  const insertSystem = db.prepare(`INSERT OR IGNORE INTO auth_roles
-    (id, owner_id, key, label, screens, is_system, created_at) VALUES (?, NULL, ?, ?, ?, 1, ?)`)
-  for (const role of SYSTEM_ROLES) {
-    insertSystem.run(role.id, role.key, role.label, JSON.stringify(role.screens), created)
-  }
+  seedSystemRoles()
 
+  const created = nowIso()
   const email = normalizeEmail(process.env.SUPERADMIN_EMAIL)
   const password = String(process.env.SUPERADMIN_PASSWORD || '')
   if (email && password) {
@@ -321,6 +317,78 @@ export function seedAuth() {
     }
   }
   q.purgeSessions.run(nowIso())
+}
+
+// ─── Demo tenant ─────────────────────────────────────────────────
+// Create (or refresh) one complete demo restaurant: a host owner plus one
+// account per staff role, so a whole team can sign in for a walkthrough.
+// Idempotent — re-running updates the same owner and accounts rather than
+// piling up duplicates. Callers still seed the shop data (buildEmpire) and
+// save the snapshot against the returned owner id.
+
+export const DEMO_PASSWORD = 'demo1234'
+
+const DEMO_ACCOUNTS = [
+  { role: 'owner', name: 'Demo Owner' },
+  { role: 'manager', name: 'Demo Manager' },
+  { role: 'server', name: 'Demo Server' },
+  { role: 'kitchen', name: 'Demo Kitchen' },
+  { role: 'host', name: 'Demo Host' },
+]
+
+export function seedSystemRoles() {
+  const created = nowIso()
+  const insertSystem = db.prepare(`INSERT OR IGNORE INTO auth_roles
+    (id, owner_id, key, label, screens, is_system, created_at) VALUES (?, NULL, ?, ?, ?, 1, ?)`)
+  for (const role of SYSTEM_ROLES) {
+    insertSystem.run(role.id, role.key, role.label, JSON.stringify(role.screens), created)
+  }
+}
+
+/**
+ * @param {{ ownerName?: string, slug?: string, password?: string,
+ *           accounts?: { role: string, name?: string, email?: string, password?: string }[] }} options
+ */
+export function seedDemoTenant(options = {}) {
+  seedSystemRoles()
+  const ownerName = String(options.ownerName || 'Restora Demo').trim() || 'Restora Demo'
+  const ownerSlug = slugify(options.slug || ownerName)
+  const defaultPassword = options.password || DEMO_PASSWORD
+  const requested = Array.isArray(options.accounts) && options.accounts.length ? options.accounts : DEMO_ACCOUNTS
+
+  const existingOwner = q.ownerBySlugFull.get(ownerSlug)
+  const ownerId = existingOwner?.id || uid('owner')
+  const createdAt = nowIso()
+  if (existingOwner) q.updateOwner.run(ownerName, 'active', ownerId)
+  else q.insertOwner.run(ownerId, ownerName, ownerSlug, 'active', createdAt)
+
+  const accounts = []
+  for (const entry of requested) {
+    const role = ROLE_BY_KEY[String(entry.role || '').trim()] || ROLE_BY_KEY.server
+    const email = normalizeEmail(entry.email || `${role.key}@${ownerSlug}.demo`)
+    const name = String(entry.name || role.label).trim() || role.label
+    const password = String(entry.password || defaultPassword)
+    const existing = q.userByEmail.get(email)
+    if (existing && existing.owner_id && existing.owner_id !== ownerId) {
+      console.warn(`[restora] demo account ${email} belongs to another owner — skipped`)
+      continue
+    }
+    const id = existing?.id || uid('user')
+    if (existing) {
+      q.updateUser.run(name, role.id, 'active', nowIso(), id)
+      q.updateUserPassword.run(hashPassword(password), nowIso(), id)
+    } else {
+      q.insertUser.run(id, ownerId, email, name, hashPassword(password), role.id, 0, 'active', createdAt, createdAt)
+    }
+    accounts.push({ role: role.key, label: role.label, email, name, password })
+  }
+
+  return {
+    owner: ownerView(q.ownerById.get(ownerId)),
+    slug: ownerSlug,
+    password: defaultPassword,
+    accounts,
+  }
 }
 
 // ─── Router ──────────────────────────────────────────────────────

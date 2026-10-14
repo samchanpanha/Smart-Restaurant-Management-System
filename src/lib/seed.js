@@ -4,11 +4,70 @@
 // Table 14 is a 4-top seated 22 min · Burger $16 / plate $4.10 / 74% ·
 // Salmon 86'd mid-service.
 
-import { defaultSettings } from './settings.js'
+import { defaultSettings, documentNumber } from './settings.js'
 import { plateCostFor } from './models.js'
+import {
+  buildInvoiceDocument, buildPurchaseOrderDocument, buildReceiptDocument,
+  buildReportDocument, buildShiftReport, buildTicketDocument,
+} from './documents.js'
 
 const now = () => Date.now()
 const minAgo = (m) => new Date(now() - m * 60000).toISOString()
+
+/**
+ * File a small, realistic document registry onto a shop so the Documents
+ * module (and every print/export path) has something to show on a fresh
+ * demo. Uses the same builders the screens do, so numbers, totals, and
+ * layouts match what an owner would print live. Returns the documents plus
+ * the advanced numbering counters to fold back into settings.
+ */
+export function attachSeedDocuments(shop) {
+  const settings = shop.settings || {}
+  const counters = {}
+  for (const kind of Object.keys(settings.numbering || {})) counters[kind] = { ...settings.numbering[kind] }
+
+  const assign = (doc, kind, index, issuedBy) => {
+    const seq = Math.max(1, Math.trunc(counters[kind]?.next ?? 1))
+    const advanced = { ...(counters[kind] || {}), next: seq + 1 }
+    counters[kind] = advanced
+    return {
+      ...doc,
+      id: `doc_seed_${kind}_${index}`,
+      number: documentNumber({ ...settings, numbering: { ...counters, [kind]: advanced } }, kind, seq),
+      meta: { ...(doc.meta || {}), issuedBy, voided: false },
+    }
+  }
+
+  const orders = shop.orders || []
+  const paid = orders.filter((order) => order.status === 'paid')
+  const open = orders.find((order) => order.status && order.status !== 'paid' && order.status !== 'void')
+  const received = (shop.purchases || []).find((purchase) => purchase.status === 'received')
+
+  const documents = []
+  // Receipts for the last few payments (guest-facing).
+  paid.slice(-3).forEach((order, i) => {
+    documents.push(assign(buildReceiptDocument({ shop, order, settings }), 'receipt', i + 1, 'server'))
+  })
+  // One invoice for a company/account guest.
+  if (paid.length) {
+    documents.push(assign(buildInvoiceDocument({ shop, order: paid.at(-1), settings, paymentTermsDays: 14 }), 'invoice', 1, 'owner'))
+  }
+  // One kitchen ticket.
+  if (open) {
+    documents.push(assign(buildTicketDocument({ shop, order: open, settings, station: null }), 'ticket', 1, 'kitchen'))
+  }
+  // One purchase order sent to a vendor. Its number IS the PO number — a
+  // purchase document does not consume a registry sequence of its own.
+  if (received) {
+    const doc = buildPurchaseOrderDocument({ shop, purchase: received, settings })
+    documents.push({ ...doc, id: 'doc_seed_purchase_1', meta: { ...(doc.meta || {}), issuedBy: 'owner', voided: false } })
+  }
+  // One end-of-shift report.
+  const report = buildShiftReport(shop, { range: 'tonight', now: now() })
+  documents.push(assign(buildReportDocument({ shop, settings, report, range: 'tonight' }), 'report', 1, 'owner'))
+
+  return { documents, numbering: counters }
+}
 
 export function buildSeed() {
   // ─── Inventory (lastCost drives every plate cost) ─────────────
@@ -602,7 +661,7 @@ export function buildSeed() {
 
   const settings = {
     ...defaultSettings('Downtown'),
-    restaurantName: 'Restora · Demo House',
+    restaurantName: 'Restora · Downtown',
     locationShort: 'DT',
     targetTurnMinutes: 45,
     ticketMinutes: 18,
@@ -624,6 +683,8 @@ export function buildSeed() {
       return { ...item, recipeSnapshot: { ...recipe, plateCost: plateCostFor(recipe, inventoryById, settings) } }
     }),
   }))
+
+  const seeded = attachSeedDocuments({ orders: frozenOrders, purchases, suppliers, inventory, menu: menuWithDetail, tables, settings, salesHistory, movements })
 
   return {
     version: 1,
@@ -647,12 +708,12 @@ export function buildSeed() {
     suppliers,
     // Issued documents (invoices, receipts, tickets, reports, purchase
     // orders) — the printed-number registry, newest last.
-    documents: [],
+    documents: seeded.documents,
     // Buy side: purchase orders (draft → ordered → received) and the
     // signed stock-movement ledger every report reads.
     purchases,
     movements,
-    settings,
+    settings: { ...settings, numbering: seeded.numbering },
     meta: { seededAt: new Date(now()).toISOString() },
   }
 }
@@ -746,6 +807,23 @@ export function buildSeedRiverside() {
   )
   const menu = base.menu.map((m) => (m.id === 'm_salmon' ? { ...m, available: true } : m))
   const salesHistory = base.salesHistory.map((d) => ({ ...d, sales: Math.round(d.sales * 0.55) }))
+  const settings = {
+    ...base.settings,
+    restaurantName: 'Restora · Riverside',
+    locationShort: 'RV',
+    numbering: defaultSettings('Riverside').numbering,
+  }
+  const { documents, numbering } = attachSeedDocuments({
+    orders,
+    purchases: base.purchases,
+    suppliers: base.suppliers,
+    inventory,
+    menu,
+    tables,
+    settings,
+    salesHistory,
+    movements: base.movements,
+  })
 
   return {
     ...base,
@@ -756,7 +834,8 @@ export function buildSeedRiverside() {
     inventory,
     menu,
     salesHistory,
-    settings: { ...base.settings, restaurantName: 'Restora · Riverside', locationShort: 'RV' },
+    settings: { ...settings, numbering },
+    documents,
     meta: { seededAt: new Date(now()).toISOString() },
   }
 }

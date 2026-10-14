@@ -10,7 +10,8 @@
     "lint": "oxlint",
     "test": "node --test",
     "preview": "vite preview",
-    "server": "node server/index.js"
+    "server": "node server/index.js",
+    "seed:demo": "node server/seed-demo.js"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",

@@ -13,6 +13,7 @@ npm install
 npm run dev      # → http://localhost:5173 (standalone demo, localStorage)
 npm run build    # production build → dist/
 npm run server   # API on :3001 (SQLite, SSE, Telegram webhook) — optional
+npm run seed:demo # load a full two-store demo + one sign-in per staff role
 npm test         # reducer, SQLite catalog, settings/currency/documents, screens contracts, tabs
 ```
 
@@ -97,6 +98,29 @@ built frontend + API together (API on `:3001`, or set `PORT=`).
 
 Data lives in `server/data/restora.sqlite` (git-ignored). Delete it to reseed.
 Sidebar shows link state: **Live · server** / **Offline · this terminal** / **Local demo**.
+
+### Demo data & accounts
+
+`npm run seed:demo` writes one complete, believable restaurant into the
+database the server boots from — both stores (Downtown + Riverside) with
+floor, tickets, kitchen, menu, catalog, inventory, stock movements,
+purchases, suppliers, reports, costing, settings, and a filled document
+registry (receipts, an invoice, a ticket, a purchase order, a shift report).
+It also creates a sign-in per staff role (all `demo1234` by default), so a
+whole team can walk through the app:
+
+```
+owner@restora-demo.demo     owner
+manager@restora-demo.demo   manager
+server@restora-demo.demo    server
+kitchen@restora-demo.demo   kitchen
+host@restora-demo.demo      host
+```
+
+It is idempotent — re-running refreshes the same owner, accounts, and
+snapshot. Override with `DEMO_OWNER_NAME`, `DEMO_SLUG`, `DEMO_PASSWORD`, and
+`RESTORA_DATA` (to target a specific database). The guest menu for the demo
+is `/login` and `/?owner=restora-demo`.
 
 ### SQLite menu catalog
 
@@ -357,6 +381,14 @@ SQLite lives on the `restora-data` volume. Provide `SUPERADMIN_EMAIL`,
 `SUPERADMIN_PASSWORD`, `RESTORA_TENANT`, and the `TELEGRAM_*` values through
 your environment (or a `.env` file beside `docker-compose.yml`) to configure
 the super admin and the hosted bot.
+
+The container has its own database on that volume, so seed the demo **inside
+the container** — running `npm run seed:demo` on the host writes to
+`server/data/`, which the container never reads:
+
+```bash
+docker compose exec restora npm run seed:demo
+```
 
 ## Stack
 

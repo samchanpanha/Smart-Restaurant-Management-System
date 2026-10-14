@@ -423,6 +423,7 @@ test('RESCALE_CATALOG revalues menu prices and stock costs by one factor', () =>
 test('filing documents assigns a running number per kind and void keeps it on record', () => {
   let empire = buildEmpire()
   const starting = shopOf(empire).settings.numbering.receipt.next
+  const seeded = shopOf(empire).documents.length
 
   empire = act(empire, 'downtown', {
     type: 'ISSUE_DOCUMENT',
@@ -441,12 +442,12 @@ test('filing documents assigns a running number per kind and void keeps it on re
     kind: 'invoice',
     document: { reference: 'o_seed_3', totals: { grandTotal: 49.2 }, lines: [] },
   })
-  assert.equal(shopOf(empire).documents.length, 2)
-  assert.notEqual(shopOf(empire).documents[0].number, shopOf(empire).documents[1].number)
+  assert.equal(shopOf(empire).documents.length, seeded + 2)
+  assert.notEqual(shopOf(empire).documents.at(-2).number, shopOf(empire).documents.at(-1).number)
 
   // Re-filing the same document id is a no-op (retry-safe)
   const retried = act(empire, 'downtown', { type: 'ISSUE_DOCUMENT', kind: 'invoice', document: { id: first.id, totals: {} } })
-  assert.equal(shopOf(retried).documents.length, 2)
+  assert.equal(shopOf(retried).documents.length, seeded + 2)
 
   empire = act(empire, 'downtown', { type: 'VOID_DOCUMENT', documentId: first.id, reason: 'guest left' })
   const voided = shopOf(empire).documents.find((document) => document.id === first.id)
