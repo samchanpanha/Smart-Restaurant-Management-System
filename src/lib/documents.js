@@ -931,7 +931,10 @@ export function printHtml(html, { title = 'Document' } = {}) {
     } catch {
       openHtmlWindow(html, title)
     }
-    window.setTimeout(() => frame.remove(), 60000)
+    // Keep the frame alive just long enough for the print dialog to read
+    // it, then clean up. A long grace period used to leave a 60s timer
+    // running on the page (and in every test that prints).
+    window.setTimeout(() => frame.remove(), 1500)
   }
   document.body.appendChild(frame)
   return true

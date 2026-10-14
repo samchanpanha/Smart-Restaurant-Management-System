@@ -915,6 +915,7 @@ function TicketWorkspace({ orderId, onError }) {
               className="min-h-[36px] shrink-0 rounded-lg bg-emerald-500 px-3 text-xs font-bold text-black hover:bg-emerald-400"
             >
               Print &amp; file receipt
+              {lang !== 'en' && <span className="sr-only"> Print &amp; file receipt</span>}
             </button>
           </div>
         )}

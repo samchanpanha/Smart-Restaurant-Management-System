@@ -13,6 +13,7 @@ import {
   useDomTranslator,
   useI18n,
 } from '../lib/i18n'
+import { isFreeTableStatus, isTableInServiceStatus } from '../lib/constants'
 import { money, orderTotals, uid } from '../lib/models'
 import { useMenuCatalog } from '../lib/useMenuCatalog'
 import { useNow, useRestora } from '../lib/store'
@@ -41,12 +42,16 @@ const TICKET_LABELS = {
   open: 'Seated',
   seated: 'Seated',
   occupied: 'Seated',
+  ordered: 'Order received',
   sent: 'Order received',
   in_prep: 'Cooking',
   ready: 'Ready',
   served: 'Served',
+  billing: 'Paying',
+  billed: 'Paying',
   paid: 'Paid',
   void: 'Cancelled',
+  cleaning: 'Being cleaned',
 }
 
 function openOrderFor(state, tableId) {
@@ -240,7 +245,7 @@ export default function GuestScreen({ tableId, allowPickup = false, onSelfSeat =
 
   const table = state.tables.find((t) => t.id === tableId)
   const moveCandidates = useMemo(
-    () => state.tables.filter((t) => t.id !== tableId && (t.status === 'free' || t.status === 'available')),
+    () => state.tables.filter((t) => t.id !== tableId && isFreeTableStatus(t.status)),
     [state.tables, tableId],
   )
   const pickupOrder = pickupOrderId
@@ -363,7 +368,10 @@ export default function GuestScreen({ tableId, allowPickup = false, onSelfSeat =
     )
   }
 
-  if (!pickup && !['seated', 'ordered'].includes(table.status)) {
+  // A guest who self-seated from the mini app gets status 'occupied', a
+  // guest waiting on the check gets 'billing' — both are dining, not
+  // "not seated yet".
+  if (!pickup && !isTableInServiceStatus(table.status)) {
     const openTables = state.tables.filter((t) => t.status === 'seated' || t.status === 'ordered')
     return shell(
       <div className="rounded-3xl bg-white p-8 text-center shadow-sm">
@@ -439,7 +447,9 @@ export default function GuestScreen({ tableId, allowPickup = false, onSelfSeat =
     if (pickup) return pickupPaid ? 'Paid' : pickupOrder ? (TICKET_LABELS[pickupOrder.status] || 'Order placed') : null
     if (order) return TICKET_LABELS[order.status] || 'Seated'
     if (paid) return 'Paid'
-    if (table && (table.status === 'seated' || table.status === 'ordered')) return TICKET_LABELS[table.status]
+    // Seated however the guest got there: hosted ('seated'/'ordered') or
+    // self-seated from the mini app ('occupied').
+    if (table && isTableInServiceStatus(table.status)) return TICKET_LABELS[table.status] || 'Seated'
     return null
   })()
 

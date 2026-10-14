@@ -137,7 +137,11 @@ function withOwner(path, params = {}) {
   return qs ? `${path}?${qs}` : path
 }
 
-export function RestoraProvider({ children }) {
+// Guests (QR page + Telegram mini app) must never stare at a boot screen:
+// they get the cached/demo menu immediately and hydrate when the snapshot
+// lands. Terminals pass `waitForServer` (the default) so a shared tablet
+// never shows another shift's numbers while it syncs.
+export function RestoraProvider({ children, waitForServer = true }) {
   const empireInit = useMemo(() => loadPersisted() || buildEmpire(), [])
   const kiosk = useMemo(kioskParams, [])
   const [empire, rawDispatch] = useReducer(reducer, empireInit)
@@ -264,6 +268,11 @@ export function RestoraProvider({ children }) {
   const clientId = useMemo(getClientId, [])
   const esRef = useRef(null)
   const retryRef = useRef(null)
+  // Live actions are queued and applied once per frame. A busy room sends
+  // several actions a second; without this every one of them re-rendered
+  // every terminal and every guest phone on its own.
+  const inboundRef = useRef([])
+  const flushRef = useRef(false)
 
   function flashNotice(msg) {
     setNotice(msg)
@@ -298,6 +307,28 @@ export function RestoraProvider({ children }) {
       return false
     }
   }, [])
+
+  const flushInbound = useCallback(() => {
+    flushRef.current = false
+    const batch = inboundRef.current
+    inboundRef.current = []
+    for (const action of batch) {
+      try {
+        rawDispatch(action)
+      } catch {
+        resync()
+        return
+      }
+    }
+  }, [resync])
+
+  const queueInbound = useCallback((action) => {
+    inboundRef.current.push(action)
+    if (flushRef.current) return
+    flushRef.current = true
+    if (typeof window.requestAnimationFrame === 'function') window.requestAnimationFrame(flushInbound)
+    else window.setTimeout(flushInbound, 16)
+  }, [flushInbound])
 
   const connectStream = useCallback(() => {
     if (esRef.current) {
@@ -348,11 +379,7 @@ export function RestoraProvider({ children }) {
       if (lid) lidAt.current.set(lid, Date.now())
       pruneLids()
       setLink({ mode: 'server', status: 'live' })
-      try {
-        rawDispatch(msg.action)
-      } catch {
-        resync()
-      }
+      queueInbound(msg.action)
     }
 
     es.onerror = () => {
@@ -365,7 +392,7 @@ export function RestoraProvider({ children }) {
         else retryRef.current = window.setTimeout(() => connectStream(), 5000)
       }, 2000)
     }
-  }, [pruneLids, resync])
+  }, [pruneLids, queueInbound, resync])
 
   useEffect(() => {
     const ctrl = new AbortController()
@@ -570,7 +597,7 @@ export function RestoraProvider({ children }) {
     [state, empire, dispatch, role, screen, setScreen, tabs, activeTabId, openTab, openScreenInTab, activateTab, closeTab, reorderTab, renameTab, togglePinTab, duplicateTab, closeOtherTabs, closeRightTabs, reopenClosedTab, workspace.closed.length, saveTabScroll, activeCtx, setTabContext, selectedTableId, setSelectedTableId, selectedDishId, setSelectedDishId, selectedOrderId, setSelectedOrderId, locId, setLocId, link, resync, notice, dispatchTo, dispatchEverywhere, issueDocument, templateForKind],
   )
 
-  if (link.status === 'starting') {
+  if (waitForServer && link.status === 'starting') {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--color-ink-950)]">
         <div className="text-center">

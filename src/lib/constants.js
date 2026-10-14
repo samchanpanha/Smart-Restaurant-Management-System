@@ -4,6 +4,18 @@
 
 export const TABLE_STATUSES = ['free', 'reserved', 'seated', 'ordered', 'billed', 'dirty', 'available', 'occupied', 'billing', 'cleaning']
 
+// The floor has two vocabularies: the host stand says free/seated/ordered
+// while self-seating (mini app, QR) says available/occupied/billing. Guest
+// surfaces must answer the same way for both, or a guest who just sat
+// themselves down is told their table "isn't seated yet".
+export const FREE_TABLE_STATUSES = ['free', 'available', 'idle']
+// 'billing'/'billed' still belong to the diner: the check is open, the
+// table is not free for somebody else yet.
+export const IN_SERVICE_TABLE_STATUSES = ['seated', 'ordered', 'billed', 'occupied', 'billing']
+
+export const isFreeTableStatus = (status) => FREE_TABLE_STATUSES.includes(status)
+export const isTableInServiceStatus = (status) => IN_SERVICE_TABLE_STATUSES.includes(status)
+
 // Strict machine with 4-state self-seating support (available -> occupied -> billing -> cleaning -> available)
 export const TABLE_TRANSITIONS = {
   free: ['seated', 'reserved', 'occupied', 'ordered'],

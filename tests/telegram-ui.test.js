@@ -36,7 +36,9 @@ const React = (await import('react')).default
 const { act } = await import('react')
 const { createRoot } = await import('react-dom/client')
 
-const server = await createServer({ server: { middlewareMode: true }, appType: 'custom', logLevel: 'error' })
+// hmr: false — several UI test files boot Vite at once and every
+// middleware-mode server would otherwise try to bind the same HMR port.
+const server = await createServer({ server: { middlewareMode: true, hmr: false }, appType: 'custom', logLevel: 'error' })
 const { RestoraProvider } = await server.ssrLoadModule('/src/lib/store.jsx')
 const { default: AppShell } = await server.ssrLoadModule('/src/components/AppShell.jsx')
 const { Router } = await server.ssrLoadModule('/src/App.jsx')

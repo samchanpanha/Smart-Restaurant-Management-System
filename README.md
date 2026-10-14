@@ -313,6 +313,27 @@ the same QR ordering surface with the platform chrome — header colour from
 lands. Open it from a bot reply (`/qr 12`), a menu button, or the link/QR on the
 screen; outside Telegram it degrades to the plain web menu.
 
+Three things keep the mini app fast on a phone, because a guest menu that takes
+seconds to appear is a lost table:
+
+- **The page never waits on the network to paint.** Guests and the mini app
+  mount the cached/demo snapshot immediately (`RestoraProvider waitForServer={false}`)
+  and hydrate when the API answers; only terminals hold a boot screen, and only
+  so a shared tablet never shows the last shift's numbers.
+- **The Telegram SDK is fetched in the background** (`src/lib/telegram-webapp.js`),
+  so a slow `telegram.org` response cannot delay the menu. Chrome (expand,
+  theme, haptics, `initData` name) is applied the moment it lands, with a 4s
+  guard so a captive portal can't hang it.
+- **One read per catalog, one action per tap.** `/api/menu` answers are cached
+  and de-duplicated per tenant + location (`src/lib/useMenuCatalog.js`), live
+  SSE actions are coalesced into one render per frame, and self-seating is a
+  single `MINIAPP_CLAIM_TABLE` action (it sets `seatedBy: 'guest'`, so the
+  stale-table sweep still frees an abandoned table).
+
+The mini app renders the same `GuestScreen` the table QR page does and shares
+the device's guest session token with the table picker, so a guest who sits
+themselves down in Telegram orders onto the same ticket a server would print.
+
 Bot API surface: `POST /api/telegram/webhook` (always answers 200 so Telegram
 does not retry a command that already ran), `POST /api/telegram/simulate`
 (`dryRun` by default), `POST /api/telegram/digest` (`dryRun` previews),

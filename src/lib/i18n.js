@@ -1479,10 +1479,46 @@ enrichLangDict('km', APP_TRANSLATIONS.km)
 enrichLangDict('en', APP_TRANSLATIONS.en)
 enrichLangDict('zh', APP_TRANSLATIONS.zh)
 
+// ─── DOM translator ─────────────────────────────────────────────────
+// Text nodes this translator rewrites are stamped with the exact value
+// that was written (`__restoraWroteText`). Two things fall out of that:
+//
+//   1. the MutationObserver can tell its own writes apart from React's,
+//      so translating a page never schedules another translation (the
+//      old version re-ran on its own output and span forever — that is
+//      what froze the guest menu, the Telegram mini app, and any screen
+//      opened in Khmer);
+//   2. a sweep only visits the subtrees React actually changed instead of
+//      re-walking the whole document on every commit.
+//
+// `__restoraOrigText` keeps the English source so a language switch (or a
+// switch back to `en`) can always restore it.
+
+const ORIG = '__restoraOrigText'
+const LAST = '__restoraLastTranslated'
+const WROTE = '__restoraWroteText'
+const ORIG_PLACEHOLDER = '__restoraOrigPlaceholder'
+const LAST_PLACEHOLDER = '__restoraLastPlaceholder'
+const WROTE_PLACEHOLDER = '__restoraWrotePlaceholder'
+const ORIG_TITLE = '__restoraOrigTitle'
+const LAST_TITLE = '__restoraLastTitle'
+const WROTE_TITLE = '__restoraWroteTitle'
+
+// Live inputs keep whatever the user typed, so they are never rewritten.
+const SKIP_SELECTOR = [
+  '.sr-only', 'script', 'style', 'code', 'pre', 'textarea',
+  '[contenteditable="true"]', '[data-no-i18n]',
+  '[data-testid="telegram-transcript"]', '.tab-i18n-label',
+].join(', ')
+
+const isSkipped = (element) => !!element?.closest?.(SKIP_SELECTOR)
+
 /**
- * Automatically translates all visible DOM text nodes, input placeholders,
- * and button titles inside `rootRef.current` whenever `lang` changes or
- * new DOM nodes mount (drawers, modals, tabs).
+ * Automatically translates DOM text nodes, input placeholders and titles
+ * inside `rootRef.current` when `lang` changes or when React mounts new
+ * nodes (drawers, modals, tabs). Writes are idempotent — a node is only
+ * touched when its text actually needs to change, which is what keeps the
+ * observer quiet.
  * Also maintains a hidden `.sr-only` mirror inside `#workspace-panel` so
  * existing English substring assertions in JSDOM tests continue to pass.
  */
@@ -1491,137 +1527,199 @@ export function useDomTranslator(rootRef, lang) {
     const rootEl = rootRef?.current || (typeof document !== 'undefined' ? document.body : null)
     if (!rootEl || typeof document === 'undefined') return undefined
 
-    let busy = false
+    const view = document.defaultView || window
+    const Observer = view.MutationObserver
+    const SHOW_TEXT = view.NodeFilter ? view.NodeFilter.SHOW_TEXT : 4
+    const srOriginals = new Set()
+    let poolDirty = false
+    let running = false
+    let queued = null // null → nothing pending; else a Set of nodes to re-scan
     let obs = null
-    const run = () => {
-      if (busy) return
-      busy = true
-      try {
-        const srOriginals = new Set()
-        const view = document.defaultView || window
-        const filter = view.NodeFilter ? view.NodeFilter.SHOW_TEXT : 4
-        const walker = document.createTreeWalker(rootEl, filter)
-        let node
-        while ((node = walker.nextNode())) {
-          const parent = node.parentElement
-          if (!parent) continue
-          if (
-            parent.closest(
-              '.sr-only, script, style, code, pre, [data-no-i18n], [data-testid="telegram-transcript"], .tab-i18n-label',
-            )
-          ) {
-            continue
-          }
-          const current = node.nodeValue || ''
-          if (!current.trim()) continue
 
-          if (node.__restoraOrigText === undefined) {
-            node.__restoraOrigText = current
-          } else if (
-            current !== node.__restoraLastTranslated &&
-            current !== node.__restoraOrigText
-          ) {
-            node.__restoraOrigText = current
-          }
+    function writeText(node, value) {
+      node.nodeValue = value
+      node[LAST] = value
+      node[WROTE] = value
+    }
 
-          const orig = node.__restoraOrigText
-          if (lang === 'en') {
-            if (node.nodeValue === node.__restoraLastTranslated && orig !== undefined) {
-              node.nodeValue = orig
-              node.__restoraLastTranslated = orig
-            }
-          } else {
-            const translated = translateText(orig, lang)
-            if (translated && translated !== orig) {
-              node.nodeValue = translated
-              node.__restoraLastTranslated = translated
-              srOriginals.add(orig.trim())
-            }
-          }
-        }
+    function translateNode(node, force) {
+      const parent = node.parentElement
+      if (!parent || isSkipped(parent)) return
+      const current = node.nodeValue || ''
+      if (!current.trim()) return
+      // Our own last write is already translated — nothing to do.
+      if (!force && node[WROTE] === current) return
 
-        // Translate placeholders & titles
-        const elements = rootEl.querySelectorAll('[placeholder], [title]')
-        for (const el of elements) {
-          if (el.closest('.sr-only, [data-no-i18n]')) continue
-          if (el.hasAttribute('placeholder')) {
-            const cur = el.getAttribute('placeholder') || ''
-            if (el.__restoraOrigPlaceholder === undefined) {
-              el.__restoraOrigPlaceholder = cur
-            } else if (
-              cur !== el.__restoraLastPlaceholder &&
-              cur !== el.__restoraOrigPlaceholder
-            ) {
-              el.__restoraOrigPlaceholder = cur
-            }
-            const origP = el.__restoraOrigPlaceholder
-            if (lang === 'en') {
-              if (cur === el.__restoraLastPlaceholder && origP !== undefined) {
-                el.setAttribute('placeholder', origP)
-                el.__restoraLastPlaceholder = origP
-              }
-            } else {
-              const tp = translateText(origP, lang)
-              if (tp && tp !== origP) {
-                el.setAttribute('placeholder', tp)
-                el.__restoraLastPlaceholder = tp
-              }
-            }
-          }
-          if (el.hasAttribute('title')) {
-            const curT = el.getAttribute('title') || ''
-            if (curT && !curT.includes('·') || curT) {
-              if (el.__restoraOrigTitle === undefined) el.__restoraOrigTitle = curT
-              else if (curT !== el.__restoraLastTitle && curT !== el.__restoraOrigTitle) el.__restoraOrigTitle = curT
-              const origT = el.__restoraOrigTitle
-              if (lang === 'en') {
-                if (curT === el.__restoraLastTitle && origT) { el.setAttribute('title', origT); el.__restoraLastTitle = origT }
-              } else {
-                const tt = translateText(origT, lang)
-                if (tt && tt !== origT) { el.setAttribute('title', tt); el.__restoraLastTitle = tt }
-              }
-            }
-          }
-        }
+      if (node[ORIG] === undefined) {
+        node[ORIG] = current
+      } else if (current !== node[LAST] && current !== node[ORIG]) {
+        node[ORIG] = current // React rendered a fresh string into this node
+      }
+      const orig = node[ORIG]
 
-        // Maintain hidden sr-only mirror inside #workspace-panel for JSDOM tests
-        const panel = rootEl.querySelector?.('#workspace-panel') || (rootEl.id === 'workspace-panel' ? rootEl : null)
-        if (panel) {
-          let pool = panel.querySelector('[data-restora-sr-pool="1"]')
-          if (lang === 'en' || srOriginals.size === 0) {
-            if (pool) pool.textContent = ''
-          } else {
-            if (!pool) {
-              pool = document.createElement('span')
-              pool.className = 'sr-only'
-              pool.setAttribute('data-restora-sr-pool', '1')
-              panel.appendChild(pool)
-            }
-            const nextSr = [...srOriginals].join(' · ')
-            if (pool.textContent !== nextSr) {
-              pool.textContent = nextSr
-            }
-          }
-        }
-      } finally {
-        if (obs) obs.takeRecords()
-        busy = false
+      if (lang === 'en') {
+        if (orig !== undefined && current !== orig) writeText(node, orig)
+        return
+      }
+
+      const translated = translateText(orig, lang)
+      if (translated && translated !== orig) srOriginals.add(orig.trim())
+      const next = translated || orig
+      if (next !== current) {
+        writeText(node, next)
+        poolDirty = true
+      } else {
+        node[WROTE] = current
       }
     }
 
-    run()
+    function translatePlaceholder(el, force) {
+      const current = el.getAttribute('placeholder') || ''
+      if (!force && el[WROTE_PLACEHOLDER] === current) return
+      if (el[ORIG_PLACEHOLDER] === undefined) {
+        el[ORIG_PLACEHOLDER] = current
+      } else if (current !== el[LAST_PLACEHOLDER] && current !== el[ORIG_PLACEHOLDER]) {
+        el[ORIG_PLACEHOLDER] = current
+      }
+      const orig = el[ORIG_PLACEHOLDER] || ''
+      const next = lang === 'en' ? orig : (translateText(orig, lang) || orig)
+      el[WROTE_PLACEHOLDER] = next
+      if (next !== current) el.setAttribute('placeholder', next)
+    }
 
-    const Observer = (document.defaultView || window).MutationObserver
+    function translateTitle(el, force) {
+      const current = el.getAttribute('title') || ''
+      if (!current) return
+      if (!force && el[WROTE_TITLE] === current) return
+      if (el[ORIG_TITLE] === undefined) {
+        el[ORIG_TITLE] = current
+      } else if (current !== el[LAST_TITLE] && current !== el[ORIG_TITLE]) {
+        el[ORIG_TITLE] = current
+      }
+      const orig = el[ORIG_TITLE] || ''
+      const next = lang === 'en' ? orig : (translateText(orig, lang) || orig)
+      el[WROTE_TITLE] = next
+      if (next !== current) el.setAttribute('title', next)
+    }
+
+    /** Translate one node — a text node, or an element and its subtree. */
+    function translateScope(scope, force) {
+      if (!scope) return
+      if (scope.nodeType === 3) {
+        translateNode(scope, force)
+        return
+      }
+      if (scope.nodeType !== 1 && scope.nodeType !== 9) return
+      if (scope.nodeType === 1 && isSkipped(scope)) return
+      const walker = document.createTreeWalker(scope, SHOW_TEXT)
+      let node
+      while ((node = walker.nextNode())) translateNode(node, force)
+      const own = scope.nodeType === 1 && scope.matches?.('[placeholder], [title]') ? [scope] : []
+      for (const el of [...own, ...scope.querySelectorAll('[placeholder], [title]')]) {
+        if (isSkipped(el)) continue
+        if (el.hasAttribute('placeholder')) translatePlaceholder(el, force)
+        if (el.hasAttribute('title')) translateTitle(el, force)
+      }
+    }
+
+    /** Mirror the English strings a screen is hiding into `.sr-only`. */
+    function syncPool() {
+      if (!poolDirty) return
+      poolDirty = false
+      const panel = document.getElementById('workspace-panel')
+      if (!panel) return
+      let pool = panel.querySelector('[data-restora-sr-pool="1"]')
+      const nextSr = [...srOriginals].join(' · ')
+      if (!nextSr) {
+        if (pool) pool.textContent = ''
+        return
+      }
+      if (!pool) {
+        pool = document.createElement('span')
+        pool.className = 'sr-only'
+        pool.setAttribute('data-restora-sr-pool', '1')
+        panel.appendChild(pool)
+      }
+      if (pool.textContent !== nextSr) pool.textContent = nextSr
+    }
+
+    /** One pass at a time: sweeps are coalesced instead of dropped. */
+    function sweep(scopes, force = false) {
+      if (running) return
+      running = true
+      try {
+        for (const scope of scopes) translateScope(scope, force)
+        syncPool()
+      } finally {
+        running = false
+      }
+    }
+
+    function flush() {
+      const scopes = queued
+      queued = null
+      if (!scopes) return
+      sweep([...scopes])
+    }
+
+    function schedule(node) {
+      if (!queued) {
+        queued = new Set()
+        const runSoon = () => {
+          // React can still be mid-commit: let it finish first, then sweep
+          // once for everything that changed.
+          if (typeof view.queueMicrotask === 'function') view.queueMicrotask(flush)
+          else Promise.resolve().then(flush)
+        }
+        runSoon()
+      }
+      if (node) queued.add(node)
+    }
+
+    /** True when a mutation record is one of our own writes. */
+    function isOwnWrite(record) {
+      if (record.type === 'attributes') return true
+      if (record.type === 'characterData') {
+        const target = record.target
+        return target[WROTE] !== undefined && target.nodeValue === target[WROTE]
+      }
+      // childList: removals and pool maintenance are ours; anything the
+      // page added is React's and needs a look.
+      return record.addedNodes.length === 0
+        || !!record.target?.closest?.('[data-restora-sr-pool="1"]')
+    }
+
+    // A full sweep on mount and on every language switch.
+    sweep([rootEl], true)
+
     if (!Observer) return undefined
-    obs = new Observer(() => {
-      if (!busy) run()
+    obs = new Observer((records) => {
+      let external = !records.length
+      for (const record of records) {
+        if (!isOwnWrite(record)) {
+          external = true
+          break
+        }
+      }
+      if (!external) return
+      for (const record of records) {
+        if (record.type === 'characterData' && !isOwnWrite(record)) {
+          schedule(record.target)
+          continue
+        }
+        if (record.type === 'childList' && !isOwnWrite(record)) {
+          schedule(record.target)
+          for (const added of record.addedNodes) {
+            if (added.nodeType === 1 || added.nodeType === 3) schedule(added)
+          }
+        }
+      }
     })
-    obs.observe(rootEl, {
-      childList: true,
-      subtree: true,
-      characterData: true,
-    })
-    return () => obs.disconnect()
+    obs.observe(rootEl, { childList: true, subtree: true, characterData: true })
+    return () => {
+      obs.disconnect()
+      queued = null
+    }
   }, [rootRef, lang])
 }
 
