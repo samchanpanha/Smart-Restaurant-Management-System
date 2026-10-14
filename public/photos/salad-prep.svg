@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" role="img" aria-label="House Salad prep">
+  <defs><linearGradient id="bgp_salad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#bbf7d0"/><stop offset="1" stop-color="#f0fdf4"/></linearGradient></defs>
+  <rect width="320" height="200" fill="url(#bgp_salad)"/>
+  <rect x="44" y="28" width="232" height="144" rx="22" fill="#18181b" opacity="0.12"/>
+  <circle cx="148" cy="104" r="64" fill="#ffffff" opacity="0.9"/>
+  <g transform="translate(-12, 0)"><circle cx="160" cy="104" r="62" fill="#4ade80" opacity="0.35"/><circle cx="140" cy="95" r="22" fill="#22c55e"/><circle cx="178" cy="92" r="20" fill="#16a34a"/><circle cx="158" cy="118" r="22" fill="#4ade80"/><circle cx="145" cy="108" r="9" fill="#ef4444"/><circle cx="175" cy="106" r="8" fill="#ef4444"/><circle cx="162" cy="88" r="6" fill="#fde047"/></g>
+  <circle cx="242" cy="64" r="22" fill="#16a34a" opacity="0.85"/>
+  <circle cx="242" cy="126" r="18" fill="#eab308" opacity="0.85"/>
+</svg>

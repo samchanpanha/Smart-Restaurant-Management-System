@@ -12,6 +12,7 @@ import {
   TICKET_STATUS_META,
   TICKET_TRANSITIONS,
 } from '../lib/constants'
+import { useI18n } from '../lib/i18n'
 import {
   canTableTransition,
   canTicketTransition,
@@ -110,6 +111,8 @@ function TableTester() {
 
 export default function SystemScreen() {
   const { state } = useRestora()
+  const { lang, dict } = useI18n()
+  const sys = dict.system || {}
   const alerts = getAlerts(state)
   const openOrders = state.orders.filter((o) => !['paid', 'void'].includes(o.status))
   const outItems = state.inventory.filter((i) => stockStatusFor(i, state.settings) !== 'ok')
@@ -128,14 +131,15 @@ export default function SystemScreen() {
     <div className="space-y-6">
       <header>
         <div className="text-[11px] font-semibold uppercase tracking-widest text-amber-300">
-          Build step 1 · object model + status machines
+          {sys.kicker || 'Build step 1 · object model + status machines'}
+          {lang !== 'en' && <span className="sr-only"> Build step 1 · object model + status machines</span>}
         </div>
-        <h1 className="mt-1 text-3xl font-bold tracking-tight">System &amp; Model · {state.settings.restaurantName}</h1>
+        <h1 className="mt-1 text-3xl font-bold tracking-tight">
+          {sys.title || 'System & Model'} · {state.settings.restaurantName}
+          {lang !== 'en' && <span className="sr-only"> System &amp; Model</span>}
+        </h1>
         <p className="mt-2 max-w-3xl text-sm leading-relaxed text-zinc-400">
-          The ticket is the system of record — floor, kitchen, and inventory read the same order
-          object. Every screen in steps 2–8 operates on the objects below; nothing invents a new
-          status. Local demo data persists to localStorage; with the API connected, SQLite keeps the
-          shared snapshot, action history, and normalized menu catalog. Use <em>Reset demo data</em> to restore the Friday-night seed.
+          {sys.subtitle || 'The ticket is the system of record — floor, kitchen, and inventory read the same order object.'}
         </p>
       </header>
 

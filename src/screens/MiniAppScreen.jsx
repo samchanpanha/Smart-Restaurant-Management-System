@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react'
 import GuestScreen from './GuestScreen'
 import { Icon } from '../components/Icon'
+import { translateTableName, translateZone, useI18n } from '../lib/i18n'
 import { useRestora } from '../lib/store'
 
 function telegramWebApp() {
@@ -17,6 +18,7 @@ function telegramWebApp() {
 
 export default function MiniAppScreen({ tableId }) {
   const { state } = useRestora()
+  const { lang } = useI18n()
   const [inTelegram, setInTelegram] = useState(Boolean(telegramWebApp()))
   const [toast, setToast] = useState('')
   // Opened from the chat rather than a table QR: start on a table that is
@@ -74,7 +76,7 @@ export default function MiniAppScreen({ tableId }) {
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-bold">{state.settings?.restaurantName || 'The Olive Restaurant'}</div>
             <div className="truncate text-[11px] text-white/60">
-              {table ? `${table.name} · ${table.zone}` : 'Table not found'} · Telegram mini app
+              {table ? `${translateTableName(table.name, lang)} · ${translateZone(table.zone, lang)}` : 'Table not found'} · Telegram mini app{table && lang !== 'en' && <span className="sr-only"> {table.name}</span>}
             </div>
           </div>
           {!tableId && state.tables.length > 1 && (
@@ -87,7 +89,7 @@ export default function MiniAppScreen({ tableId }) {
               >
                 {state.tables.map((entry) => (
                   <option key={entry.id} value={entry.id} className="text-zinc-900">
-                    {entry.name}
+                    {translateTableName(entry.name, lang)}
                   </option>
                 ))}
               </select>

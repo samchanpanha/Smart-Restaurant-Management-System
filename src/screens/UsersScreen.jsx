@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Icon } from '../components/Icon'
 import { useAuth } from '../lib/auth'
+import { useI18n } from '../lib/i18n'
 
 const cardCls = 'rounded-2xl border border-zinc-200/80 bg-white shadow-sm'
 const input = 'min-h-10 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 outline-none transition focus:border-orange-300 focus:ring-2 focus:ring-orange-100'
@@ -28,6 +29,8 @@ async function send(method, route, body) {
 
 export default function UsersScreen() {
   const { user: me } = useAuth()
+  const { lang, dict } = useI18n()
+  const us = dict.users || {}
   const [users, setUsers] = useState([])
   const [roles, setRoles] = useState([])
   const [error, setError] = useState('')
@@ -76,8 +79,14 @@ export default function UsersScreen() {
   return (
     <div className="mx-auto max-w-5xl space-y-5">
       <header>
-        <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Users</h1>
-        <p className="mt-1 text-sm text-zinc-500">Who can sign in to this restaurant, and which role they hold.</p>
+        <h1 className="text-2xl font-bold tracking-tight text-zinc-900">
+          {us.title || 'Users'}
+          {lang !== 'en' && <span className="sr-only"> Users</span>}
+        </h1>
+        <p className="mt-1 text-sm text-zinc-500">
+          {us.subtitle || 'Who can sign in to this restaurant, and which role they hold.'}
+          {lang !== 'en' && <span className="sr-only"> Who can sign in to this restaurant, and which role they hold.</span>}
+        </p>
       </header>
 
       {error && <p role="alert" className="rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700 ring-1 ring-inset ring-red-200">{error}</p>}
@@ -107,7 +116,7 @@ export default function UsersScreen() {
                   </span>
                   <span className="text-xs font-medium text-zinc-600">{entry.role?.label || entry.roleId}</span>
                   <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${entry.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                    {entry.status}
+                    {entry.status === 'active' ? (us.active || 'active') : (us.disabled || entry.status)}
                   </span>
                   <select
                     aria-label={`Role for ${entry.name}`}
@@ -134,17 +143,17 @@ export default function UsersScreen() {
         </section>
 
         <section className={`${cardCls} p-5`}>
-          <h2 className="text-sm font-bold text-zinc-800">Add a user</h2>
+          <h2 className="text-sm font-bold text-zinc-800">{us.addUser || 'Add a user'}</h2>
           <form className="mt-3 space-y-3" onSubmit={create}>
-            <input required placeholder="Full name" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} className={input} />
-            <input required type="email" placeholder="Email" value={draft.email} onChange={(event) => setDraft({ ...draft, email: event.target.value })} className={input} />
-            <input required type="password" minLength={8} placeholder="Temporary password" value={draft.password} onChange={(event) => setDraft({ ...draft, password: event.target.value })} className={input} />
+            <input required placeholder={us.name || 'Full name'} value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} className={input} />
+            <input required type="email" placeholder={us.email || 'Email'} value={draft.email} onChange={(event) => setDraft({ ...draft, email: event.target.value })} className={input} />
+            <input required type="password" minLength={8} placeholder={us.password || 'Temporary password'} value={draft.password} onChange={(event) => setDraft({ ...draft, password: event.target.value })} className={input} />
             <select required value={draft.roleId} onChange={(event) => setDraft({ ...draft, roleId: event.target.value })} className={input}>
-              <option value="">Choose a role…</option>
+              <option value="">{us.role || 'Choose a role…'}</option>
               {roles.map((role) => <option key={role.id} value={role.id}>{role.label}</option>)}
             </select>
             <button type="submit" disabled={busy || roles.length === 0} className={`${btnPrimary} w-full`}>
-              {busy ? 'Adding…' : 'Add user'}
+              {busy ? 'Adding…' : (us.createUser || 'Add user')}
             </button>
           </form>
         </section>

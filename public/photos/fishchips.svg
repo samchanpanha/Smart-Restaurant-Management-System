@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" role="img" aria-label="Fish & Chips plated">
+  <defs><linearGradient id="bg_fishchips" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fffbeb"/><stop offset="1" stop-color="#fde68a"/></linearGradient></defs>
+  <rect width="320" height="200" fill="url(#bg_fishchips)"/>
+  <circle cx="160" cy="104" r="74" fill="#ffffff" opacity="0.82"/>
+  <path d="M104 102c18-22 58-24 84-6 8 6 12 16 4 24-22 14-64 12-88-18z" fill="#f59e0b"/><rect x="172" y="106" width="38" height="9" rx="4" fill="#fbbf24"/><rect x="166" y="118" width="42" height="9" rx="4" fill="#eab308"/><circle cx="122" cy="128" r="11" fill="#fef08a" stroke="#eab308" stroke-width="2"/>
+</svg>

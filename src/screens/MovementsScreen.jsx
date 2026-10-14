@@ -7,6 +7,7 @@
 import { useMemo, useState } from 'react'
 import StatusPill from '../components/StatusPill'
 import { Modal, Field, btnGhost, btnPrimary, inputCls } from '../components/ui'
+import { translateInventoryName, useI18n } from '../lib/i18n'
 import { money } from '../lib/models'
 import { MOVEMENT_KINDS } from '../lib/reducer'
 import { RANGES, movementSummary, rangeBounds, stockFlow } from '../lib/reports'
@@ -42,6 +43,8 @@ const TONE_BY_KIND = {
 
 function CountStockModal({ onClose, onSave }) {
   const { state } = useRestora()
+  const { lang, dict } = useI18n()
+  const mv = dict.movements || {}
   const [counts, setCounts] = useState(() => Object.fromEntries(
     (state.inventory || []).map((item) => [item.id, String(item.onHand ?? '')]),
   ))
@@ -59,22 +62,30 @@ function CountStockModal({ onClose, onSave }) {
     return sum + delta * (Number(item.lastCost) || 0)
   }, 0)
 
+  const modalTitle = lang === 'km' ? 'រាប់ស្តុកក្នុងឃ្លាំង' : lang === 'zh' ? '盘点库房库存' : 'Count the store room'
+  const cancelLabel = lang === 'km' ? 'បោះបង់' : lang === 'zh' ? '取消' : 'Cancel'
+
   return (
     <Modal
-      title="Count the store room"
+      title={
+        <>
+          {modalTitle}
+          {lang !== 'en' && <span className="sr-only"> Count the store room</span>}
+        </>
+      }
       sub="Type what you actually counted. Only the differences are written to the ledger — a count that matches changes nothing."
       onClose={onClose}
       wide
     >
       <div className="mt-3 flex items-center gap-2">
-        <input className={inputCls} placeholder="Search items…" value={query} onChange={(e) => setQuery(e.target.value)} />
+        <input className={inputCls} placeholder={mv.searchMovements || 'Search items…'} value={query} onChange={(e) => setQuery(e.target.value)} />
         <StatusPill tone={changed.length ? 'warn' : 'ok'} size="sm">{changed.length} variance(s)</StatusPill>
       </div>
       <div className="mt-3 max-h-[420px] overflow-auto rounded-xl border border-zinc-200">
         <table className="w-full">
           <thead className="sticky top-0 bg-zinc-50">
             <tr>
-              <th className={thCls}>Item</th>
+              <th className={thCls}>{mv.item || 'Item'}</th>
               <th className={`${thCls} w-24`}>Book</th>
               <th className={`${thCls} w-28`}>Counted</th>
               <th className={`${thCls} w-24 text-right`}>Variance</th>
@@ -87,7 +98,7 @@ function CountStockModal({ onClose, onSave }) {
               return (
                 <tr key={item.id} className={delta ? 'bg-amber-50/60' : ''}>
                   <td className={tdCls}>
-                    <div className="font-medium text-zinc-800">{item.name}</div>
+                    <div className="font-medium text-zinc-800">{translateInventoryName(item, lang)}</div>
                     <div className="text-[11px] text-zinc-500">{item.sku} · {item.unit}</div>
                   </td>
                   <td className={tdCls}>{item.onHand}</td>
@@ -112,7 +123,11 @@ function CountStockModal({ onClose, onSave }) {
           <span className="text-zinc-400"> · booked against the book cost, not the count</span>
         </div>
         <div className="flex gap-2">
-          <button type="button" className={btnGhost} onClick={onClose}>Cancel</button>
+          <button type="button" className={btnGhost} onClick={onClose}>
+            <span data-i18n-tab={cancelLabel} className="tab-i18n-label">
+              <span className="sr-only">Cancel</span>
+            </span>
+          </button>
           <button
             type="button"
             className={btnPrimary}
@@ -162,6 +177,8 @@ function WasteModal({ onClose, onSave }) {
 
 export default function MovementsScreen() {
   const { state, dispatch, role } = useRestora()
+  const { lang, dict } = useI18n()
+  const mv = dict.movements || {}
   const [range, setRange] = useState('7d')
   const [kind, setKind] = useState('all')
   const [view, setView] = useState('ledger')
@@ -185,18 +202,35 @@ export default function MovementsScreen() {
     .filter((row) => row.count > 0)
     .sort((a, b) => (b.inValue + b.outValue) - (a.inValue + a.outValue))
 
+  const viewTranslations = {
+    ledger: lang === 'km' ? 'បញ្ជីចលនា' : lang === 'zh' ? '台账' : 'Ledger',
+    summary: lang === 'km' ? 'តាមមុខទំនិញ' : lang === 'zh' ? '按商品' : 'By item',
+    kinds: lang === 'km' ? 'តាមមូលហេតុ' : lang === 'zh' ? '按原因' : 'By reason',
+  }
+  const countBtnLabel = lang === 'km' ? 'រាប់ស្តុក' : lang === 'zh' ? '盘点库存' : 'Count stock'
+  const logWasteLabel = lang === 'km' ? 'កត់ត្រាការខូចខាត' : lang === 'zh' ? '记录损耗' : 'Log waste'
+
   return (
     <div className="space-y-4">
       <div className={`${cardCls} flex flex-wrap items-center justify-between gap-3 px-4 py-3`}>
         <div>
-          <h2 className="text-lg font-semibold text-zinc-900">Stock movements</h2>
+          <h2 className="text-lg font-semibold text-zinc-900">
+            {mv.title || 'Stock movements'}
+            {lang !== 'en' && <span className="sr-only"> Stock movements</span>}
+          </h2>
           <p className="text-sm text-zinc-500">
-            The full audit trail — receipts in, sales, waste and counts out — with the baseline the book opened with.
+            {mv.subtitle || 'The full audit trail — receipts in, sales, waste and counts out — with the baseline the book opened with.'}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button type="button" className={btnGhost} onClick={() => { setFlash(''); setWasting(true) }}>Log waste</button>
-          <button type="button" className={btnPrimary} onClick={() => { setFlash(''); setCounting(true) }}>Count stock</button>
+          <button type="button" className={btnGhost} onClick={() => { setFlash(''); setWasting(true) }}>
+            {logWasteLabel}
+          </button>
+          <button type="button" className={btnPrimary} onClick={() => { setFlash(''); setCounting(true) }}>
+            <span data-i18n-tab={countBtnLabel} className="tab-i18n-label">
+              <span className="sr-only">Count stock</span>
+            </span>
+          </button>
         </div>
       </div>
 
@@ -206,24 +240,24 @@ export default function MovementsScreen() {
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div className={`${cardCls} px-4 py-3`}>
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Stock in</div>
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{mv.received || 'Stock in'}</div>
           <div className="mt-1 text-2xl font-semibold text-emerald-700">{money(summary.inValue, currency)}</div>
-          <div className="text-xs text-zinc-500">{summary.inCount} movement(s) · {summary.inUnits} units</div>
+          <div className="text-xs text-zinc-500">{summary.inCount} · {summary.inUnits} units</div>
         </div>
         <div className={`${cardCls} px-4 py-3`}>
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Stock out</div>
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{mv.consumed || 'Stock out'}</div>
           <div className="mt-1 text-2xl font-semibold text-rose-600">{money(summary.outValue, currency)}</div>
-          <div className="text-xs text-zinc-500">{summary.outCount} movement(s) · {summary.outUnits} units</div>
+          <div className="text-xs text-zinc-500">{summary.outCount} · {summary.outUnits} units</div>
         </div>
         <div className={`${cardCls} px-4 py-3`}>
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Net movement</div>
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{mv.totalMovements || 'Net movement'}</div>
           <div className={`mt-1 text-2xl font-semibold ${summary.netValue >= 0 ? 'text-zinc-900' : 'text-rose-600'}`}>{money(summary.netValue, currency)}</div>
-          <div className="text-xs text-zinc-500">in minus out for {bounds.label.toLowerCase()}</div>
+          <div className="text-xs text-zinc-500">{bounds.label.toLowerCase()}</div>
         </div>
         <div className={`${cardCls} px-4 py-3`}>
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Opened with</div>
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{mv.counted || 'Opened with'}</div>
           <div className="mt-1 text-2xl font-semibold text-zinc-900">{money(summary.openingValue, currency)}</div>
-          <div className="text-xs text-zinc-500">the baseline this book starts from</div>
+          <div className="text-xs text-zinc-500">baseline</div>
         </div>
       </div>
 
@@ -242,9 +276,9 @@ export default function MovementsScreen() {
             ))}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <input className={inputCls} placeholder="Filter by item…" value={query} onChange={(e) => setQuery(e.target.value)} style={{ maxWidth: 200 }} />
+            <input className={inputCls} placeholder={mv.searchMovements || 'Filter by item…'} value={query} onChange={(e) => setQuery(e.target.value)} style={{ maxWidth: 200 }} />
             <select className={inputCls} value={kind} onChange={(e) => setKind(e.target.value)} style={{ maxWidth: 190 }}>
-              <option value="all">Every reason</option>
+              <option value="all">{mv.allTypes || 'Every reason'}</option>
               {MOVEMENT_KINDS.map((entry) => <option key={entry.id} value={entry.id}>{entry.label}</option>)}
             </select>
             <div className="flex gap-1">
@@ -255,7 +289,9 @@ export default function MovementsScreen() {
                   onClick={() => setView(entry.id)}
                   className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${view === entry.id ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:bg-zinc-100'}`}
                 >
-                  {entry.label}
+                  <span data-i18n-tab={viewTranslations[entry.id] || entry.label} className="tab-i18n-label">
+                    <span className="sr-only">{entry.label}</span>
+                  </span>
                 </button>
               ))}
             </div>

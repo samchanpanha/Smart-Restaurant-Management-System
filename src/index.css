@@ -183,6 +183,9 @@ body {
 .restora-theme .tab-list::-webkit-scrollbar {
   display: none;
 }
+.tab-i18n-label::before {
+  content: attr(data-i18n-tab);
+}
 .restora-theme .restora-tab {
   cursor: grab;
   transition: background-color 0.15s ease, color 0.15s ease;

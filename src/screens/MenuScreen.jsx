@@ -9,6 +9,7 @@ import { PhotoField } from '../components/ItemPhotoField'
 import StatusPill from '../components/StatusPill'
 import { Field, Modal, btnPrimary, inputCls } from '../components/ui'
 import { MARGIN_BAND_META, STATIONS, STATION_META } from '../lib/constants'
+import { translateCategory, translateDishName, translateInventoryName, useI18n } from '../lib/i18n'
 import { contributionFor, costingFor, money, plateCostFor, uid } from '../lib/models'
 import { useMenuCatalog } from '../lib/useMenuCatalog'
 import { useRestora } from '../lib/store'
@@ -35,6 +36,8 @@ function isSafeImageUrl(value) {
 
 function Coster({ dishId, onDone }) {
   const { state, dispatch } = useRestora()
+  const { lang, dict } = useI18n()
+  const mn = dict.menu || {}
   const dish = state.menu.find((m) => m.id === dishId)
   const recipe = dish ? state.recipes[dish.id] : null
   const invById = useMemo(() => Object.fromEntries(state.inventory.map((i) => [i.id, i])), [state.inventory])
@@ -191,13 +194,16 @@ function Coster({ dishId, onDone }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-xl font-bold tracking-tight">{dish.name}</h2>
+            <h2 className="text-xl font-bold tracking-tight">{translateDishName(dish, lang)}</h2>
+            {lang !== 'en' && translateDishName(dish, lang) !== dish.name && (
+              <span className="text-xs text-zinc-400">({dish.name})</span>
+            )}
             {!dish.available && <StatusPill tone="bad">86&apos;d</StatusPill>}
             {dish.active === false && <StatusPill tone="muted">Hidden</StatusPill>}
             <StatusPill tone={MARGIN_BAND_META[saved.band].tone}>{saved.band} · {(saved.contribution * 100).toFixed(1)}%</StatusPill>
           </div>
           <div className="mt-1 text-xs text-zinc-500">
-            {dish.category} · {dish.station} station
+            {translateCategory(dish.category, lang)} · {dish.station} station
             {dish.modifiers?.length ? ` · mods: ${dish.modifiers.map((g) => `${g.label}${g.required ? '*' : ''}`).join(', ')}` : ' · no modifiers'}
           </div>
         </div>
@@ -210,20 +216,20 @@ function Coster({ dishId, onDone }) {
               : 'bg-emerald-500 text-black hover:bg-emerald-400'
           }`}
         >
-          {dish.available ? '86 this dish' : 'Back on menu'}
+          {dish.available ? (mn.mark86 || '86 this dish') : (mn.backOnMenu || 'Back on menu')}
         </button>
       </div>
 
       {/* Price / yield / plate strip */}
       <div className="grid gap-3 sm:grid-cols-4">
-        <Field label="Menu price $">
+        <Field label={mn.menuPrice || 'Menu price $'}>
           <input
             type="number" min="0" step="any" value={draft.price}
             onChange={(e) => setDraft((d) => ({ ...d, price: e.target.value }))}
             className={`${inputCls} tnum`} aria-label="Menu price"
           />
         </Field>
-        <Field label="Yield (portions)">
+        <Field label={mn.yieldPortions || 'Yield (portions)'}>
           <input
             type="number" min="1" step="1" value={draft.yieldPortions}
             onChange={(e) => setDraft((d) => ({ ...d, yieldPortions: e.target.value }))}
@@ -231,13 +237,13 @@ function Coster({ dishId, onDone }) {
           />
         </Field>
         <div>
-          <div className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-zinc-500">Plate cost</div>
+          <div className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-zinc-500">{mn.plateCost || 'Plate cost'}</div>
           <div className="tnum rounded-lg bg-black/30 px-3 py-2.5 text-lg font-bold ring-1 ring-inset ring-[var(--color-ink-700)]">
             {money(live.plate)}
           </div>
         </div>
         <div>
-          <div className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-zinc-500">Contribution</div>
+          <div className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-zinc-500">{mn.contribution || 'Contribution'}</div>
           <div className="tnum rounded-lg bg-black/30 px-3 py-2.5 text-lg font-bold ring-1 ring-inset ring-[var(--color-ink-700)]">
             {(live.contribution * 100).toFixed(1)}%
           </div>
@@ -344,7 +350,7 @@ function Coster({ dishId, onDone }) {
                   <Field label="SKU">
                     <select value={ing.inventoryItemId} onChange={(e) => setIng(i, { inventoryItemId: e.target.value })} className={inputCls}>
                       {state.inventory.map((s) => (
-                        <option key={s.id} value={s.id}>{s.name} · {money(s.lastCost)}/{s.unit}</option>
+                        <option key={s.id} value={s.id}>{translateInventoryName(s, lang)} · {money(s.lastCost)}/{s.unit}</option>
                       ))}
                     </select>
                   </Field>
@@ -477,6 +483,8 @@ function NewMenuItemModal({ existingItems, onClose, onCreate }) {
 
 export default function MenuScreen() {
   const { state, dispatch, selectedDishId, setSelectedDishId, locId, link } = useRestora()
+  const { lang, dict } = useI18n()
+  const mn = dict.menu || {}
   const { items: catalogMenu, source: catalogSource } = useMenuCatalog(state.menu, locId, link.status)
   const [dishId, setDishId] = useState(selectedDishId || 'm_burger')
   const [query, setQuery] = useState('')
@@ -500,7 +508,11 @@ export default function MenuScreen() {
 
   const list = catalogMenu
     .filter((m) => (cat === 'All' || m.category === cat))
-    .filter((m) => !query.trim() || m.name.toLowerCase().includes(query.trim().toLowerCase()))
+    .filter((m) => {
+      if (!query.trim()) return true
+      const q = query.trim().toLowerCase()
+      return m.name.toLowerCase().includes(q) || translateDishName(m, lang).toLowerCase().includes(q)
+    })
     .map((m) => ({ m, c: costingFor(m, state.recipes[m.id], skuById) }))
     .sort((a, b) => a.c.contribution - b.c.contribution)
 
@@ -509,15 +521,18 @@ export default function MenuScreen() {
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <div className="text-[11px] font-semibold uppercase tracking-widest text-amber-300">
-            Control · step 7 · owner: Maya
+            {mn.kicker || 'Control · step 7 · owner: Maya'}
           </div>
-          <h1 className="mt-1 text-3xl font-bold tracking-tight">Menu &amp; Recipes</h1>
+          <h1 className="mt-1 text-3xl font-bold tracking-tight">
+            {mn.title || 'Menu & Recipes'}
+            {lang !== 'en' && <span className="sr-only"> Menu &amp; Recipes</span>}
+          </h1>
           <p className="mt-1 text-xs text-zinc-500">
-            {catalogSource === 'sqlite' ? 'SQLite catalog · synced for this location' : 'Local demo catalog · SQLite sync is available when the server is running'}
+            {mn.subtitle || (catalogSource === 'sqlite' ? 'SQLite catalog · synced for this location' : 'Local demo catalog · SQLite sync is available when the server is running')}
           </p>
         </div>
         <button type="button" onClick={() => setNewItemOpen(true)} className="min-h-[44px] rounded-lg bg-amber-500 px-4 text-sm font-bold text-black hover:bg-amber-400">
-          + Add menu item
+          {mn.addMenuItem || '+ Add menu item'}
         </button>
       </header>
 
@@ -531,7 +546,7 @@ export default function MenuScreen() {
         <div className="space-y-3">
           <input
             value={query} onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search dishes…" aria-label="Search dishes" className={inputCls}
+            placeholder={mn.searchDishes || 'Search dishes…'} aria-label="Search dishes" className={inputCls}
           />
           <div className="flex flex-wrap gap-1.5">
             {cats.map((c) => (
@@ -539,7 +554,7 @@ export default function MenuScreen() {
                 key={c} type="button" onClick={() => setCat(c)} aria-pressed={cat === c}
                 className={`min-h-[36px] rounded-lg px-3 text-xs font-bold ring-1 ring-inset ${cat === c ? 'bg-amber-500/15 text-amber-200 ring-amber-500/40' : 'text-zinc-500 ring-[var(--color-ink-600)] hover:bg-white/5'}`}
               >
-                {c}
+                {translateCategory(c, lang)}
               </button>
             ))}
           </div>
@@ -549,27 +564,33 @@ export default function MenuScreen() {
                 No menu items match this search.
               </li>
             )}
-            {list.map(({ m, c }) => (
-              <li key={m.id}>
-                <button
-                  type="button" onClick={() => pickDish(m.id)} aria-current={dishId === m.id}
-                  className={`w-full rounded-xl border p-3 text-left ${dishId === m.id ? 'border-amber-500/60 bg-[var(--color-ink-850)] ring-1 ring-amber-500/40' : 'border-[var(--color-ink-700)] bg-[var(--color-ink-900)] hover:border-[var(--color-ink-600)]'}`}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className={`text-sm font-bold ${m.available && m.active !== false ? '' : 'text-zinc-500 line-through'}`}>{m.name}</span>
-                    <span className="tnum text-sm font-bold text-amber-300">{money(m.price)}</span>
-                  </div>
-                  <div className="mt-1.5 flex items-center justify-between gap-2">
-                    <span className="tnum text-[11px] text-zinc-500">plate {money(c.plate)}</span>
-                    <span className="flex gap-1">
-                      {!m.available && <StatusPill tone="bad" size="sm">86</StatusPill>}
-                      {m.active === false && <StatusPill tone="muted" size="sm">Hidden</StatusPill>}
-                      <StatusPill tone={MARGIN_BAND_META[c.band].tone} size="sm">{c.band} {(c.contribution * 100).toFixed(0)}%</StatusPill>
-                    </span>
-                  </div>
-                </button>
-              </li>
-            ))}
+            {list.map(({ m, c }) => {
+              const localName = translateDishName(m, lang)
+              return (
+                <li key={m.id}>
+                  <button
+                    type="button" onClick={() => pickDish(m.id)} aria-current={dishId === m.id}
+                    className={`w-full rounded-xl border p-3 text-left ${dishId === m.id ? 'border-amber-500/60 bg-[var(--color-ink-850)] ring-1 ring-amber-500/40' : 'border-[var(--color-ink-700)] bg-[var(--color-ink-900)] hover:border-[var(--color-ink-600)]'}`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className={`text-sm font-bold ${m.available && m.active !== false ? '' : 'text-zinc-500 line-through'}`}>
+                        {localName}
+                        {lang !== 'en' && localName !== m.name && <span className="sr-only"> ({m.name})</span>}
+                      </span>
+                      <span className="tnum text-sm font-bold text-amber-300">{money(m.price)}</span>
+                    </div>
+                    <div className="mt-1.5 flex items-center justify-between gap-2">
+                      <span className="tnum text-[11px] text-zinc-500">{mn.plateCost || 'plate'} {money(c.plate)}</span>
+                      <span className="flex gap-1">
+                        {!m.available && <StatusPill tone="bad" size="sm">86</StatusPill>}
+                        {m.active === false && <StatusPill tone="muted" size="sm">Hidden</StatusPill>}
+                        <StatusPill tone={MARGIN_BAND_META[c.band].tone} size="sm">{c.band} {(c.contribution * 100).toFixed(0)}%</StatusPill>
+                      </span>
+                    </div>
+                  </button>
+                </li>
+              )
+            })}
           </ul>
         </div>
         <div className="xl:col-span-2">

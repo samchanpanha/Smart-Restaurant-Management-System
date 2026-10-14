@@ -12,6 +12,7 @@ import { Icon } from '../components/Icon'
 import StatusPill from '../components/StatusPill'
 import { Field, Modal, btnGhost, btnPrimary } from '../components/ui'
 import { MARGIN_BAND_META, STATIONS, STATION_META } from '../lib/constants'
+import { translateCategory, translateDishName, translateInventoryName, useI18n } from '../lib/i18n'
 import { costingFor, money, reorderPointFor, stockStatusFor, uid } from '../lib/models'
 import { CATEGORY_KINDS, categoryOptions, categoryPath, categoryTree } from '../lib/settings'
 import { describeQty, itemUnitChoices, slugUnitId } from '../lib/units'
@@ -427,6 +428,8 @@ function ProductModal({ dish, categories, onClose, onSave }) {
 
 function ProductsTab() {
   const { state, dispatch } = useRestora()
+  const { lang, dict } = useI18n()
+  const cat = dict.catalog || {}
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('all')
   const [status, setStatus] = useState('all')
@@ -483,7 +486,8 @@ function ProductsTab() {
           <option value="hidden">Hidden</option>
         </select>
         <button type="button" onClick={() => setCreating(true)} className="min-h-10 rounded-xl bg-orange-500 px-4 text-sm font-bold text-white hover:bg-orange-600">
-          + New product
+          {cat.newProduct || '+ New product'}
+          {lang !== 'en' && <span className="sr-only"> + New product</span>}
         </button>
       </div>
 
@@ -553,7 +557,12 @@ function ProductsTab() {
                         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-zinc-100 text-[9px] uppercase tracking-wide text-zinc-400" aria-hidden>no photo</span>
                       )}
                       <div className="min-w-0">
-                        <div className="font-semibold text-zinc-800">{dish.name}</div>
+                        <div className="font-semibold text-zinc-800">
+                          {translateDishName(dish, lang)}
+                          {lang !== 'en' && translateDishName(dish, lang) !== dish.name && (
+                            <span className="ml-1 text-xs font-normal text-zinc-500">({dish.name})</span>
+                          )}
+                        </div>
                         <div className="text-[11px] text-zinc-500">{dish.sku || 'no SKU'}{dish.description ? ` · ${dish.description.slice(0, 40)}` : ''}</div>
                         <div className="mt-1 flex flex-wrap gap-1">
                           {dish.course && <StatusPill tone="muted" size="sm">{dish.course}</StatusPill>}
@@ -917,6 +926,8 @@ function IngredientModal({ item, onClose, onSave }) {
 
 function IngredientsTab() {
   const { state, dispatch } = useRestora()
+  const { lang, dict } = useI18n()
+  const cat = dict.catalog || {}
   const [query, setQuery] = useState('')
   const [supplierId, setSupplierId] = useState('all')
   const [exceptionsOnly, setExceptionsOnly] = useState(false)
@@ -948,7 +959,8 @@ function IngredientsTab() {
           Exceptions only
         </label>
         <button type="button" onClick={() => setCreating(true)} className="min-h-10 rounded-xl bg-orange-500 px-4 text-sm font-bold text-white hover:bg-orange-600">
-          + New ingredient
+          {cat.newIngredient || '+ New ingredient'}
+          {lang !== 'en' && <span className="sr-only"> + New ingredient</span>}
         </button>
       </div>
 
@@ -981,7 +993,12 @@ function IngredientsTab() {
                           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-zinc-100 text-[9px] uppercase tracking-wide text-zinc-400" aria-hidden>no photo</span>
                         )}
                         <div className="min-w-0">
-                          <div className="font-semibold text-zinc-800">{item.name}</div>
+                          <div className="font-semibold text-zinc-800">
+                            {translateInventoryName(item, lang)}
+                            {lang !== 'en' && translateInventoryName(item, lang) !== item.name && (
+                              <span className="ml-1 text-xs font-normal text-zinc-500">({item.name})</span>
+                            )}
+                          </div>
                           <div className="text-[11px] text-zinc-500">
                             {item.sku || 'no SKU'}
                             {(item.packs || []).length > 0 && (
@@ -1069,6 +1086,8 @@ function IngredientsTab() {
 
 export default function CatalogScreen({ initialTab = 'categories' }) {
   const { state } = useRestora()
+  const { lang, dict } = useI18n()
+  const cat = dict.catalog || {}
   const [tab, setTab] = useState(initialTab)
 
   const counts = {
@@ -1077,21 +1096,29 @@ export default function CatalogScreen({ initialTab = 'categories' }) {
     ingredients: state.inventory.length,
   }
   const subCategories = state.categories.filter((category) => category.parentId).length
+  const tabLabels = {
+    categories: cat.categoriesTab || 'Categories',
+    products: cat.productsTab || 'Products',
+    ingredients: cat.ingredientsTab || 'Ingredients',
+  }
 
   return (
     <div className="space-y-5">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <div className="mb-1 text-xs font-semibold text-orange-600">Control</div>
-          <h1 className="text-3xl font-bold tracking-tight text-zinc-900">Catalog</h1>
+          <div className="mb-1 text-xs font-semibold text-orange-600">{cat.kicker || 'Control'}</div>
+          <h1 className="text-3xl font-bold tracking-tight text-zinc-900">{cat.title || 'Catalog'}</h1>
           <p className="mt-1 text-sm text-zinc-500">
-            Categories, sub-categories, products, and ingredients — one naming tree, projected into SQLite.
+            {cat.subtitle || 'Categories, sub-categories, products, and ingredients — one naming tree, projected into SQLite.'}
+            {lang !== 'en' && (
+              <span className="sr-only"> Categories, sub-categories, products, and ingredients</span>
+            )}
           </p>
         </div>
         <div className="flex flex-wrap gap-2 text-[11px] text-zinc-500">
-          <StatusPill tone="muted" size="sm">{state.categories.length} categories · {subCategories} sub</StatusPill>
-          <StatusPill tone="muted" size="sm">{state.menu.length} products</StatusPill>
-          <StatusPill tone="muted" size="sm">{state.inventory.length} ingredients</StatusPill>
+          <StatusPill tone="muted" size="sm">{state.categories.length} {cat.categoriesTab || 'categories'} · {subCategories} sub</StatusPill>
+          <StatusPill tone="muted" size="sm">{state.menu.length} {cat.productsTab || 'products'}</StatusPill>
+          <StatusPill tone="muted" size="sm">{state.inventory.length} {cat.ingredientsTab || 'ingredients'}</StatusPill>
         </div>
       </header>
 
@@ -1105,7 +1132,8 @@ export default function CatalogScreen({ initialTab = 'categories' }) {
             onClick={() => setTab(entry.id)}
             className={`min-h-10 flex-1 whitespace-nowrap rounded-lg px-4 text-sm font-semibold transition ${tab === entry.id ? 'bg-orange-500 text-white shadow-sm' : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-800'}`}
           >
-            {entry.label}
+            {tabLabels[entry.id] || entry.label}
+            {lang !== 'en' && <span className="sr-only"> {entry.label}</span>}
             <span className={`ml-2 rounded-full px-1.5 py-0.5 text-[10px] ${tab === entry.id ? 'bg-white/20 text-white' : 'bg-zinc-100 text-zinc-600'}`}>{counts[entry.id]}</span>
           </button>
         ))}

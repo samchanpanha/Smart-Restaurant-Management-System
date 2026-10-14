@@ -97,19 +97,66 @@ export function buildSeed() {
   // it is, and a demo photo. Owners edit all of it in Catalog → Products,
   // and the vocabulary behind it lives in Settings → Food & menu.
   const MENU_DETAIL = {
-    m_salad: { course: 'Appetizer', menuWindow: 'lunch', dietaryTags: ['Vegetarian', 'Gluten-free'] },
-    m_wings: { course: 'Appetizer', menuWindow: 'dinner', spiceLevel: 'Medium', dietaryTags: ['Spicy'] },
-    m_soup: { course: 'Appetizer', menuWindow: 'lunch' },
-    m_burger: { course: 'Main', menuWindow: 'dinner', imageUrl: '/photos/burger.svg', allergens: ['Gluten', 'Dairy', 'Sesame'] },
-    m_salmon: { course: 'Main', menuWindow: 'dinner', imageUrl: '/photos/salmon.svg' },
-    m_chickenpasta: { course: 'Main', menuWindow: 'dinner' },
-    m_steak: { course: 'Main', menuWindow: 'dinner' },
-    m_fishchips: { course: 'Main', menuWindow: 'dinner' },
-    m_vegbowl: { course: 'Main', menuWindow: 'lunch', dietaryTags: ['Vegan', 'Dairy-free'] },
-    m_cake: { course: 'Dessert', menuWindow: 'dinner' },
-    m_icecream: { course: 'Dessert', menuWindow: 'dinner', dietaryTags: ['Vegetarian'] },
-    m_soda: { course: 'Drink', menuWindow: '', spiceLevel: '' },
-    m_coffee: { course: 'Drink', menuWindow: '' },
+    m_salad: {
+      course: 'Appetizer', menuWindow: 'lunch', dietaryTags: ['Vegetarian', 'Gluten-free'],
+      imageUrl: '/photos/salad.svg',
+      images: ['/photos/salad.svg', '/photos/salad-prep.svg', '/photos/salad-detail.svg'],
+    },
+    m_wings: {
+      course: 'Appetizer', menuWindow: 'dinner', spiceLevel: 'Medium', dietaryTags: ['Spicy'],
+      imageUrl: '/photos/wings.svg',
+      images: ['/photos/wings.svg', '/photos/wings-prep.svg', '/photos/wings-detail.svg'],
+    },
+    m_soup: {
+      course: 'Appetizer', menuWindow: 'lunch',
+      imageUrl: '/photos/soup.svg',
+      images: ['/photos/soup.svg', '/photos/soup-prep.svg', '/photos/soup-detail.svg'],
+    },
+    m_burger: {
+      course: 'Main', menuWindow: 'dinner', imageUrl: '/photos/burger.svg',
+      images: ['/photos/burger.svg', '/photos/burger-prep.svg', '/photos/burger-detail.svg'],
+      allergens: ['Gluten', 'Dairy', 'Sesame'],
+    },
+    m_salmon: {
+      course: 'Main', menuWindow: 'dinner', imageUrl: '/photos/salmon.svg',
+      images: ['/photos/salmon.svg', '/photos/salmon-prep.svg', '/photos/salmon-detail.svg'],
+    },
+    m_chickenpasta: {
+      course: 'Main', menuWindow: 'dinner', imageUrl: '/photos/chickenpasta.svg',
+      images: ['/photos/chickenpasta.svg', '/photos/chickenpasta-prep.svg', '/photos/chickenpasta-detail.svg'],
+    },
+    m_steak: {
+      course: 'Main', menuWindow: 'dinner', imageUrl: '/photos/steak.svg',
+      images: ['/photos/steak.svg', '/photos/steak-prep.svg', '/photos/steak-detail.svg'],
+    },
+    m_fishchips: {
+      course: 'Main', menuWindow: 'dinner', imageUrl: '/photos/fishchips.svg',
+      images: ['/photos/fishchips.svg', '/photos/fishchips-prep.svg', '/photos/fishchips-detail.svg'],
+    },
+    m_vegbowl: {
+      course: 'Main', menuWindow: 'lunch', dietaryTags: ['Vegan', 'Dairy-free'],
+      imageUrl: '/photos/vegbowl.svg',
+      images: ['/photos/vegbowl.svg', '/photos/vegbowl-prep.svg', '/photos/vegbowl-detail.svg'],
+    },
+    m_cake: {
+      course: 'Dessert', menuWindow: 'dinner', imageUrl: '/photos/cake.svg',
+      images: ['/photos/cake.svg', '/photos/cake-prep.svg', '/photos/cake-detail.svg'],
+    },
+    m_icecream: {
+      course: 'Dessert', menuWindow: 'dinner', dietaryTags: ['Vegetarian'],
+      imageUrl: '/photos/icecream.svg',
+      images: ['/photos/icecream.svg', '/photos/icecream-prep.svg', '/photos/icecream-detail.svg'],
+    },
+    m_soda: {
+      course: 'Drink', menuWindow: '', spiceLevel: '',
+      imageUrl: '/photos/soda.svg',
+      images: ['/photos/soda.svg', '/photos/soda-prep.svg', '/photos/soda-detail.svg'],
+    },
+    m_coffee: {
+      course: 'Drink', menuWindow: '',
+      imageUrl: '/photos/coffee.svg',
+      images: ['/photos/coffee.svg', '/photos/coffee-prep.svg', '/photos/coffee-detail.svg'],
+    },
   }
 
   // ─── Suppliers ─────────────────────────────────────────────────

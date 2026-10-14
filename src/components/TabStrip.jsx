@@ -5,6 +5,7 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { CRITICAL_ALERTS, NAV_SECTIONS, ROLE_NAV, SCREEN_ICONS, screenForAlert } from '../lib/constants'
+import { translateScreenLabel, useI18n } from '../lib/i18n'
 import { LOCATIONS, getAlerts, useRestora } from '../lib/store'
 import { Icon } from './Icon'
 
@@ -30,6 +31,7 @@ export default function TabStrip({ fallbackScreen }) {
     role, state, tabs, activeTabId, activateTab, closeTab, openTab, openScreenInTab, reorderTab, renameTab,
     togglePinTab, duplicateTab, closeOtherTabs, closeRightTabs, reopenClosedTab, canReopenClosed,
   } = useRestora()
+  const { lang, dict } = useI18n()
   const allowed = ROLE_NAV[role] || ROLE_NAV.owner
   // Every tab of the workspace is shown, whatever the current role: a role
   // switch is a change of who is driving, not a reason to hide the road.
@@ -341,6 +343,7 @@ export default function TabStrip({ fallbackScreen }) {
           const locked = Boolean(tab.screen) && !allowed.includes(tab.screen)
           const badge = badges[tab.screen]
           const label = tabLabel(tab)
+          const displayLabel = tab.title || (tab.screen ? translateScreenLabel(tab.screen, label, lang) : dict.newTab)
           const locShort = LOCATIONS.find((item) => item.id === tab.locId)?.short || tab.locId
           const isRenaming = renaming?.tabId === tab.id
           return (
@@ -398,7 +401,14 @@ export default function TabStrip({ fallbackScreen }) {
                       />
                       <span aria-hidden="true" className={`absolute -right-1 -top-0.5 h-1.5 w-1.5 rounded-full ${locDot(tab.locId)}`} />
                     </span>
-                    {!tab.pinned && <span className={`truncate ${locked ? 'text-amber-700/80' : ''}`}>{label}</span>}
+                    {!tab.pinned && (
+                      <span
+                        data-i18n-tab={displayLabel}
+                        className={`tab-i18n-label truncate ${locked ? 'text-amber-700/80' : ''}`}
+                      >
+                        <span className="sr-only">{label}</span>
+                      </span>
+                    )}
                     {badge && (
                       <span
                         title={`${badge.count} alert${badge.count > 1 ? 's' : ''} need attention`}
@@ -450,7 +460,7 @@ export default function TabStrip({ fallbackScreen }) {
           className="flex h-8 items-center gap-1 rounded-lg px-2 text-xs font-semibold text-zinc-500 hover:bg-white hover:text-zinc-900"
         >
           <Icon name="plus" size={16} />
-          <span className="hidden lg:inline">New tab</span>
+          <span className="hidden lg:inline">{dict.newTab}</span>
         </button>
       </div>
 
@@ -460,18 +470,18 @@ export default function TabStrip({ fallbackScreen }) {
           className="tab-menu fixed z-50 w-[216px] rounded-xl border border-zinc-200 bg-white p-1.5 shadow-[0_18px_45px_rgba(22,30,40,.18)]"
           style={{ left: menu.x, top: menu.y }}
         >
-          <MenuItem label="New tab" hint="⌥T" onPick={menuAction(() => openTab())} />
-          {canReopenClosed && <MenuItem label="Reopen closed tab" hint="⌘⇧T" onPick={menuAction(reopenClosedTab)} />}
+          <MenuItem label={dict.newTab} srLabel="New tab" hint="⌥T" onPick={menuAction(() => openTab())} />
+          {canReopenClosed && <MenuItem label={dict.reopenClosedTab} srLabel="Reopen closed tab" hint="⌘⇧T" onPick={menuAction(reopenClosedTab)} />}
           {menuTab && (
             <>
               <div className="my-1 h-px bg-zinc-100" />
-              <MenuItem label="Duplicate tab" onPick={menuAction(() => duplicateTab(menuTab.id))} />
-              <MenuItem label="Rename tab" onPick={menuAction(() => setRenaming({ tabId: menuTab.id, draft: tabLabel(menuTab) }))} />
-              <MenuItem label={menuTab.pinned ? 'Unpin tab' : 'Pin tab'} onPick={menuAction(() => togglePinTab(menuTab.id))} />
+              <MenuItem label={dict.duplicateTab} srLabel="Duplicate tab" onPick={menuAction(() => duplicateTab(menuTab.id))} />
+              <MenuItem label={dict.renameTab} srLabel="Rename tab" onPick={menuAction(() => setRenaming({ tabId: menuTab.id, draft: tabLabel(menuTab) }))} />
+              <MenuItem label={menuTab.pinned ? dict.unpinTab : dict.pinTab} srLabel={menuTab.pinned ? 'Unpin tab' : 'Pin tab'} onPick={menuAction(() => togglePinTab(menuTab.id))} />
               <div className="my-1 h-px bg-zinc-100" />
-              <MenuItem label="Close tab" hint="⌘W" onPick={menuAction(() => closeTab(menuTab.id, fallbackScreen))} />
-              <MenuItem label="Close other tabs" disabled={!closableOthers} onPick={menuAction(() => closeOtherTabs(menuTab.id))} />
-              <MenuItem label="Close tabs to the right" disabled={!closableRight} onPick={menuAction(() => closeRightTabs(menuTab.id))} />
+              <MenuItem label={dict.closeTab} srLabel="Close tab" hint="⌘W" onPick={menuAction(() => closeTab(menuTab.id, fallbackScreen))} />
+              <MenuItem label={dict.closeOtherTabs} srLabel="Close other tabs" disabled={!closableOthers} onPick={menuAction(() => closeOtherTabs(menuTab.id))} />
+              <MenuItem label={dict.closeRightTabs} srLabel="Close tabs to the right" disabled={!closableRight} onPick={menuAction(() => closeRightTabs(menuTab.id))} />
             </>
           )}
         </div>
@@ -480,7 +490,7 @@ export default function TabStrip({ fallbackScreen }) {
   )
 }
 
-function MenuItem({ label, hint, disabled, onPick }) {
+function MenuItem({ label, srLabel, hint, disabled, onPick }) {
   return (
     <button
       type="button"
@@ -489,7 +499,10 @@ function MenuItem({ label, hint, disabled, onPick }) {
       onClick={onPick}
       className="flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-left text-xs font-medium text-zinc-700 hover:bg-orange-50 hover:text-zinc-900 disabled:cursor-not-allowed disabled:text-zinc-300 disabled:hover:bg-transparent"
     >
-      {label}
+      <span>
+        {label}
+        {srLabel && srLabel !== label && <span className="sr-only"> {srLabel}</span>}
+      </span>
       {hint && <span className="ml-4 text-[10px] text-zinc-400">{hint}</span>}
     </button>
   )

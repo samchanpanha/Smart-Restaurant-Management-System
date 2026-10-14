@@ -4,6 +4,15 @@
 // consumer-friendly surface — the opposite of the dark ops screens.
 
 import { useMemo, useState } from 'react'
+import LanguageSwitcher from '../components/LanguageSwitcher'
+import {
+  translateCategory,
+  translateDishName,
+  translateModifier,
+  translateTableName,
+  useDomTranslator,
+  useI18n,
+} from '../lib/i18n'
 import { money, orderTotals } from '../lib/models'
 import { useMenuCatalog } from '../lib/useMenuCatalog'
 import { useNow, useRestora } from '../lib/store'
@@ -40,11 +49,13 @@ function paidOrderFor(state, tableId) {
 // ─── Dish detail (modifiers, qty) ─────────────────────────────────
 
 function DishModal({ item, onAdd, onClose, showImages = true }) {
+  const { lang } = useI18n()
   const [picks, setPicks] = useState({})
   const [qty, setQty] = useState(1)
   const [notes, setNotes] = useState('')
   const required = (item.modifiers || []).filter((g) => g.required)
   const ready = required.every((g) => picks[g.id])
+  const dishTitle = translateDishName(item, lang)
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label={item.name} onClick={onClose}>
@@ -58,7 +69,10 @@ function DishModal({ item, onAdd, onClose, showImages = true }) {
             className="mb-4 h-44 w-full rounded-2xl object-cover"
           />
         )}
-        <h2 className="text-xl font-extrabold text-stone-900">{item.name}</h2>
+        <h2 className="text-xl font-extrabold text-stone-900">
+          {dishTitle}
+          {lang !== 'en' && <span className="sr-only"> {item.name}</span>}
+        </h2>
         <p className="mt-1 text-sm leading-relaxed text-stone-500">{item.description || DESC[item.id] || 'Prepared fresh to order.'}</p>
         <div className="tnum mt-2 text-lg font-extrabold text-amber-700">{money(item.price)}</div>
         {!!item.dietaryTags?.length && (
@@ -87,7 +101,8 @@ function DishModal({ item, onAdd, onClose, showImages = true }) {
                     picks[g.id] === opt ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
                   }`}
                 >
-                  {opt}
+                  {translateModifier(opt, lang)}
+                  {lang !== 'en' && <span className="sr-only"> {opt}</span>}
                 </button>
               ))}
             </div>
@@ -188,6 +203,9 @@ function PaySheet({ order, onClose, onPaid }) {
 
 export default function GuestScreen({ tableId }) {
   const { state, dispatch, locId, link } = useRestora()
+  const { lang, dict } = useI18n()
+  useDomTranslator(null, lang)
+  const gu = dict.guest || {}
   const { items: catalogMenu } = useMenuCatalog(state.menu, locId, link.status)
   useNow(5000)
   const [tab, setTab] = useState('menu')
@@ -280,8 +298,8 @@ export default function GuestScreen({ tableId }) {
     return shell(
       <div className="rounded-3xl bg-white p-8 text-center shadow-sm">
         <div className="text-4xl">🪑</div>
-        <h1 className="mt-3 text-xl font-extrabold">{table.name} isn&apos;t seated yet.</h1>
-        <p className="mt-1 text-sm text-stone-500">Your host will seat you, then this menu unlocks. The wait is worth it.</p>
+        <h1 className="mt-3 text-xl font-extrabold">{translateTableName(table.name, lang)}{lang === 'km' ? ' មិនទាន់បានដាក់ភ្ញៀវអង្គុយទេ។' : lang === 'zh' ? ' 尚未入座。' : " isn't seated yet."}{lang !== 'en' && <span className="sr-only"> {table.name} isn&apos;t seated yet.</span>}</h1>
+        <p className="mt-1 text-sm text-stone-500">{lang === 'km' ? 'បុគ្គលិកទទួលភ្ញៀវនឹងដាក់លោកអ្នកអង្គុយ បន្ទាប់មកមុខម្ហូបនេះនឹងបើក។ ការរង់ចាំគឺមានតម្លៃ។' : lang === 'zh' ? '接待员安排入座后，菜单即会解锁。等待是值得的。' : 'Your host will seat you, then this menu unlocks. The wait is worth it.'}</p>
       </div>,
     )
   }
@@ -293,29 +311,39 @@ export default function GuestScreen({ tableId }) {
   return (
     <div className="min-h-screen bg-[#faf6ef] text-stone-900">
       <div className="mx-auto max-w-md px-4 pb-36 pt-5">
+        <div className="mb-3 flex justify-end">
+          <LanguageSwitcher compact testIdPrefix="guest-lang" />
+        </div>
         <header className="flex items-center justify-between">
           <div>
-            <div className="text-xs font-bold uppercase tracking-widest text-amber-700">Restora · order at table</div>
-            <h1 className="text-2xl font-extrabold tracking-tight">{table.name}</h1>
+            <div className="text-xs font-bold uppercase tracking-widest text-amber-700">
+              {gu.orderAtTable || 'Restora · order at table'}
+              {lang !== 'en' && <span className="sr-only"> Restora · order at table</span>}
+            </div>
+            <h1 className="text-2xl font-extrabold tracking-tight">
+              {translateTableName(table.name, lang)}
+              {lang !== 'en' && <span className="sr-only"> {table.name}</span>}
+            </h1>
           </div>
           <button
             type="button"
             onClick={() => dispatch({ type: 'CALL_SERVER', tableId })}
             className="min-h-[44px] rounded-full border border-stone-200 bg-white px-4 text-sm font-bold text-stone-700 shadow-sm"
           >
-            🙋 Call server
+            🙋 {gu.callServer || 'Call server'}
+            {lang !== 'en' && <span className="sr-only"> Call server</span>}
           </button>
         </header>
 
         <input
           value={guestName} onChange={(e) => setGuestName(e.target.value)} maxLength={24}
-          placeholder="Your name (optional — helps the kitchen)"
+          placeholder={gu.yourName || 'Your name (optional — helps the kitchen)'}
           className="mt-3 min-h-[44px] w-full rounded-2xl border border-stone-200 bg-white px-4 text-sm shadow-sm"
         />
 
         {justSent && (
           <div className="mt-3 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white shadow" role="status">
-            Sent to the kitchen — watch it here live. 🔥
+            {gu.sentToKitchen || 'Sent to the kitchen — watch it here live. 🔥'}
           </div>
         )}
 
@@ -328,7 +356,8 @@ export default function GuestScreen({ tableId }) {
                     key={c} type="button" onClick={() => setCat(c)}
                     className={`min-h-[44px] shrink-0 rounded-full px-4 text-sm font-bold ${cat === c ? 'bg-stone-900 text-white' : 'bg-white text-stone-600 shadow-sm'}`}
                   >
-                    {c}
+                    {translateCategory(c, lang)}
+                    {lang !== 'en' && <span className="sr-only"> {c}</span>}
                   </button>
                 ))}
               </div>
@@ -351,7 +380,10 @@ export default function GuestScreen({ tableId }) {
                     )}
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="font-extrabold">{m.name}</div>
+                        <div className="font-extrabold">
+                          {translateDishName(m, lang)}
+                          {lang !== 'en' && <span className="sr-only"> {m.name}</span>}
+                        </div>
                         <div className="mt-0.5 line-clamp-2 text-[13px] leading-snug text-stone-500">{m.description || DESC[m.id] || 'Prepared fresh to order.'}</div>
                       </div>
                       <div className="tnum shrink-0 font-extrabold text-amber-700">{money(m.price)}</div>
@@ -369,7 +401,7 @@ export default function GuestScreen({ tableId }) {
               ))}
               {available.length === 0 && (
                 <li className="rounded-3xl bg-white p-6 text-center text-sm text-stone-500">
-                  Everything in {cat} is 86&apos;d right now — the kitchen will fix it. Try another craving.
+                  Everything in {translateCategory(cat, lang)} is 86&apos;d right now — the kitchen will fix it. Try another craving.
                 </li>
               )}
             </ul>
@@ -381,7 +413,7 @@ export default function GuestScreen({ tableId }) {
 
         {tab === 'status' && (
           <div className="mt-4 space-y-2.5">
-            <h2 className="text-sm font-bold uppercase tracking-widest text-stone-500">Your orders · live</h2>
+            <h2 className="text-sm font-bold uppercase tracking-widest text-stone-500">{gu.yourOrders || 'Your orders · live'}</h2>
             {myLines.length === 0 && (
               <div className="rounded-3xl bg-white p-6 text-center text-sm text-stone-500 shadow-sm">
                 Nothing sent yet — <button type="button" onClick={() => setTab('menu')} className="font-bold text-amber-700 underline">browse the menu</button>.
@@ -390,9 +422,12 @@ export default function GuestScreen({ tableId }) {
             {myLines.map((l) => (
               <div key={l.id} className="flex items-center justify-between gap-2 rounded-3xl bg-white p-4 shadow-sm">
                 <div>
-                  <div className="font-extrabold">{l.qty}× {menuById[l.menuItemId]?.name}</div>
+                  <div className="font-extrabold">
+                    {l.qty}× {translateDishName(menuById[l.menuItemId] || { id: l.menuItemId, name: l.menuItemId }, lang)}
+                    {lang !== 'en' && <span className="sr-only"> {menuById[l.menuItemId]?.name}</span>}
+                  </div>
                   <div className="text-xs text-stone-500">
-                    {(l.modifiers || []).map((m) => m.value).join(' · ')}
+                    {(l.modifiers || []).map((m) => translateModifier(m.value, lang)).join(' · ')}
                     {l.comped && ' · on the house 🎁'}
                   </div>
                 </div>
@@ -413,7 +448,7 @@ export default function GuestScreen({ tableId }) {
 
         {tab === 'bill' && (
           <div className="mt-4 space-y-3">
-            <h2 className="text-sm font-bold uppercase tracking-widest text-stone-500">Table check</h2>
+            <h2 className="text-sm font-bold uppercase tracking-widest text-stone-500">{gu.tableCheck || 'Table check'}</h2>
             {!order || bill.lines.length === 0 ? (
               <div className="rounded-3xl bg-white p-6 text-center text-sm text-stone-500 shadow-sm">
                 Nothing on the check yet.
@@ -424,15 +459,15 @@ export default function GuestScreen({ tableId }) {
                   <ul className="space-y-1.5 text-sm">
                     {bill.lines.map((l) => (
                       <li key={l.id} className="flex justify-between text-stone-700">
-                        <span>{l.qty}× {l.name}{l.by !== 'guest' && <span className="text-stone-400"> (server)</span>}</span>
+                        <span>{l.qty}× {translateDishName(menuById[l.menuItemId] || { id: l.menuItemId, name: l.name }, lang)}{l.by !== 'guest' && <span className="text-stone-400"> (server)</span>}</span>
                         <span className="tnum font-bold">{money(l.lineTotal)}</span>
                       </li>
                     ))}
                   </ul>
                   <div className="mt-3 space-y-1 border-t border-stone-100 pt-3 text-sm">
-                    <div className="flex justify-between text-stone-500"><span>Subtotal</span><span className="tnum">{money(bill.subtotal)}</span></div>
-                    <div className="flex justify-between text-stone-500"><span>Tax</span><span className="tnum">{money(bill.tax)}</span></div>
-                    <div className="flex justify-between text-base font-extrabold"><span>Total due</span><span className="tnum">{money(bill.total)}</span></div>
+                    <div className="flex justify-between text-stone-500"><span>{gu.subtotal || 'Subtotal'}</span><span className="tnum">{money(bill.subtotal)}</span></div>
+                    <div className="flex justify-between text-stone-500"><span>{gu.tax || 'Tax'}</span><span className="tnum">{money(bill.tax)}</span></div>
+                    <div className="flex justify-between text-base font-extrabold"><span>{gu.total || 'Total due'}</span><span className="tnum">{money(bill.total)}</span></div>
                   </div>
                 </div>
                 {payable ? (
@@ -470,21 +505,22 @@ export default function GuestScreen({ tableId }) {
               type="button" onClick={() => setCartOpen(true)}
               className="tnum mb-2 flex min-h-[52px] w-full items-center justify-between rounded-2xl bg-amber-500 px-5 text-base font-extrabold text-stone-950"
             >
-              <span>View order · {cartCount} item{cartCount === 1 ? '' : 's'}</span>
+              <span>{gu.viewOrder || 'View order'} · {cartCount} item{cartCount === 1 ? '' : 's'}</span>
               <span>{money(cartTotal)} →</span>
             </button>
           )}
           <div className="grid grid-cols-3 gap-1">
             {[
-              ['menu', '🍽 Menu'],
-              ['status', `🔥 Status${myLines.filter((l) => l.status === 'fired').length ? ` (${myLines.filter((l) => l.status === 'fired').length})` : ''}`],
-              ['bill', '🧾 Bill'],
-            ].map(([id, label]) => (
+              ['menu', gu.menuTab || '🍽 Menu', '🍽 Menu'],
+              ['status', `${gu.statusTab || '🔥 Status'}${myLines.filter((l) => l.status === 'fired').length ? ` (${myLines.filter((l) => l.status === 'fired').length})` : ''}`, '🔥 Status'],
+              ['bill', gu.billTab || '🧾 Bill', '🧾 Bill'],
+            ].map(([id, label, enLabel]) => (
               <button
                 key={id} type="button" onClick={() => setTab(id)}
                 className={`min-h-[44px] rounded-2xl text-sm font-extrabold ${tab === id ? 'bg-stone-900 text-white' : 'text-stone-500'}`}
               >
                 {label}
+                {lang !== 'en' && <span className="sr-only"> {enLabel}</span>}
               </button>
             ))}
           </div>

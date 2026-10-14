@@ -1,6 +1,7 @@
 import AppShell from './components/AppShell'
 import { Icon } from './components/Icon'
 import { NAV_SECTIONS, ROLE_NAV } from './lib/constants'
+import { translateScreenLabel, useI18n } from './lib/i18n'
 import { RestoraProvider, useRestora } from './lib/store'
 import CatalogScreen from './screens/CatalogScreen'
 import ComingSoon from './screens/ComingSoon'
@@ -63,24 +64,30 @@ function MiniAppFrame({ tableId }) {
  */
 function RestrictedScreen({ screen, role }) {
   const { setRole } = useRestora()
+  const { lang, dict } = useI18n()
+  const rs = dict.restrictedScreen || {}
+  const screenName = translateScreenLabel(screen, SCREEN_LABELS[screen] || screen, lang)
+  const roleName = dict.roles?.[role] || role
   return (
     <div className="mx-auto max-w-xl rounded-2xl border border-amber-200 bg-amber-50/70 p-8 text-center">
       <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/15 text-amber-700">
         <Icon name="lock" size={22} />
       </span>
       <h2 className="mt-4 text-xl font-bold tracking-tight text-zinc-900">
-        {SCREEN_LABELS[screen] || screen} is not part of the {role} workspace
+        {rs.title || `${screenName} is not part of the ${roleName} workspace`}
+        {lang !== 'en' && (
+          <span className="sr-only"> {SCREEN_LABELS[screen] || screen} is not part of the {role} workspace</span>
+        )}
       </h2>
       <p className="mt-2 text-sm text-zinc-600">
-        The tab is still here — this role just cannot open that screen. Close the tab, or switch
-        back to a role that can.
+        {rs.desc ? rs.desc(screenName, roleName) : `${roleName} role cannot access ${screenName}.`}
       </p>
       <button
         type="button"
         onClick={() => setRole('owner')}
         className="mt-5 min-h-10 rounded-xl bg-orange-500 px-4 text-sm font-bold text-white hover:bg-orange-600"
       >
-        Switch to owner (demo)
+        {lang === 'km' ? 'ប្ដូរទៅម្ចាស់ហាង (Owner)' : lang === 'zh' ? '切换至店主 (Owner)' : 'Switch to owner'}
       </button>
     </div>
   )

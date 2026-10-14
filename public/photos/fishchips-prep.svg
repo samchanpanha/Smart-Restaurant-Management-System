@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" role="img" aria-label="Fish & Chips prep">
+  <defs><linearGradient id="bgp_fishchips" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fde68a"/><stop offset="1" stop-color="#fffbeb"/></linearGradient></defs>
+  <rect width="320" height="200" fill="url(#bgp_fishchips)"/>
+  <rect x="44" y="28" width="232" height="144" rx="22" fill="#18181b" opacity="0.12"/>
+  <circle cx="148" cy="104" r="64" fill="#ffffff" opacity="0.9"/>
+  <g transform="translate(-12, 0)"><path d="M104 102c18-22 58-24 84-6 8 6 12 16 4 24-22 14-64 12-88-18z" fill="#f59e0b"/><rect x="172" y="106" width="38" height="9" rx="4" fill="#fbbf24"/><rect x="166" y="118" width="42" height="9" rx="4" fill="#eab308"/><circle cx="122" cy="128" r="11" fill="#fef08a" stroke="#eab308" stroke-width="2"/></g>
+  <circle cx="242" cy="64" r="22" fill="#f59e0b" opacity="0.85"/>
+  <circle cx="242" cy="126" r="18" fill="#facc15" opacity="0.85"/>
+</svg>

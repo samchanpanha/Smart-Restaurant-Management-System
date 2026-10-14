@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" role="img" aria-label="Ice Cream close-up">
+  <defs><linearGradient id="bgd_icecream" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#fdf2f8"/><stop offset="1" stop-color="#fbcfe8"/></linearGradient></defs>
+  <rect width="320" height="200" fill="url(#bgd_icecream)"/>
+  <circle cx="160" cy="100" r="82" fill="#ffffff" opacity="0.92"/>
+  <g transform="translate(-32, -20) scale(1.2)"><circle cx="144" cy="96" r="24" fill="#fbcfe8"/><circle cx="176" cy="96" r="24" fill="#fef3c7"/><path d="M126 112h68l-14 34h-40z" fill="#d97706"/><circle cx="160" cy="72" r="6" fill="#e11d48"/></g>
+</svg>
