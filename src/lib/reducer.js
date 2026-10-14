@@ -32,9 +32,11 @@ import {
   sanitizeSupplier,
   sanitizeTemplate,
   MAX_IMAGE_CHARS,
+  sanitizeImageList,
   sanitizeImageRef,
 } from './settings.js'
-import { buildSeed, buildSeedRiverside } from './seed.js'
+import { sanitizeTranslations } from './i18n.js'
+import { SEED_INVENTORY_NAMES, SEED_MENU_MEDIA, buildSeed, buildSeedRiverside } from './seed.js'
 
 export { buildSeed, buildSeedRiverside }
 
@@ -126,9 +128,21 @@ function cleanImageUrl(value, maxChars = MAX_IMAGE_CHARS) {
   return sanitizeImageRef(value, maxChars)
 }
 
+/**
+ * Cover + gallery, cleaned together: the gallery never repeats the cover
+ * and the pair stays inside the item's media budget (MAX_ITEM_MEDIA_CHARS).
+ * The editor promotes the next photo when a cover is removed; the reducer
+ * only cleans, so a rejected cover stays rejected.
+ */
+function cleanItemPhotos(item) {
+  const imageUrl = cleanImageUrl(item?.imageUrl)
+  return { imageUrl, images: sanitizeImageList(item?.images, { cover: imageUrl }) }
+}
+
 function normalizeMenuItem(item, index = 0) {
   const numericPrice = Number(item?.price)
   const numericOrder = Number(item?.sortOrder)
+  const photos = cleanItemPhotos(item)
   return {
     ...item,
     id: String(item?.id ?? '').trim(),
@@ -145,7 +159,10 @@ function normalizeMenuItem(item, index = 0) {
     sku: String(item?.sku ?? '').trim().slice(0, 40),
     dietaryTags: cleanLabelList(item?.dietaryTags),
     allergens: cleanLabelList(item?.allergens),
-    imageUrl: cleanImageUrl(item?.imageUrl),
+    imageUrl: photos.imageUrl,
+    images: photos.images,
+    // Names for the kitchen and floor in other languages; English is `name`.
+    translations: sanitizeTranslations(item?.translations),
     course: String(item?.course ?? '').trim().slice(0, 24),
     menuWindow: String(item?.menuWindow ?? '').trim().slice(0, 24),
     spiceLevel: String(item?.spiceLevel ?? '').trim().slice(0, 20),
@@ -188,6 +205,7 @@ function normalizeInventoryItem(item, index = 0) {
     dailyUse: Number.isFinite(Number(item?.dailyUse)) ? Number(item.dailyUse) : 0,
     incoming: Number.isFinite(Number(item?.incoming)) ? Number(item.incoming) : 0,
     imageUrl: cleanImageUrl(item?.imageUrl),
+    translations: sanitizeTranslations(item?.translations),
     vendor: String(item?.vendor ?? '').trim().slice(0, 60),
     supplierId: item?.supplierId ? String(item.supplierId) : null,
     sku: String(item?.sku ?? '').trim().slice(0, 40),
@@ -1696,7 +1714,9 @@ function shopReducer(state, action) {
 // Every shop action travels wrapped: { type: 'LOC', locId, action: inner }.
 // RESET_ALL reseeds the whole empire; HYDRATE swaps it (bootstrap only).
 
-export const STATE_VERSION = 4
+// v5: dish photo galleries (item.images) and per-language names
+// (item.translations) — see backfillSeedExtras below.
+export const STATE_VERSION = 5
 
 export function buildEmpire() {
   const downtown = buildSeed()
@@ -1710,29 +1730,64 @@ export function buildEmpire() {
 
 const LOCATION_LABELS = { downtown: 'Downtown', riverside: 'Riverside' }
 
+/**
+ * v5 gave the demo dishes photo galleries and Khmer/Chinese names. Snapshots
+ * saved before that get them once — but only on items the owner has not made
+ * their own: same id, same English name, and no photos or translations of
+ * their own. Anything renamed or re-photographed is left exactly as it was.
+ */
+function backfillSeedExtras(shop) {
+  if (!shop) return shop
+  const menu = Array.isArray(shop.menu)
+    ? shop.menu.map((item) => {
+      const seed = SEED_MENU_MEDIA[item?.id]
+      if (!seed || item.name !== seed.name) return item
+      const next = { ...item }
+      if (!item.translations) next.translations = seed.translations
+      const ownPhoto = item.imageUrl && item.imageUrl !== seed.imageUrl
+      if (!item.images && !ownPhoto) {
+        next.imageUrl = seed.imageUrl
+        next.images = seed.images
+      }
+      return next
+    })
+    : shop.menu
+  const inventory = Array.isArray(shop.inventory)
+    ? shop.inventory.map((item) => {
+      const seed = SEED_INVENTORY_NAMES[item?.id]
+      if (!seed || item.name !== seed.name || item.translations) return item
+      return { ...item, translations: seed.translations }
+    })
+    : shop.inventory
+  return { ...shop, menu, inventory }
+}
+
 export function migrateToEmpire(old) {
   if (!old) return null
   if (old.locations && old.version >= 2 && old.version <= STATE_VERSION) {
+    const before5 = old.version < 5
     return {
-      version: STATE_VERSION,
       ...old,
+      // Record the version we migrated to, so the server persists the
+      // upgrade once instead of re-running it on every boot.
+      version: STATE_VERSION,
       locations: Object.fromEntries(
         Object.entries(old.locations).map(([id, shop]) => [
           id,
-          withShopDefaults(seedCategoriesIfEmpty(shop), LOCATION_LABELS[id] || id),
+          withShopDefaults(seedCategoriesIfEmpty(before5 ? backfillSeedExtras(shop) : shop), LOCATION_LABELS[id] || id),
         ]),
       ),
     }
   }
   if (old.version === 1 && Array.isArray(old.tables)) {
-    const downtown = withShopDefaults(seedCategoriesIfEmpty({
+    const downtown = withShopDefaults(seedCategoriesIfEmpty(backfillSeedExtras({
       ...old,
       settings: {
         ...old.settings,
         restaurantName: 'Restora · Downtown',
         locationShort: 'DT',
       },
-    }), 'Downtown')
+    })), 'Downtown')
     return { version: STATE_VERSION, locations: { downtown, riverside: buildSeedRiverside() } }
   }
   return null

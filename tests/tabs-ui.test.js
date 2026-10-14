@@ -51,6 +51,9 @@ const { RestoraProvider } = await server.ssrLoadModule('/src/lib/store.jsx')
 const { default: AppShell } = await server.ssrLoadModule('/src/components/AppShell.jsx')
 const { Router } = await server.ssrLoadModule('/src/App.jsx')
 const { NAV_SECTIONS, SCREEN_ICONS } = await server.ssrLoadModule('/src/lib/constants.js')
+const { KITCHEN_STRINGS } = await server.ssrLoadModule('/src/lib/kitchen-strings.js')
+// The kitchen display boots in Khmer; its eyebrow proves the screen is up.
+const KDS_EYEBROW = new RegExp(KITCHEN_STRINGS.km.eyebrow.split(' · ')[0])
 
 const flush = async () => { await act(async () => { await Promise.resolve() }) }
 // The provider boots asynchronously: /api/state fails here, which must land
@@ -290,14 +293,14 @@ test('switching role keeps the workspace, locks what the role cannot open', asyn
   assert.deepEqual(tabButtons().map((tab) => tab.textContent), labelsBefore)
   // … the screen the role cannot open is refused, with an explanation …
   assert.match(container.textContent, /not part of the server workspace/)
-  assert.doesNotMatch(container.textContent, /Live kitchen display/)
+  assert.doesNotMatch(container.textContent, KDS_EYEBROW)
   // … the nav offers only what the role may open …
   assert.equal(navButton('Settings'), undefined)
   assert.equal(navButton('Kitchen'), undefined)
   assert.ok(navButton('Tickets'))
   // … and switching back restores the very same tab untouched.
   await setRole('owner')
-  assert.match(container.textContent, /Live kitchen display/)
+  assert.match(container.textContent, KDS_EYEBROW)
   assert.ok(navButton('Settings'), 'owner gets the settings nav back')
 })
 

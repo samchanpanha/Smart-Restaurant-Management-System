@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" role="img" aria-label="Chicken Pasta from above">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fefce8"/><stop offset="1" stop-color="#f5e3a1"/></linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.4" r="0.62"><stop offset="0" stop-color="#ffffff" stop-opacity="0.7"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="320" height="200" fill="url(#bg)"/>
+  <rect width="320" height="200" fill="url(#glow)"/>
+  <circle cx="164" cy="106" r="88" fill="#0f172a" opacity="0.09"/>
+  <circle cx="160" cy="100" r="88" fill="#ffffff"/>
+  <circle cx="160" cy="100" r="65.1" fill="#f6f7f9" stroke="#e5e8ec" stroke-width="1.5"/>
+  <circle cx="160" cy="100" r="72" fill="#f2cf72"/>
+  <circle cx="160" cy="100" r="12" fill="none" stroke="#e9bf5c" stroke-width="4" stroke-dasharray="30 10" transform="rotate(0 160 100)"/><circle cx="160" cy="100" r="19" fill="none" stroke="#f7dc8c" stroke-width="4" stroke-dasharray="36 10" transform="rotate(40 160 100)"/><circle cx="160" cy="100" r="26" fill="none" stroke="#e9bf5c" stroke-width="4" stroke-dasharray="42 10" transform="rotate(80 160 100)"/><circle cx="160" cy="100" r="33" fill="none" stroke="#f7dc8c" stroke-width="4" stroke-dasharray="48 10" transform="rotate(120 160 100)"/><circle cx="160" cy="100" r="40" fill="none" stroke="#e9bf5c" stroke-width="4" stroke-dasharray="54 10" transform="rotate(160 160 100)"/><circle cx="160" cy="100" r="47" fill="none" stroke="#f7dc8c" stroke-width="4" stroke-dasharray="60 10" transform="rotate(200 160 100)"/><circle cx="160" cy="100" r="54" fill="none" stroke="#e9bf5c" stroke-width="4" stroke-dasharray="66 10" transform="rotate(240 160 100)"/><circle cx="160" cy="100" r="61" fill="none" stroke="#f7dc8c" stroke-width="4" stroke-dasharray="72 10" transform="rotate(280 160 100)"/><circle cx="160" cy="100" r="68" fill="none" stroke="#e9bf5c" stroke-width="4" stroke-dasharray="78 10" transform="rotate(320 160 100)"/>
+  <g transform="rotate(-40 134 86)"><rect x="111" y="77" width="46" height="18" rx="6" fill="#e2ad73"/><rect x="114" y="80" width="40" height="12" rx="4" fill="#f5d9b1"/><path d="M124 77 l-4 18 M134 77 l-4 18 M144 77 l-4 18" stroke="#8a5a2b" stroke-width="2"/></g>
+  <g transform="rotate(-10 160 76)"><rect x="137" y="67" width="46" height="18" rx="6" fill="#e2ad73"/><rect x="140" y="70" width="40" height="12" rx="4" fill="#f5d9b1"/><path d="M150 67 l-4 18 M160 67 l-4 18 M170 67 l-4 18" stroke="#8a5a2b" stroke-width="2"/></g>
+  <g transform="rotate(24 188 86)"><rect x="165" y="77" width="46" height="18" rx="6" fill="#e2ad73"/><rect x="168" y="80" width="40" height="12" rx="4" fill="#f5d9b1"/><path d="M178 77 l-4 18 M188 77 l-4 18 M198 77 l-4 18" stroke="#8a5a2b" stroke-width="2"/></g>
+  <g transform="translate(150 118) rotate(0) scale(0.8)">
+    <path d="M0 0 C-6 -4 -8 -12 -2 -16 C2 -10 3 -5 0 0 Z" fill="#2f9e44"/>
+    <path d="M0 0 C6 -3 12 -2 13 4 C7 5 3 3 0 0 Z" fill="#2f9e44" opacity="0.9"/>
+    <path d="M0 0 C-5 2 -10 7 -8 12 C-3 9 -1 5 0 0 Z" fill="#2f9e44" opacity="0.85"/>
+  </g>
+  <g transform="translate(178 116) rotate(60) scale(0.7)">
+    <path d="M0 0 C-6 -4 -8 -12 -2 -16 C2 -10 3 -5 0 0 Z" fill="#2f9e44"/>
+    <path d="M0 0 C6 -3 12 -2 13 4 C7 5 3 3 0 0 Z" fill="#2f9e44" opacity="0.9"/>
+    <path d="M0 0 C-5 2 -10 7 -8 12 C-3 9 -1 5 0 0 Z" fill="#2f9e44" opacity="0.85"/>
+  </g>
+  <ellipse cx="110" cy="69" rx="2.4" ry="1.3" fill="#fffdf2" transform="rotate(0 110 69)"/><ellipse cx="157" cy="118.7" rx="2.4" ry="1.3" fill="#fffdf2" transform="rotate(41 157 118.7)"/><ellipse cx="204" cy="98.4" rx="2.4" ry="1.3" fill="#fffdf2" transform="rotate(82 204 98.4)"/><ellipse cx="151" cy="78.1" rx="2.4" ry="1.3" fill="#fffdf2" transform="rotate(123 151 78.1)"/><ellipse cx="198" cy="127.8" rx="2.4" ry="1.3" fill="#fffdf2" transform="rotate(164 198 127.8)"/><ellipse cx="145" cy="107.5" rx="2.4" ry="1.3" fill="#fffdf2" transform="rotate(25 145 107.5)"/><ellipse cx="192" cy="87.2" rx="2.4" ry="1.3" fill="#fffdf2" transform="rotate(66 192 87.2)"/><ellipse cx="139" cy="136.9" rx="2.4" ry="1.3" fill="#fffdf2" transform="rotate(107 139 136.9)"/><ellipse cx="186" cy="116.6" rx="2.4" ry="1.3" fill="#fffdf2" transform="rotate(148 186 116.6)"/><ellipse cx="133" cy="96.3" rx="2.4" ry="1.3" fill="#fffdf2" transform="rotate(9 133 96.3)"/><ellipse cx="180" cy="76" rx="2.4" ry="1.3" fill="#fffdf2" transform="rotate(50 180 76)"/><ellipse cx="127" cy="125.7" rx="2.4" ry="1.3" fill="#fffdf2" transform="rotate(91 127 125.7)"/><ellipse cx="174" cy="105.4" rx="2.4" ry="1.3" fill="#fffdf2" transform="rotate(132 174 105.4)"/><ellipse cx="121" cy="85.1" rx="2.4" ry="1.3" fill="#fffdf2" transform="rotate(173 121 85.1)"/><ellipse cx="168" cy="134.8" rx="2.4" ry="1.3" fill="#fffdf2" transform="rotate(34 168 134.8)"/><ellipse cx="115" cy="114.5" rx="2.4" ry="1.3" fill="#fffdf2" transform="rotate(75 115 114.5)"/>
+</svg>

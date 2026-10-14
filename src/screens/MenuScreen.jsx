@@ -5,10 +5,11 @@
 // the floor composer and KDS instantly.
 
 import { useEffect, useMemo, useState } from 'react'
-import { PhotoField } from '../components/ItemPhotoField'
+import { NameTranslationsField, PhotoGalleryField } from '../components/ItemPhotoField'
 import StatusPill from '../components/StatusPill'
 import { Field, Modal, btnPrimary, inputCls } from '../components/ui'
 import { MARGIN_BAND_META, STATIONS, STATION_META } from '../lib/constants'
+import { translationDraft, translationPatch } from '../lib/i18n'
 import { contributionFor, costingFor, money, plateCostFor, uid } from '../lib/models'
 import { useMenuCatalog } from '../lib/useMenuCatalog'
 import { useRestora } from '../lib/store'
@@ -55,6 +56,8 @@ function Coster({ dishId, onDone }) {
       dietaryTagsText: (dish.dietaryTags || []).join(', '),
       allergensText: (dish.allergens || []).join(', '),
       imageUrl: dish.imageUrl || '',
+      images: dish.images || [],
+      names: translationDraft(dish),
       price: String(dish.price),
       yieldPortions: recipe.yieldPortions,
       prepNotes: recipe.prepNotes || '',
@@ -90,6 +93,8 @@ function Coster({ dishId, onDone }) {
     JSON.stringify(toLabels(draft.dietaryTagsText)) !== JSON.stringify(dish.dietaryTags || []) ||
     JSON.stringify(toLabels(draft.allergensText)) !== JSON.stringify(dish.allergens || []) ||
     draft.imageUrl.trim() !== (dish.imageUrl || '') ||
+    JSON.stringify(draft.images) !== JSON.stringify(dish.images || []) ||
+    JSON.stringify(translationPatch(draft.names)) !== JSON.stringify(translationPatch(translationDraft(dish))) ||
     Number(draft.price) !== dish.price
   const recipeDirty =
     Number(draft.yieldPortions) !== recipe.yieldPortions ||
@@ -131,7 +136,7 @@ function Coster({ dishId, onDone }) {
       return
     }
     const price = Math.round(priceInput * 100) / 100
-    if (!isSafeImageUrl(draft.imageUrl)) {
+    if (![draft.imageUrl, ...draft.images].every(isSafeImageUrl)) {
       onDone('Use an HTTPS image URL or a site-local path beginning with /.')
       return
     }
@@ -150,6 +155,8 @@ function Coster({ dishId, onDone }) {
           dietaryTags,
           allergens,
           imageUrl: draft.imageUrl.trim(),
+          images: draft.images,
+          translations: translationPatch(draft.names),
           price,
         },
       })
@@ -313,11 +320,18 @@ function Coster({ dishId, onDone }) {
         Demo allergen labels must be checked against your kitchen&apos;s recipes and cross-contact practices before use.
       </div>
 
-      <PhotoField
-        value={draft.imageUrl}
-        onChange={(value) => setDraft((d) => ({ ...d, imageUrl: value }))}
+      <NameTranslationsField
+        value={draft.names}
+        onChange={(names) => setDraft((d) => ({ ...d, names }))}
+        englishName={draft.name.trim()}
+      />
+
+      <PhotoGalleryField
+        cover={draft.imageUrl}
+        images={draft.images}
+        onChange={({ imageUrl, images }) => setDraft((d) => ({ ...d, imageUrl, images }))}
         maxKb={state.settings.food.imageMaxKb}
-        hint="Shown on the menu screen and the guest QR menu when photos are switched on in Settings → Food & menu."
+        hint="The cover shows on the menu screen and the guest QR menu (when photos are on in Settings → Food & menu); the kitchen display shows every photo."
       />
 
       {/* Ingredients */}

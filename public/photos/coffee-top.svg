@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" role="img" aria-label="Coffee from above, latte art">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fbf7f2"/><stop offset="1" stop-color="#e3cdb4"/></linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.4" r="0.62"><stop offset="0" stop-color="#ffffff" stop-opacity="0.7"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="320" height="200" fill="url(#bg)"/>
+  <rect width="320" height="200" fill="url(#glow)"/>
+  <circle cx="164" cy="106" r="80" fill="#2b1a0e" opacity="0.1"/>
+  <circle cx="160" cy="100" r="80" fill="#ffffff" stroke="#ece4da" stroke-width="1.5"/>
+  <circle cx="160" cy="100" r="62" fill="#f4eee6"/>
+  <rect x="210" y="92" width="34" height="16" rx="8" fill="#ffffff" stroke="#ece4da" stroke-width="1.5"/>
+  <circle cx="160" cy="100" r="54" fill="#ffffff" stroke="#ece4da" stroke-width="1.5"/>
+  <circle cx="160" cy="100" r="46" fill="#9a6034"/>
+  <circle cx="160" cy="100" r="40" fill="#b9814f"/>
+  <path d="M160 122 C136 106 136 84 150 82 C156 81 159 85 160 89 C161 85 164 81 170 82 C184 84 184 106 160 122 Z" fill="#f6eadb"/>
+  <path d="M160 122 V136" stroke="#f6eadb" stroke-width="3" stroke-linecap="round"/>
+  <rect x="86" y="128" width="54" height="7" rx="3.5" fill="#ced4da" transform="rotate(-34 113 131)"/>
+  <ellipse cx="80" cy="146" rx="9" ry="12" fill="#dee2e6" transform="rotate(-34 80 146)"/>
+  <g transform="rotate(12 232 150)"><rect x="225" y="143" width="14" height="14" rx="2" fill="#ffffff" stroke="#e9ecef" stroke-width="1.2"/><circle cx="230" cy="148" r="0.9" fill="#dee2e6"/><circle cx="235" cy="152" r="0.9" fill="#dee2e6"/></g>
+  <g transform="translate(244 56) rotate(30) scale(1)"><ellipse cx="0" cy="0" rx="8" ry="5.5" fill="#5b3a24"/><path d="M-6 0 q3 -3 6 0 t6 0" stroke="#2f1c10" stroke-width="1.6" fill="none"/></g>
+  <g transform="translate(80 56) rotate(-20) scale(1)"><ellipse cx="0" cy="0" rx="8" ry="5.5" fill="#5b3a24"/><path d="M-6 0 q3 -3 6 0 t6 0" stroke="#2f1c10" stroke-width="1.6" fill="none"/></g>
+</svg>

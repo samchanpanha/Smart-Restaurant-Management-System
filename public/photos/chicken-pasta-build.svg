@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" role="img" aria-label="What goes into the Chicken Pasta">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fefce8"/><stop offset="1" stop-color="#f5e3a1"/></linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.4" r="0.62"><stop offset="0" stop-color="#ffffff" stop-opacity="0.7"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="320" height="200" fill="url(#bg)"/>
+  <rect width="320" height="200" fill="url(#glow)"/>
+  <rect x="26" y="37" width="276" height="146" rx="20" fill="#0f172a" opacity="0.1"/>
+  <rect x="22" y="30" width="276" height="146" rx="20" fill="#dcae78"/>
+  <path d="M38 64 q62 -9 124 0 t118 2 M34 112 q72 -7 134 2 t112 -2 M40 152 q54 7 114 0 t126 0" stroke="#c99560" stroke-width="2" fill="none" opacity="0.7"/>
+  <rect x="22" y="30" width="276" height="146" rx="20" fill="none" stroke="#bf8a54" stroke-width="2"/>
+  <g transform="rotate(-24 96 82)"><rect x="46" y="70" width="104" height="2.6" rx="1.3" fill="#e9bf5c"/><rect x="46" y="73" width="104" height="2.6" rx="1.3" fill="#f2cf72"/><rect x="46" y="76" width="104" height="2.6" rx="1.3" fill="#e9bf5c"/><rect x="46" y="79" width="104" height="2.6" rx="1.3" fill="#f2cf72"/><rect x="46" y="82" width="104" height="2.6" rx="1.3" fill="#e9bf5c"/><rect x="46" y="85" width="104" height="2.6" rx="1.3" fill="#f2cf72"/><rect x="46" y="88" width="104" height="2.6" rx="1.3" fill="#e9bf5c"/><rect x="46" y="91" width="104" height="2.6" rx="1.3" fill="#f2cf72"/><rect x="88" y="66" width="12" height="32" rx="3" fill="#2f6fde"/></g>
+  <path d="M178 58 C204 50 244 58 252 78 C258 96 236 108 212 106 C188 104 168 92 170 76 C171 68 172 62 178 58 Z" fill="#f8c4b4"/>
+  <path d="M188 70 q20 -6 44 4" stroke="#fde2d8" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <circle cx="82" cy="149" r="20" fill="#0f172a" opacity="0.1"/>
+  <circle cx="80" cy="146" r="20" fill="#ffffff" stroke="#e3e7ec" stroke-width="1.2"/>
+  <circle cx="80" cy="146" r="14.4" fill="#fffdf5"/>
+  <ellipse cx="75" cy="140.4" rx="4.4" ry="2.4" fill="#ffffff" opacity="0.45"/>
+  <path d="M132 160 l40 -40 l24 34 z" fill="#f7d774"/>
+  <path d="M132 160 l40 -40 l24 34 z" fill="none" stroke="#e5b93f" stroke-width="2"/>
+  <circle cx="160" cy="146" r="3" fill="#e5b93f"/><circle cx="172" cy="136" r="2.4" fill="#e5b93f"/>
+  <g transform="translate(232 158) rotate(70)"><path d="M0 0 V-36" stroke="#2f7d32" stroke-width="1.6"/><path d="M0 -4 q-7 -3 -9 -9 q6 1 9 6 z" fill="#2f7d32"/><path d="M0 -6 q7 -3 9 -9 q-6 1 -9 6 z" fill="#2f7d32"/><path d="M0 -10 q-7 -3 -9 -9 q6 1 9 6 z" fill="#2f7d32"/><path d="M0 -12 q7 -3 9 -9 q-6 1 -9 6 z" fill="#2f7d32"/><path d="M0 -16 q-7 -3 -9 -9 q6 1 9 6 z" fill="#2f7d32"/><path d="M0 -18 q7 -3 9 -9 q-6 1 -9 6 z" fill="#2f7d32"/><path d="M0 -22 q-7 -3 -9 -9 q6 1 9 6 z" fill="#2f7d32"/><path d="M0 -24 q7 -3 9 -9 q-6 1 -9 6 z" fill="#2f7d32"/><path d="M0 -28 q-7 -3 -9 -9 q6 1 9 6 z" fill="#2f7d32"/><path d="M0 -30 q7 -3 9 -9 q-6 1 -9 6 z" fill="#2f7d32"/><path d="M0 -34 q-7 -3 -9 -9 q6 1 9 6 z" fill="#2f7d32"/><path d="M0 -36 q7 -3 9 -9 q-6 1 -9 6 z" fill="#2f7d32"/></g>
+  <g transform="translate(254 128) rotate(10) scale(1)">
+    <path d="M0 0 C-6 -4 -8 -12 -2 -16 C2 -10 3 -5 0 0 Z" fill="#2f9e44"/>
+    <path d="M0 0 C6 -3 12 -2 13 4 C7 5 3 3 0 0 Z" fill="#2f9e44" opacity="0.9"/>
+    <path d="M0 0 C-5 2 -10 7 -8 12 C-3 9 -1 5 0 0 Z" fill="#2f9e44" opacity="0.85"/>
+  </g>
+</svg>

@@ -10,6 +10,75 @@ import { plateCostFor } from './models.js'
 const now = () => Date.now()
 const minAgo = (m) => new Date(now() - m * 60000).toISOString()
 
+// ─── Dish photos + names in Khmer and Chinese ───────────────────────
+// Every demo dish ships three photos — the plate, the pass view from
+// above, and what goes into it — so each ticket line on the kitchen
+// display has a picture to check a plate against. The Khmer and Chinese
+// names feed the kitchen's language switch. Owners replace all of it in
+// Catalog → Products; the art is local (public/photos/), so it works
+// offline and never breaks on a dead link.
+const DISH_EXTRAS = {
+  m_salad: { name: 'House Salad', km: 'សាឡាដពិសេសរបស់ហាង', zh: '招牌沙拉', photos: ['salad', 'salad-top', 'salad-build'] },
+  m_wings: { name: 'Grill Wings', km: 'ស្លាបមាន់អាំង', zh: '烤鸡翅', photos: ['wings', 'wings-top', 'wings-build'] },
+  m_soup: { name: 'Soup of the Day', km: 'ស៊ុបប្រចាំថ្ងៃ', zh: '每日例汤', photos: ['soup', 'soup-top', 'soup-build'] },
+  m_burger: { name: 'Restora Burger', km: 'ប៊ឺហ្គឺ Restora', zh: 'Restora 汉堡', photos: ['burger', 'burger-top', 'burger-build'] },
+  m_salmon: { name: 'Grilled Salmon', km: 'ត្រីសាលម៉ុនអាំង', zh: '烤三文鱼', photos: ['salmon', 'salmon-top', 'salmon-build'] },
+  m_chickenpasta: { name: 'Chicken Pasta', km: 'ប៉ាស្តាសាច់មាន់', zh: '鸡肉意面', photos: ['chicken-pasta', 'chicken-pasta-top', 'chicken-pasta-build'] },
+  m_steak: { name: 'Ribeye Plate', km: 'សាច់គោរីបអាយអាំង', zh: '肋眼牛排', photos: ['ribeye', 'ribeye-top', 'ribeye-build'] },
+  m_fishchips: { name: 'Fish & Chips', km: 'ត្រីបំពង និងដំឡូងបារាំង', zh: '炸鱼薯条', photos: ['fish-chips', 'fish-chips-top', 'fish-chips-build'] },
+  m_vegbowl: { name: 'Garden Bowl', km: 'ចានបន្លែស្រស់', zh: '田园蔬菜碗', photos: ['garden-bowl', 'garden-bowl-top', 'garden-bowl-build'] },
+  m_cake: { name: 'Chocolate Cake', km: 'នំខេកសូកូឡា', zh: '巧克力蛋糕', photos: ['chocolate-cake', 'chocolate-cake-top', 'chocolate-cake-build'] },
+  m_icecream: { name: 'Ice Cream', km: 'ការ៉េម', zh: '冰淇淋', photos: ['ice-cream', 'ice-cream-top', 'ice-cream-build'] },
+  m_soda: { name: 'Soda', km: 'ភេសជ្ជៈកំប៉ុង', zh: '汽水', photos: ['soda', 'soda-top', 'soda-build'] },
+  m_coffee: { name: 'Coffee', km: 'កាហ្វេ', zh: '咖啡', photos: ['coffee', 'coffee-top', 'coffee-build'] },
+}
+
+const INGREDIENT_EXTRAS = {
+  inv_bun: { name: 'Brioche bun', km: 'នំប៉័ងប៊្រីយ៉ូស', zh: '布里欧面包' },
+  inv_patty: { name: 'Beef patty 6oz', km: 'សាច់គោកិនដុំ 6oz', zh: '牛肉饼 6盎司' },
+  inv_tomato: { name: 'Tomato', km: 'ប៉េងប៉ោះ', zh: '番茄' },
+  inv_lettuce: { name: 'Lettuce portion', km: 'ស្លឹកសាឡាត់ (ចំណែក)', zh: '生菜（份）' },
+  inv_cheese: { name: 'Cheddar slice', km: 'ឈីសឆេដា (បន្ទះ)', zh: '切达芝士片' },
+  inv_fries: { name: 'Fries portion', km: 'ដំឡូងបារាំង (ចំណែក)', zh: '薯条（份）' },
+  inv_salmon: { name: 'Salmon fillet', km: 'សាច់ត្រីសាលម៉ុន', zh: '三文鱼柳' },
+  inv_chicken: { name: 'Chicken breast', km: 'សាច់ទ្រូងមាន់', zh: '鸡胸肉' },
+  inv_pasta: { name: 'Pasta portion', km: 'ប៉ាស្តា (ចំណែក)', zh: '意面（份）' },
+  inv_cream: { name: 'Cream cup', km: 'ក្រែមទឹកដោះគោ (ពែង)', zh: '淡奶油（杯）' },
+  inv_saladmix: { name: 'Salad mix', km: 'បន្លែសាឡាដចម្រុះ', zh: '混合沙拉菜' },
+  inv_dressing: { name: 'Dressing cup', km: 'ទឹកសាឡាដ (ពែង)', zh: '沙拉酱（杯）' },
+  inv_wings: { name: 'Wings portion', km: 'ស្លាបមាន់ (ចំណែក)', zh: '鸡翅（份）' },
+  inv_steak: { name: 'Ribeye 10oz', km: 'សាច់គោរីបអាយ 10oz', zh: '肋眼牛排 10盎司' },
+  inv_cake: { name: 'Chocolate cake slice', km: 'នំខេកសូកូឡា (ចំណិត)', zh: '巧克力蛋糕（块）' },
+  inv_icecream: { name: 'Ice cream scoops', km: 'ការ៉េម (ស្កុប)', zh: '冰淇淋球' },
+  inv_soda: { name: 'Soda can', km: 'ភេសជ្ជៈកំប៉ុង', zh: '罐装汽水' },
+  inv_coffee: { name: 'Coffee portion', km: 'កាហ្វេ (ចំណែក)', zh: '咖啡（份）' },
+}
+
+const photoPath = (slug) => `/photos/${slug}.svg`
+const namesIn = ({ km, zh }) => ({ km: { name: km }, zh: { name: zh } })
+
+/** Seed cover, gallery and names per dish id — also used to upgrade v4 snapshots. */
+export const SEED_MENU_MEDIA = Object.fromEntries(
+  Object.entries(DISH_EXTRAS).map(([id, dish]) => [id, {
+    name: dish.name,
+    imageUrl: photoPath(dish.photos[0]),
+    images: dish.photos.slice(1).map(photoPath),
+    translations: namesIn(dish),
+  }]),
+)
+
+/** Seed ingredient names in Khmer and Chinese, keyed by stock item id. */
+export const SEED_INVENTORY_NAMES = Object.fromEntries(
+  Object.entries(INGREDIENT_EXTRAS).map(([id, item]) => [id, { name: item.name, translations: namesIn(item) }]),
+)
+
+/** Fresh copies, so no shop ever shares an array with these constants. */
+function seedMediaFor(id) {
+  const media = SEED_MENU_MEDIA[id]
+  if (!media) return {}
+  return { imageUrl: media.imageUrl, images: [...media.images], translations: namesIn(DISH_EXTRAS[id]) }
+}
+
 export function buildSeed() {
   // ─── Inventory (lastCost drives every plate cost) ─────────────
   const inventory = [
@@ -34,15 +103,16 @@ export function buildSeed() {
     { id: 'inv_coffee', name: 'Coffee portion', unit: 'portion', onHand: 60, par: 30, lastCost: 0.55, vendor: 'BevCo', location: 'dry', packs: [{ id: 'case', name: 'Case', qty: 20 }], purchaseUnit: 'case' },
   ]
 
-  // Food detail per dish: the course it belongs to, when it sells, how hot
-  // it is, and a demo photo. Owners edit all of it in Catalog → Products,
-  // and the vocabulary behind it lives in Settings → Food & menu.
+  // Food detail per dish: the course it belongs to, when it sells and how
+  // hot it is (photos and translated names come from DISH_EXTRAS). Owners
+  // edit all of it in Catalog → Products, and the vocabulary behind it
+  // lives in Settings → Food & menu.
   const MENU_DETAIL = {
     m_salad: { course: 'Appetizer', menuWindow: 'lunch', dietaryTags: ['Vegetarian', 'Gluten-free'] },
     m_wings: { course: 'Appetizer', menuWindow: 'dinner', spiceLevel: 'Medium', dietaryTags: ['Spicy'] },
     m_soup: { course: 'Appetizer', menuWindow: 'lunch' },
-    m_burger: { course: 'Main', menuWindow: 'dinner', imageUrl: '/photos/burger.svg', allergens: ['Gluten', 'Dairy', 'Sesame'] },
-    m_salmon: { course: 'Main', menuWindow: 'dinner', imageUrl: '/photos/salmon.svg' },
+    m_burger: { course: 'Main', menuWindow: 'dinner', allergens: ['Gluten', 'Dairy', 'Sesame'] },
+    m_salmon: { course: 'Main', menuWindow: 'dinner' },
     m_chickenpasta: { course: 'Main', menuWindow: 'dinner' },
     m_steak: { course: 'Main', menuWindow: 'dinner' },
     m_fishchips: { course: 'Main', menuWindow: 'dinner' },
@@ -186,6 +256,7 @@ export function buildSeed() {
       countDueDays: 1 + (index % 7),
       notes: '',
       active: true,
+      translations: SEED_INVENTORY_NAMES[item.id] ? namesIn(INGREDIENT_EXTRAS[item.id]) : {},
     })
   })
 
@@ -598,6 +669,7 @@ export function buildSeed() {
     spiceLevel: '',
     ...item,
     ...(MENU_DETAIL[item.id] || {}),
+    ...seedMediaFor(item.id),
   }))
 
   const settings = {

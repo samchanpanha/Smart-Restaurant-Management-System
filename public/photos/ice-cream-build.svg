@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" role="img" aria-label="What goes into the Ice Cream">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f7f4ff"/><stop offset="1" stop-color="#d6ccfa"/></linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.4" r="0.62"><stop offset="0" stop-color="#ffffff" stop-opacity="0.7"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="320" height="200" fill="url(#bg)"/>
+  <rect width="320" height="200" fill="url(#glow)"/>
+  <rect x="26" y="37" width="276" height="146" rx="20" fill="#0f172a" opacity="0.1"/>
+  <rect x="22" y="30" width="276" height="146" rx="20" fill="#dcae78"/>
+  <path d="M38 64 q62 -9 124 0 t118 2 M34 112 q72 -7 134 2 t112 -2 M40 152 q54 7 114 0 t126 0" stroke="#c99560" stroke-width="2" fill="none" opacity="0.7"/>
+  <rect x="22" y="30" width="276" height="146" rx="20" fill="none" stroke="#bf8a54" stroke-width="2"/>
+  <path d="M46 62 h76 l-8 72 q0 6 -6 6 h-48 q-6 0 -6 -6 z" fill="#ffffff" stroke="#e5e0f7" stroke-width="2"/>
+  <rect x="42" y="54" width="84" height="12" rx="4" fill="#9775fa"/>
+  <rect x="58" y="86" width="52" height="22" rx="4" fill="#e5dbff"/>
+  <rect x="150" y="60" width="10" height="56" rx="5" fill="#adb5bd" transform="rotate(-30 155 88)"/>
+  <circle cx="186" cy="60" r="16" fill="#ced4da"/><circle cx="186" cy="60" r="11" fill="#e9ecef"/>
+  <g transform="rotate(70 228 116)"><rect x="221" y="66" width="14" height="50" rx="2" fill="#e9b872"/><path d="M221 76 h14 M221 88 h14 M221 100 h14 M221 112 h14 M228 66 v50" stroke="#c98c3e" stroke-width="1.4"/></g>
+  <g transform="rotate(76 236 136)"><rect x="229" y="86" width="14" height="50" rx="2" fill="#e9b872"/><path d="M229 96 h14 M229 108 h14 M229 120 h14 M229 132 h14 M236 86 v50" stroke="#c98c3e" stroke-width="1.4"/></g>
+  <circle cx="172" cy="145" r="20" fill="#0f172a" opacity="0.1"/>
+  <circle cx="170" cy="142" r="20" fill="#ffffff" stroke="#e3e7ec" stroke-width="1.2"/>
+  <circle cx="170" cy="142" r="14.4" fill="#4a2511"/>
+  <ellipse cx="165" cy="136.4" rx="4.4" ry="2.4" fill="#ffffff" opacity="0.45"/>
+  <circle cx="232" cy="72" r="9" fill="#c92a2a"/><circle cx="252" cy="78" r="9" fill="#e03131"/>
+  <path d="M232 64 q6 -12 14 -14 M252 70 q-2 -12 -6 -20" stroke="#2f9e44" stroke-width="2" fill="none"/>
+</svg>

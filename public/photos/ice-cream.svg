@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" role="img" aria-label="Ice Cream, two scoops">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f7f4ff"/><stop offset="1" stop-color="#d6ccfa"/></linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.4" r="0.62"><stop offset="0" stop-color="#ffffff" stop-opacity="0.7"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="320" height="200" fill="url(#bg)"/>
+  <rect width="320" height="200" fill="url(#glow)"/>
+  <ellipse cx="163" cy="176" rx="48" ry="9" fill="#1e1b4b" opacity="0.12"/>
+  <rect x="152" y="132" width="16" height="36" rx="5" fill="#ffffff" opacity="0.85"/>
+  <ellipse cx="160" cy="170" rx="38" ry="8" fill="#ffffff" opacity="0.9" stroke="#e5e0f7" stroke-width="1.5"/>
+  <path d="M100 104 C100 62.4 164 62.4 164 104 q-8 11.2 -16 0 q-8 12.8 -16 0 q-8 11.2 -16 0 q-8 12.8 -16 0 z" fill="#fff1d6"/>
+  <path d="M112.8 86.4 C119.2 73.6 132 71.36 138.4 72" stroke="#ffffff" stroke-width="4" stroke-linecap="round" fill="none" opacity="0.55"/>
+  <path d="M103.2 102 q28.8 8 57.6 0" stroke="#e9c98a" stroke-width="2" fill="none" opacity="0.5"/>
+  <path d="M154 102 C154 60.4 218 60.4 218 102 q-8 11.2 -16 0 q-8 12.8 -16 0 q-8 11.2 -16 0 q-8 12.8 -16 0 z" fill="#7b4a2d"/>
+  <path d="M166.8 84.4 C173.2 71.6 186 69.36 192.4 70" stroke="#ffffff" stroke-width="4" stroke-linecap="round" fill="none" opacity="0.55"/>
+  <path d="M157.2 100 q28.8 8 57.6 0" stroke="#4a2b18" stroke-width="2" fill="none" opacity="0.5"/>
+  <path d="M132 80 C132 43.6 188 43.6 188 80 q-7 9.799999999999999 -14 0 q-7 11.200000000000001 -14 0 q-7 9.799999999999999 -14 0 q-7 11.200000000000001 -14 0 z" fill="#f9a8c9"/>
+  <path d="M143.2 64.6 C148.8 53.400000000000006 160 51.44 165.6 52" stroke="#ffffff" stroke-width="4" stroke-linecap="round" fill="none" opacity="0.55"/>
+  <path d="M134.8 78 q25.2 7 50.4 0" stroke="#e47aa4" stroke-width="2" fill="none" opacity="0.5"/>
+  <path d="M92 104 C96 140 128 148 160 148 C192 148 224 140 228 104 Z" fill="#ffffff" opacity="0.72" stroke="#e5e0f7" stroke-width="2"/>
+  <path d="M104 112 C110 134 128 140 146 142" stroke="#ffffff" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <g transform="rotate(18 222 86)"><rect x="215" y="36" width="14" height="50" rx="2" fill="#e9b872"/><path d="M215 46 h14 M215 58 h14 M215 70 h14 M215 82 h14 M222 36 v50" stroke="#c98c3e" stroke-width="1.4"/></g>
+  <circle cx="160" cy="50" r="8" fill="#c92a2a"/><path d="M160 42 q4 -10 12 -14" stroke="#2f9e44" stroke-width="2" fill="none"/>
+  <rect x="135" y="70" width="6" height="2.2" rx="1.1" fill="#f06595" transform="rotate(0 135 70)"/><rect x="158.5" y="87" width="6" height="2.2" rx="1.1" fill="#4dabf7" transform="rotate(53 158.5 87)"/><rect x="182" y="80.1" width="6" height="2.2" rx="1.1" fill="#ffd43b" transform="rotate(106 182 80.1)"/><rect x="155.5" y="73.1" width="6" height="2.2" rx="1.1" fill="#69db7c" transform="rotate(159 155.5 73.1)"/><rect x="179" y="90.2" width="6" height="2.2" rx="1.1" fill="#ffffff" transform="rotate(32 179 90.2)"/><rect x="152.5" y="83.2" width="6" height="2.2" rx="1.1" fill="#f06595" transform="rotate(85 152.5 83.2)"/><rect x="176" y="76.2" width="6" height="2.2" rx="1.1" fill="#4dabf7" transform="rotate(138 176 76.2)"/><rect x="149.5" y="93.3" width="6" height="2.2" rx="1.1" fill="#ffd43b" transform="rotate(11 149.5 93.3)"/><rect x="173" y="86.3" width="6" height="2.2" rx="1.1" fill="#69db7c" transform="rotate(64 173 86.3)"/><rect x="146.5" y="79.4" width="6" height="2.2" rx="1.1" fill="#ffffff" transform="rotate(117 146.5 79.4)"/>
+</svg>

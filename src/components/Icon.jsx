@@ -28,6 +28,9 @@ const ICONS = {
   lock: <><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8.5 11V8a3.5 3.5 0 0 1 7 0v3" /></>,
   plus: <path d="M12 5v14m-7-7h14" />,
   pin: <><path d="M9 4h6l-1 6 3 3v2H7v-2l3-3-1-6Z" /><path d="M12 15v6" /></>,
+  globe: <><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c2.4 2.6 3.6 5.6 3.6 9s-1.2 6.4-3.6 9c-2.4-2.6-3.6-5.6-3.6-9S9.6 5.6 12 3Z" /></>,
+  chevronLeft: <path d="m14.5 6-6 6 6 6" />,
+  chevronRight: <path d="m9.5 6 6 6-6 6" />,
 }
 
 export function Icon({ name, size = 20, className = '' }) {

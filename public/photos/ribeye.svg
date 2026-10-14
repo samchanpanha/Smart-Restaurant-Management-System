@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" role="img" aria-label="Ribeye Plate with fries">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f8f5f2"/><stop offset="1" stop-color="#dacbbd"/></linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.4" r="0.62"><stop offset="0" stop-color="#ffffff" stop-opacity="0.7"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="320" height="200" fill="url(#bg)"/>
+  <rect width="320" height="200" fill="url(#glow)"/>
+  <ellipse cx="163" cy="151" rx="128" ry="38" fill="#0f172a" opacity="0.09"/>
+  <ellipse cx="160" cy="142" rx="128" ry="38" fill="#ffffff"/>
+  <ellipse cx="160" cy="141" rx="94.7" ry="25.1" fill="#f3f5f8"/>
+  <ellipse cx="160" cy="142" rx="128" ry="38" fill="none" stroke="#e3e7ec" stroke-width="1.5"/>
+  <rect x="208" y="96" width="7" height="44" rx="2" fill="#f6c445" stroke="#e0a526" stroke-width="1" transform="rotate(-1 211.5 140)"/>
+  <rect x="215" y="109" width="7" height="31" rx="2" fill="#f6c445" stroke="#e0a526" stroke-width="1" transform="rotate(6 218.5 140)"/>
+  <rect x="222" y="108" width="7" height="32" rx="2" fill="#f6c445" stroke="#e0a526" stroke-width="1" transform="rotate(13 225.5 140)"/>
+  <rect x="229" y="107" width="7" height="33" rx="2" fill="#f6c445" stroke="#e0a526" stroke-width="1" transform="rotate(20 232.5 140)"/>
+  <rect x="236" y="106" width="7" height="34" rx="2" fill="#f6c445" stroke="#e0a526" stroke-width="1" transform="rotate(27 239.5 140)"/>
+  <rect x="243" y="105" width="7" height="35" rx="2" fill="#f6c445" stroke="#e0a526" stroke-width="1" transform="rotate(4 246.5 140)"/>
+  <rect x="250" y="104" width="7" height="36" rx="2" fill="#f6c445" stroke="#e0a526" stroke-width="1" transform="rotate(11 253.5 140)"/>
+  <rect x="257" y="103" width="7" height="37" rx="2" fill="#f6c445" stroke="#e0a526" stroke-width="1" transform="rotate(18 260.5 140)"/>
+
+  <path d="M74 126 C70 104 96 90 136 92 C176 94 204 104 200 124 C196 140 160 146 126 144 C96 142 76 138 74 126 Z" fill="#5c2c14"/>
+  <path d="M78 122 C76 104 100 94 136 96 C172 98 196 106 194 122 C190 134 158 138 128 136 C100 134 80 132 78 122 Z" fill="#7a3b1b"/>
+  <path d="M96 100 l26 34 M120 96 l26 38 M146 96 l26 36 M170 100 l20 28" stroke="#3d1a09" stroke-width="5" stroke-linecap="round" opacity="0.8"/>
+  <path d="M84 126 C92 134 120 138 150 136" stroke="#f5e6d3" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.5"/>
+  <path d="M129 95.5 l9 -4.5 l9 4.5 v9 l-9 4.5 l-9 -4.5 z" fill="#fde68a" stroke="#f2c94c" stroke-width="1"/>
+  <path d="M129 95.5 l9 4.5 l9 -4.5 M138 100 v9" stroke="#f2c94c" stroke-width="1" fill="none"/>
+  <g transform="translate(150 96) rotate(20) scale(0.6)">
+    <path d="M0 0 C-6 -4 -8 -12 -2 -16 C2 -10 3 -5 0 0 Z" fill="#2f9e44"/>
+    <path d="M0 0 C6 -3 12 -2 13 4 C7 5 3 3 0 0 Z" fill="#2f9e44" opacity="0.9"/>
+    <path d="M0 0 C-5 2 -10 7 -8 12 C-3 9 -1 5 0 0 Z" fill="#2f9e44" opacity="0.85"/>
+  </g>
+</svg>

@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" role="img" aria-label="What goes into the Chocolate Cake">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fdf3f7"/><stop offset="1" stop-color="#f3c2d4"/></linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.4" r="0.62"><stop offset="0" stop-color="#ffffff" stop-opacity="0.7"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="320" height="200" fill="url(#bg)"/>
+  <rect width="320" height="200" fill="url(#glow)"/>
+  <rect x="26" y="37" width="276" height="146" rx="20" fill="#0f172a" opacity="0.1"/>
+  <rect x="22" y="30" width="276" height="146" rx="20" fill="#dcae78"/>
+  <path d="M38 64 q62 -9 124 0 t118 2 M34 112 q72 -7 134 2 t112 -2 M40 152 q54 7 114 0 t126 0" stroke="#c99560" stroke-width="2" fill="none" opacity="0.7"/>
+  <rect x="22" y="30" width="276" height="146" rx="20" fill="none" stroke="#bf8a54" stroke-width="2"/>
+  <rect x="44" y="52" width="96" height="56" rx="5" fill="#3d1d0b"/>
+  <rect x="50" y="58" width="26" height="20" rx="3" fill="#5c2f15"/><rect x="50" y="82" width="26" height="20" rx="3" fill="#5c2f15"/><rect x="80" y="58" width="26" height="20" rx="3" fill="#5c2f15"/><rect x="80" y="82" width="26" height="20" rx="3" fill="#5c2f15"/><rect x="110" y="58" width="26" height="20" rx="3" fill="#5c2f15"/><rect x="110" y="82" width="26" height="20" rx="3" fill="#5c2f15"/>
+  <path d="M120 52 l20 0 l0 20 z" fill="#f7efe5"/>
+  <ellipse cx="184" cy="70" rx="14" ry="18" fill="#fffaf2" stroke="#efe4d2" stroke-width="1.5" transform="rotate(-20 184 70)"/><ellipse cx="214" cy="62" rx="14" ry="18" fill="#fffaf2" stroke="#efe4d2" stroke-width="1.5" transform="rotate(8 214 62)"/><ellipse cx="204" cy="92" rx="14" ry="18" fill="#fffaf2" stroke="#efe4d2" stroke-width="1.5" transform="rotate(36 204 92)"/>
+  <circle cx="260" cy="88" r="26" fill="#0f172a" opacity="0.1"/>
+  <circle cx="256" cy="82" r="26" fill="#ffffff" stroke="#e3e7ec" stroke-width="1.5"/>
+  <circle cx="256" cy="82" r="19" fill="#ffffff"/>
+  <path d="M244 84 q12 -8 24 0" stroke="#e9ecef" stroke-width="3" fill="none"/>
+  <path d="M67 139.5 l13 -6.5 l13 6.5 v13 l-13 6.5 l-13 -6.5 z" fill="#fde68a" stroke="#f2c94c" stroke-width="1"/>
+  <path d="M67 139.5 l13 6.5 l13 -6.5 M80 146 v13" stroke="#f2c94c" stroke-width="1" fill="none"/>
+  <circle cx="150" cy="140" r="4.5" fill="#d6336c"/><circle cx="144.4" cy="135.8" r="4.5" fill="#d6336c"/><circle cx="155.6" cy="135.8" r="4.5" fill="#d6336c"/><circle cx="144.4" cy="144.2" r="4.5" fill="#d6336c"/><circle cx="155.6" cy="144.2" r="4.5" fill="#d6336c"/><circle cx="150" cy="131.6" r="4.5" fill="#d6336c"/><circle cx="150" cy="148.4" r="4.5" fill="#d6336c"/><circle cx="147.9" cy="137.2" r="1.7" fill="#ffffff" opacity="0.6"/>
+  <circle cx="172" cy="152" r="4.2" fill="#d6336c"/><circle cx="166.8" cy="148.1" r="4.2" fill="#d6336c"/><circle cx="177.2" cy="148.1" r="4.2" fill="#d6336c"/><circle cx="166.8" cy="155.9" r="4.2" fill="#d6336c"/><circle cx="177.2" cy="155.9" r="4.2" fill="#d6336c"/><circle cx="172" cy="144.2" r="4.2" fill="#d6336c"/><circle cx="172" cy="159.8" r="4.2" fill="#d6336c"/><circle cx="170.1" cy="149.4" r="1.6" fill="#ffffff" opacity="0.6"/>
+  <circle cx="140" cy="160" r="3.8" fill="#d6336c"/><circle cx="135.2" cy="156.4" r="3.8" fill="#d6336c"/><circle cx="144.8" cy="156.4" r="3.8" fill="#d6336c"/><circle cx="135.2" cy="163.6" r="3.8" fill="#d6336c"/><circle cx="144.8" cy="163.6" r="3.8" fill="#d6336c"/><circle cx="140" cy="152.8" r="3.8" fill="#d6336c"/><circle cx="140" cy="167.2" r="3.8" fill="#d6336c"/><circle cx="138.2" cy="157.6" r="1.4" fill="#ffffff" opacity="0.6"/>
+  <rect x="200" y="132" width="70" height="20" rx="10" fill="#4a2511"/>
+  <rect x="206" y="136" width="58" height="12" rx="6" fill="#7b4a2d"/>
+</svg>

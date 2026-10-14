@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" role="img" aria-label="Grilled Salmon from above">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#effcff"/><stop offset="1" stop-color="#b4e1f5"/></linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.4" r="0.62"><stop offset="0" stop-color="#ffffff" stop-opacity="0.7"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="320" height="200" fill="url(#bg)"/>
+  <rect width="320" height="200" fill="url(#glow)"/>
+  <circle cx="164" cy="106" r="88" fill="#0f172a" opacity="0.09"/>
+  <circle cx="160" cy="100" r="88" fill="#ffffff"/>
+  <circle cx="160" cy="100" r="65.1" fill="#f6f7f9" stroke="#e5e8ec" stroke-width="1.5"/>
+  <rect x="96" y="128" width="96" height="7" rx="3.5" fill="#37b24d" transform="rotate(-8 96 128)"/>
+  <rect x="100" y="138" width="92" height="7" rx="3.5" fill="#2f9e44" transform="rotate(-6 100 138)"/>
+  <rect x="104" y="148" width="84" height="7" rx="3.5" fill="#37b24d" transform="rotate(-4 104 148)"/>
+  <path d="M110 70 C132 56 196 56 210 76 C220 92 212 112 188 118 C160 124 122 122 108 106 C98 94 100 78 110 70 Z" fill="#c84f2f"/>
+  <path d="M114 74 C134 62 192 62 204 78 C212 92 206 106 186 112 C160 117 126 116 114 104 C106 94 106 80 114 74 Z" fill="#fa8b68"/>
+  <path d="M132 70 q-8 20 2 42 M152 66 q-8 24 2 50 M172 66 q-8 24 2 50 M192 70 q-8 20 2 42" stroke="#ffd8c8" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <g transform="translate(160 90) rotate(20) scale(1)">
+    <path d="M0 0 C-6 -4 -8 -12 -2 -16 C2 -10 3 -5 0 0 Z" fill="#2f9e44"/>
+    <path d="M0 0 C6 -3 12 -2 13 4 C7 5 3 3 0 0 Z" fill="#2f9e44" opacity="0.9"/>
+    <path d="M0 0 C-5 2 -10 7 -8 12 C-3 9 -1 5 0 0 Z" fill="#2f9e44" opacity="0.85"/>
+  </g>
+  <g transform="rotate(-30 222 132)">
+    <path d="M206 132 A16 16 0 0 0 238 132 Z" fill="#facc15" stroke="#eab308" stroke-width="1.5"/>
+    <path d="M210 132 A12 12 0 0 0 234 132 Z" fill="#fef08a"/>
+    <path d="M222 132 l-7.7 7.7 M222 132 v11 M222 132 l7.7 7.7" stroke="#facc15" stroke-width="1.5"/>
+  </g>
+</svg>

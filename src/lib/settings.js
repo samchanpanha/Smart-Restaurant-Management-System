@@ -123,6 +123,44 @@ export function sanitizeImageRef(value, maxChars = MAX_IMAGE_CHARS) {
   }
 }
 
+/** A dish shows at most this many photos: the cover (imageUrl) plus a gallery. */
+export const MAX_ITEM_PHOTOS = 6
+/**
+ * Uploaded photo data one item may carry, cover and gallery together. Every
+ * edit ships the whole item to the server, whose JSON body limit is 1 MB, so
+ * a full gallery of uploads has to fit well inside it. URLs and /photos/
+ * paths are a few dozen characters and barely count.
+ */
+export const MAX_ITEM_MEDIA_CHARS = 720000
+
+/**
+ * The gallery after the cover: valid refs only, no repeats (nor the cover
+ * again), at most MAX_ITEM_PHOTOS - 1, and within the item's media budget —
+ * a photo that would overflow it is dropped.
+ */
+export function sanitizeImageList(value, { cover = '', max = MAX_ITEM_PHOTOS - 1, budget = MAX_ITEM_MEDIA_CHARS } = {}) {
+  const list = Array.isArray(value) ? value : []
+  const seen = new Set(cover ? [cover] : [])
+  let used = String(cover || '').length
+  const out = []
+  for (const entry of list) {
+    if (out.length >= max) break
+    const ref = sanitizeImageRef(entry)
+    if (!ref || seen.has(ref)) continue
+    if (used + ref.length > budget) continue
+    seen.add(ref)
+    used += ref.length
+    out.push(ref)
+  }
+  return out
+}
+
+/** Characters of photo data an item carries (cover + gallery). */
+export function itemMediaChars(item) {
+  const refs = [item?.imageUrl, ...(Array.isArray(item?.images) ? item.images : [])]
+  return refs.reduce((sum, ref) => sum + (typeof ref === 'string' ? ref.length : 0), 0)
+}
+
 /** Clean, de-duplicated, length-capped label list (tags, allergens, …). */
 export function sanitizeLabelList(value, max = 24, maxLength = 40) {
   const list = Array.isArray(value) ? value : []
@@ -432,6 +470,7 @@ export function defaultSettings(locationLabel = 'Downtown') {
       menuWindows: DEFAULT_MENU_WINDOWS.map((window) => ({ ...window })),
       showImages: true,
       imagesOnGuestMenu: true,
+      imagesOnKitchen: true,
       imagesInPrint: false,
       imageMaxKb: 180,
       allergenAlerts: true,
@@ -711,6 +750,7 @@ export function sanitizeSettings(raw, locationLabel = 'Downtown') {
       menuWindows: sanitizeMenuWindows(source.food?.menuWindows, base.food.menuWindows),
       showImages: source.food?.showImages !== false,
       imagesOnGuestMenu: source.food?.imagesOnGuestMenu !== false,
+      imagesOnKitchen: source.food?.imagesOnKitchen !== false,
       imagesInPrint: source.food?.imagesInPrint === true,
       imageMaxKb: Math.trunc(clampNumber(source.food?.imageMaxKb, 20, 600, base.food.imageMaxKb)),
       allergenAlerts: source.food?.allergenAlerts !== false,

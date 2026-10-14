@@ -66,7 +66,8 @@ npm run dev               # in another shell — /api proxied to :3001
 Kiosk URLs — open one per device:
 
 - Floor tablet: `http://<host>:5173/?role=host&screen=floor`
-- Kitchen display: `http://<host>:5173/?role=kitchen&screen=kitchen`
+- Kitchen display: `http://<host>:5173/?role=kitchen&screen=kitchen` — opens in
+  Khmer; add `&lang=en` or `&lang=zh` to start it in English or Chinese
 - Server handheld: `http://<host>:5173/?role=server&screen=tickets`
 - Owner laptop: `http://<host>:5173/?role=owner&screen=dashboard`
 
@@ -223,9 +224,47 @@ Menu items and stock items carry a photo (`imageUrl` — an upload kept as a sma
 data URL, or a path/URL), a description, dietary tags (Vegetarian, Vegan,
 Gluten-free, Contains nuts…), spice level, allergens, station, prep time,
 availability windows (breakfast / lunch / dinner / late), courses, and
-modifier groups. The vocabulary is configurable under **Settings → Food**, the
-photo is capped by `food.imageMaxKb`, and images appear on the guest menu, the
-tickets, the KDS, and the printed documents.
+modifier groups. The vocabulary is configurable under **Settings → Food**, and
+each upload is compressed to about `food.imageMaxKb`.
+
+Dishes can hold up to **six photos**: `imageUrl` is the cover (menu screen,
+guest QR menu, documents) and `images` holds the rest, which the kitchen
+display shows. Catalog → Products and Menu & Recipes edit them together —
+upload several at once, add links, reorder, pick the cover. Uploads on one dish
+share a ~700 kB budget (`MAX_ITEM_MEDIA_CHARS`), because an edit reaches the
+server as one request; links and `/photos/…` paths cost almost nothing. Every
+demo dish ships three text-free illustrations in `public/photos/` (the plate,
+the pass view from above, and what goes into it).
+
+### Kitchen display: photos & languages
+
+- **Photos on every line.** Each ticket line shows the dish's cover with a
+  `+2` badge when there are more. A tap opens the dish: every photo, large
+  (arrows, swipe, ← / →, a thumbnail strip), next to the line's modifiers and
+  note, the dish's allergens and dietary tags, and the recipe's prep notes —
+  with a Bump button right there. The 86 board shows photos too. Turn them off
+  under **Settings → Food → Show photos on the kitchen screen**
+  (`food.imagesOnKitchen`).
+- **Khmer, English, Chinese.** The screen opens in **Khmer**; the switch in the
+  header changes it to English or 中文, and the choice is remembered per
+  terminal (`localStorage['restora-lang']`, or `?lang=` in a kiosk URL). All
+  of the screen's own words are translated (`src/lib/kitchen-strings.js`), and
+  so is the kitchen vocabulary — stations, courses, doneness, sauces,
+  allergens, "Table 7" (`src/lib/i18n.js`). Words an owner adds in Settings
+  show as typed.
+- **Dish and ingredient names** in Khmer and Chinese live on each item
+  (`translations: { km: { name }, zh: { name } }`) and are edited next to the
+  English name — Catalog → Products / Ingredients, and Menu & Recipes for
+  dishes; an empty one falls back to English. Notes typed by staff and prep
+  notes are never machine-translated.
+- **Khmer renders everywhere.** Many KDS devices ship without a Khmer font, so
+  Noto Sans Khmer (SIL OFL 1.1, ~59 kB) is bundled and only downloads when
+  Khmer text is on screen. Chinese uses the device's own CJK font.
+- Snapshots saved before this (state v4) pick up the demo photos and names on
+  load — only on demo dishes the owner hasn't renamed or re-photographed.
+
+The translations were written for this demo; have a native speaker review
+them (and your own dish names) before service.
 
 ### Telegram bot & mini app
 
@@ -329,7 +368,7 @@ Express + SQLite (`better-sqlite3`) via action log + SSE when a server is presen
 | 1 | Object model + status machines | ✅ Done | Tables, tickets, items, recipes, inventory, alerts; strict machines; seed data; role-aware shell |
 | 2 | Floor seat/dirty | ✅ Done | Live map by zone, tap-to-seat, over-cap confirm, reservations, waitlist + honest wait quotes |
 | 3 | Ticket compose/send/undo | ✅ Done | Composer + required mods, 86 w/ substitute, course fire, 15s undo, split/pay/void/comp |
-| 4 | KDS fire/bump/86 | ✅ Done | Station columns + expo, live SLA timers, bump-all, 60s recall, shared 86 board |
+| 4 | KDS fire/bump/86 | ✅ Done | Station columns + expo, live SLA timers, bump-all, 60s recall, shared 86 board, dish photos on every line, Khmer · English · Chinese |
 | 5 | Theoretical inventory on fire | ✅ Done | Stock exceptions, receive w/ plate-cost impact, count sheet w/ variance reasons, waste log |
 | 6 | Dashboard alerts | ✅ Done | KPIs, tappable alert rail, rush watch, sparkline, sellers/losers, SLA, floor snapshot |
 | 7 | Recipe cost + matrix | ✅ Done | Recipe coster w/ snapshots, 86 write-through, menu matrix, ingredient shocks, in-place reprice |

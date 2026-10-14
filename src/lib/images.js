@@ -4,7 +4,7 @@
 // and re-compressed in the browser before it is stored. No upload
 // endpoint, no storage bill, no broken images offline.
 
-import { MAX_IMAGE_CHARS } from './settings.js'
+import { MAX_IMAGE_CHARS, MAX_ITEM_PHOTOS } from './settings.js'
 
 export const IMAGE_ACCEPT = 'image/png,image/jpeg,image/webp,image/gif,image/avif'
 
@@ -76,4 +76,21 @@ export function isDisplayableImage(value) {
   const raw = String(value || '').trim()
   if (!raw) return false
   return /^(https?:\/\/|\/|data:image\/)/i.test(raw)
+}
+
+/**
+ * Every photo of an item in display order — cover first, then the gallery —
+ * de-duplicated, displayable only, capped at MAX_ITEM_PHOTOS. Works on raw
+ * seed items as well as normalized ones (both fields are optional).
+ */
+export function itemPhotos(item) {
+  const refs = [item?.imageUrl, ...(Array.isArray(item?.images) ? item.images : [])]
+  const out = []
+  for (const ref of refs) {
+    const value = String(ref || '').trim()
+    if (!isDisplayableImage(value) || out.includes(value)) continue
+    out.push(value)
+    if (out.length >= MAX_ITEM_PHOTOS) break
+  }
+  return out
 }

@@ -15,7 +15,8 @@ import { MARGIN_BAND_META, STATIONS, STATION_META } from '../lib/constants'
 import { costingFor, money, reorderPointFor, stockStatusFor, uid } from '../lib/models'
 import { CATEGORY_KINDS, categoryOptions, categoryPath, categoryTree } from '../lib/settings'
 import { describeQty, itemUnitChoices, slugUnitId } from '../lib/units'
-import { ChipPicker, PhotoField } from '../components/ItemPhotoField'
+import { ChipPicker, NameTranslationsField, PhotoField, PhotoGalleryField } from '../components/ItemPhotoField'
+import { translationDraft, translationPatch } from '../lib/i18n'
 import { useRestora } from '../lib/store'
 
 const TABS = [
@@ -292,6 +293,8 @@ function ProductModal({ dish, categories, onClose, onSave }) {
     sku: dish?.sku || '',
     active: dish?.active !== false,
     imageUrl: dish?.imageUrl || '',
+    images: dish?.images || [],
+    names: translationDraft(dish),
     dietaryTags: dish?.dietaryTags || [],
     allergens: dish?.allergens || [],
     course: dish?.course || food.defaultCourse,
@@ -330,6 +333,8 @@ function ProductModal({ dish, categories, onClose, onSave }) {
       sku: draft.sku.trim(),
       active: draft.active,
       imageUrl: draft.imageUrl.trim(),
+      images: draft.images,
+      translations: translationPatch(draft.names),
       dietaryTags: draft.dietaryTags,
       allergens: draft.allergens,
       course: draft.course,
@@ -394,7 +399,19 @@ function ProductModal({ dish, categories, onClose, onSave }) {
         </Field>
       </div>
       <div className="mt-3">
-        <PhotoField value={draft.imageUrl} onChange={(value) => setDraft((current) => ({ ...current, imageUrl: value }))} maxKb={food.imageMaxKb} />
+        <NameTranslationsField
+          value={draft.names}
+          onChange={(names) => setDraft((current) => ({ ...current, names }))}
+          englishName={draft.name.trim()}
+        />
+      </div>
+      <div className="mt-3">
+        <PhotoGalleryField
+          cover={draft.imageUrl}
+          images={draft.images}
+          onChange={({ imageUrl, images }) => setDraft((current) => ({ ...current, imageUrl, images }))}
+          maxKb={food.imageMaxKb}
+        />
       </div>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <ChipPicker
@@ -677,6 +694,7 @@ function IngredientModal({ item, onClose, onSave }) {
     location: item?.location || 'dry',
     notes: item?.notes || '',
     imageUrl: item?.imageUrl || '',
+    names: translationDraft(item),
   }))
   const parents = options.filter((option) => option.depth === 0)
   const subs = options.filter((option) => option.depth === 1 && option.parentName === draft.category)
@@ -880,6 +898,14 @@ function IngredientModal({ item, onClose, onSave }) {
         <textarea value={draft.notes} onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))} rows={2} maxLength={240} className={`${smallInput} mt-3 resize-y`} />
       </Field>
       <div className="mt-3">
+        <NameTranslationsField
+          value={draft.names}
+          onChange={(names) => setDraft((current) => ({ ...current, names }))}
+          englishName={draft.name.trim()}
+          hint="The kitchen display uses these when it runs in Khmer or Chinese (stock-outs on the 86 board)."
+        />
+      </div>
+      <div className="mt-3">
         <PhotoField
           value={draft.imageUrl}
           onChange={(value) => setDraft((current) => ({ ...current, imageUrl: value }))}
@@ -906,6 +932,7 @@ function IngredientModal({ item, onClose, onSave }) {
           location: draft.location,
           notes: draft.notes.trim(),
           imageUrl: draft.imageUrl.trim(),
+          translations: translationPatch(draft.names),
         })}
         className={`${btnPrimary} mt-4`}
       >

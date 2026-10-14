@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" role="img" aria-label="What goes into the Grilled Salmon">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#effcff"/><stop offset="1" stop-color="#b4e1f5"/></linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.4" r="0.62"><stop offset="0" stop-color="#ffffff" stop-opacity="0.7"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="320" height="200" fill="url(#bg)"/>
+  <rect width="320" height="200" fill="url(#glow)"/>
+  <rect x="26" y="37" width="276" height="146" rx="20" fill="#0f172a" opacity="0.1"/>
+  <rect x="22" y="30" width="276" height="146" rx="20" fill="#dcae78"/>
+  <path d="M38 64 q62 -9 124 0 t118 2 M34 112 q72 -7 134 2 t112 -2 M40 152 q54 7 114 0 t126 0" stroke="#c99560" stroke-width="2" fill="none" opacity="0.7"/>
+  <rect x="22" y="30" width="276" height="146" rx="20" fill="none" stroke="#bf8a54" stroke-width="2"/>
+  <path d="M46 74 C66 58 140 58 156 74 C166 86 160 104 140 110 C112 118 64 116 50 102 C40 92 40 82 46 74 Z" fill="#fca486"/>
+  <path d="M70 66 q-8 20 2 44 M94 62 q-8 24 2 50 M118 62 q-8 24 2 50 M140 66 q-6 18 2 40" stroke="#ffe3d6" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <circle cx="204" cy="70" r="18" fill="#facc15"/>
+  <circle cx="204" cy="70" r="15.5" fill="#fef3a0"/>
+  <path d="M204 70 L219 70 M204 70 L214.6 80.6 M204 70 L204 85 M204 70 L193.4 80.6 M204 70 L189 70 M204 70 L193.4 59.4 M204 70 L204 55 M204 70 L214.6 59.4 " stroke="#facc15" stroke-width="1.4"/>
+  <g transform="rotate(20 252 76)">
+    <path d="M234 76 A18 18 0 0 0 270 76 Z" fill="#facc15" stroke="#eab308" stroke-width="1.5"/>
+    <path d="M238 76 A14 14 0 0 0 266 76 Z" fill="#fef08a"/>
+    <path d="M252 76 l-9.1 9.1 M252 76 v13 M252 76 l9.1 9.1" stroke="#facc15" stroke-width="1.5"/>
+  </g>
+  <rect x="206" y="128" width="58" height="6" rx="3" fill="#37b24d" transform="rotate(-10 206 128)"/><rect x="213" y="125" width="52" height="6" rx="3" fill="#2f9e44" transform="rotate(-7 213 128)"/><rect x="220" y="128" width="46" height="6" rx="3" fill="#37b24d" transform="rotate(-4 220 128)"/><rect x="227" y="125" width="58" height="6" rx="3" fill="#2f9e44" transform="rotate(-10 227 128)"/><rect x="234" y="128" width="52" height="6" rx="3" fill="#37b24d" transform="rotate(-7 234 128)"/><rect x="241" y="125" width="46" height="6" rx="3" fill="#2f9e44" transform="rotate(-4 241 128)"/>
+  <path d="M165 134.5 l11 -5.5 l11 5.5 v11 l-11 5.5 l-11 -5.5 z" fill="#fde68a" stroke="#f2c94c" stroke-width="1"/>
+  <path d="M165 134.5 l11 5.5 l11 -5.5 M176 140 v11" stroke="#f2c94c" stroke-width="1" fill="none"/>
+  <g transform="translate(84 158) rotate(70)"><path d="M0 0 V-36" stroke="#2f7d32" stroke-width="1.6"/><path d="M0 -4 q-7 -3 -9 -9 q6 1 9 6 z" fill="#2f7d32"/><path d="M0 -6 q7 -3 9 -9 q-6 1 -9 6 z" fill="#2f7d32"/><path d="M0 -10 q-7 -3 -9 -9 q6 1 9 6 z" fill="#2f7d32"/><path d="M0 -12 q7 -3 9 -9 q-6 1 -9 6 z" fill="#2f7d32"/><path d="M0 -16 q-7 -3 -9 -9 q6 1 9 6 z" fill="#2f7d32"/><path d="M0 -18 q7 -3 9 -9 q-6 1 -9 6 z" fill="#2f7d32"/><path d="M0 -22 q-7 -3 -9 -9 q6 1 9 6 z" fill="#2f7d32"/><path d="M0 -24 q7 -3 9 -9 q-6 1 -9 6 z" fill="#2f7d32"/><path d="M0 -28 q-7 -3 -9 -9 q6 1 9 6 z" fill="#2f7d32"/><path d="M0 -30 q7 -3 9 -9 q-6 1 -9 6 z" fill="#2f7d32"/><path d="M0 -34 q-7 -3 -9 -9 q6 1 9 6 z" fill="#2f7d32"/><path d="M0 -36 q7 -3 9 -9 q-6 1 -9 6 z" fill="#2f7d32"/></g>
+  <g transform="translate(128 142) scale(0.9)">
+    <path d="M0 -16 C-4 -10 -16 -6 -16 6 C-16 14 -8 18 0 18 C8 18 16 14 16 6 C16 -6 4 -10 0 -16 Z" fill="#f8f4ec" stroke="#e2d6c0" stroke-width="1.2"/>
+    <path d="M0 -12 C-3 -2 -4 8 -2 17 M0 -12 C3 -2 4 8 2 17 M-8 -2 C-11 6 -10 12 -6 16 M8 -2 C11 6 10 12 6 16" stroke="#e2d6c0" stroke-width="1.2" fill="none"/>
+  </g>
+</svg>

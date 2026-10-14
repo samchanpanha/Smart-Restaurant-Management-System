@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" role="img" aria-label="Chocolate Cake slice, plated">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fdf3f7"/><stop offset="1" stop-color="#f3c2d4"/></linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.4" r="0.62"><stop offset="0" stop-color="#ffffff" stop-opacity="0.7"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="320" height="200" fill="url(#bg)"/>
+  <rect width="320" height="200" fill="url(#glow)"/>
+  <ellipse cx="163" cy="151" rx="128" ry="38" fill="#0f172a" opacity="0.09"/>
+  <ellipse cx="160" cy="142" rx="128" ry="38" fill="#ffffff"/>
+  <ellipse cx="160" cy="141" rx="94.7" ry="25.1" fill="#f3f5f8"/>
+  <ellipse cx="160" cy="142" rx="128" ry="38" fill="none" stroke="#e3e7ec" stroke-width="1.5"/>
+  <path d="M84 150 q14 -10 28 0 t28 0 t28 0 t28 0 t28 0" stroke="#4a2511" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.8"/>
+  <path d="M112 84 L206 84 L228 70 L136 70 Z" fill="#3d1d0b"/>
+  <path d="M206 84 L228 70 L228 122 L206 138 Z" fill="#4a2511"/>
+  <rect x="112" y="84" width="94" height="54" fill="#5c2f15"/>
+  <rect x="112" y="98" width="94" height="6" fill="#a0673a"/>
+  <rect x="112" y="116" width="94" height="6" fill="#a0673a"/>
+  <path d="M112 84 h94 v6 q-6 6 -12 0 q-6 8 -12 0 q-6 6 -12 0 q-6 10 -12 0 q-6 6 -12 0 q-6 8 -12 0 q-6 6 -12 0 q-4 4 -10 0 z" fill="#2b1206"/>
+  <path d="M146 64 c-10 0 -12 -8 -6 -12 c-4 -8 6 -14 12 -8 c6 -6 16 0 12 8 c6 4 4 12 -6 12 z" fill="#fff8f0"/>
+  <circle cx="168" cy="60" r="3.5" fill="#d6336c"/><circle cx="163.6" cy="56.7" r="3.5" fill="#d6336c"/><circle cx="172.4" cy="56.7" r="3.5" fill="#d6336c"/><circle cx="163.6" cy="63.3" r="3.5" fill="#d6336c"/><circle cx="172.4" cy="63.3" r="3.5" fill="#d6336c"/><circle cx="168" cy="53.4" r="3.5" fill="#d6336c"/><circle cx="168" cy="66.6" r="3.5" fill="#d6336c"/><circle cx="166.4" cy="57.8" r="1.3" fill="#ffffff" opacity="0.6"/>
+  <circle cx="236" cy="136" r="3.8" fill="#d6336c"/><circle cx="231.2" cy="132.4" r="3.8" fill="#d6336c"/><circle cx="240.8" cy="132.4" r="3.8" fill="#d6336c"/><circle cx="231.2" cy="139.6" r="3.8" fill="#d6336c"/><circle cx="240.8" cy="139.6" r="3.8" fill="#d6336c"/><circle cx="236" cy="128.8" r="3.8" fill="#d6336c"/><circle cx="236" cy="143.2" r="3.8" fill="#d6336c"/><circle cx="234.2" cy="133.6" r="1.4" fill="#ffffff" opacity="0.6"/>
+  <circle cx="96" cy="138" r="3.2" fill="#d6336c"/><circle cx="92" cy="135" r="3.2" fill="#d6336c"/><circle cx="100" cy="135" r="3.2" fill="#d6336c"/><circle cx="92" cy="141" r="3.2" fill="#d6336c"/><circle cx="100" cy="141" r="3.2" fill="#d6336c"/><circle cx="96" cy="132" r="3.2" fill="#d6336c"/><circle cx="96" cy="144" r="3.2" fill="#d6336c"/><circle cx="94.5" cy="136" r="1.2" fill="#ffffff" opacity="0.6"/>
+</svg>

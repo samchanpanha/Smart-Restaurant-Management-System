@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" role="img" aria-label="What goes into the Ribeye Plate">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f8f5f2"/><stop offset="1" stop-color="#dacbbd"/></linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.4" r="0.62"><stop offset="0" stop-color="#ffffff" stop-opacity="0.7"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="320" height="200" fill="url(#bg)"/>
+  <rect width="320" height="200" fill="url(#glow)"/>
+  <rect x="26" y="37" width="276" height="146" rx="20" fill="#0f172a" opacity="0.1"/>
+  <rect x="22" y="30" width="276" height="146" rx="20" fill="#dcae78"/>
+  <path d="M38 64 q62 -9 124 0 t118 2 M34 112 q72 -7 134 2 t112 -2 M40 152 q54 7 114 0 t126 0" stroke="#c99560" stroke-width="2" fill="none" opacity="0.7"/>
+  <rect x="22" y="30" width="276" height="146" rx="20" fill="none" stroke="#bf8a54" stroke-width="2"/>
+  <path d="M50 70 C56 52 104 46 132 56 C158 66 160 96 140 110 C116 126 70 124 54 106 C44 96 46 80 50 70 Z" fill="#c92a2a"/>
+  <path d="M62 74 q20 -8 40 2 t30 10 M60 92 q24 -6 50 4 M74 108 q24 4 50 -6" stroke="#ffe3e3" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.85"/>
+  <path d="M120 58 C140 64 150 80 144 96" stroke="#fff5f5" stroke-width="6" fill="none" stroke-linecap="round" opacity="0.8"/>
+  <ellipse cx="200" cy="70" rx="16" ry="6" fill="#ffffff" opacity="0.9"/><rect x="188" y="64" width="3" height="3" fill="#ffffff" stroke="#e5e7eb" stroke-width="0.6" transform="rotate(0 188 64)"/><rect x="193" y="65" width="3" height="3" fill="#ffffff" stroke="#e5e7eb" stroke-width="0.6" transform="rotate(23 193 65)"/><rect x="198" y="66" width="3" height="3" fill="#ffffff" stroke="#e5e7eb" stroke-width="0.6" transform="rotate(46 198 66)"/><rect x="203" y="67" width="3" height="3" fill="#ffffff" stroke="#e5e7eb" stroke-width="0.6" transform="rotate(69 203 67)"/><rect x="208" y="68" width="3" height="3" fill="#ffffff" stroke="#e5e7eb" stroke-width="0.6" transform="rotate(92 208 68)"/><rect x="189" y="69" width="3" height="3" fill="#ffffff" stroke="#e5e7eb" stroke-width="0.6" transform="rotate(115 189 69)"/><rect x="194" y="70" width="3" height="3" fill="#ffffff" stroke="#e5e7eb" stroke-width="0.6" transform="rotate(138 194 70)"/><rect x="199" y="71" width="3" height="3" fill="#ffffff" stroke="#e5e7eb" stroke-width="0.6" transform="rotate(161 199 71)"/><rect x="204" y="64" width="3" height="3" fill="#ffffff" stroke="#e5e7eb" stroke-width="0.6" transform="rotate(184 204 64)"/><rect x="209" y="65" width="3" height="3" fill="#ffffff" stroke="#e5e7eb" stroke-width="0.6" transform="rotate(207 209 65)"/>
+  <circle cx="233" cy="59" r="1.6" fill="#3b3b3b"/><circle cx="245.6" cy="70" r="1.6" fill="#3b3b3b"/><circle cx="258.2" cy="63" r="1.6" fill="#3b3b3b"/><circle cx="236.7" cy="73.9" r="1.6" fill="#3b3b3b"/><circle cx="249.3" cy="66.9" r="1.6" fill="#3b3b3b"/><circle cx="261.9" cy="59.9" r="1.6" fill="#3b3b3b"/><circle cx="240.5" cy="70.9" r="1.6" fill="#3b3b3b"/><circle cx="253.1" cy="63.9" r="1.6" fill="#3b3b3b"/><circle cx="265.6" cy="74.8" r="1.6" fill="#3b3b3b"/><circle cx="244.2" cy="67.8" r="1.6" fill="#3b3b3b"/><circle cx="256.8" cy="60.8" r="1.6" fill="#3b3b3b"/><circle cx="235.4" cy="71.8" r="1.6" fill="#3b3b3b"/><circle cx="248" cy="64.8" r="1.6" fill="#3b3b3b"/><circle cx="260.5" cy="75.7" r="1.6" fill="#3b3b3b"/><circle cx="239.1" cy="68.7" r="1.6" fill="#3b3b3b"/><circle cx="251.7" cy="61.7" r="1.6" fill="#3b3b3b"/>
+  <g transform="translate(200 128) scale(1)">
+    <path d="M0 -16 C-4 -10 -16 -6 -16 6 C-16 14 -8 18 0 18 C8 18 16 14 16 6 C16 -6 4 -10 0 -16 Z" fill="#f8f4ec" stroke="#e2d6c0" stroke-width="1.2"/>
+    <path d="M0 -12 C-3 -2 -4 8 -2 17 M0 -12 C3 -2 4 8 2 17 M-8 -2 C-11 6 -10 12 -6 16 M8 -2 C11 6 10 12 6 16" stroke="#e2d6c0" stroke-width="1.2" fill="none"/>
+  </g>
+  <g transform="translate(228 160) rotate(64)"><path d="M0 0 V-52" stroke="#3f6f32" stroke-width="1.6"/><path d="M0 -4 q-7 -3 -9 -9 q6 1 9 6 z" fill="#3f6f32"/><path d="M0 -6 q7 -3 9 -9 q-6 1 -9 6 z" fill="#3f6f32"/><path d="M0 -12.7 q-7 -3 -9 -9 q6 1 9 6 z" fill="#3f6f32"/><path d="M0 -14.7 q7 -3 9 -9 q-6 1 -9 6 z" fill="#3f6f32"/><path d="M0 -21.3 q-7 -3 -9 -9 q6 1 9 6 z" fill="#3f6f32"/><path d="M0 -23.3 q7 -3 9 -9 q-6 1 -9 6 z" fill="#3f6f32"/><path d="M0 -30 q-7 -3 -9 -9 q6 1 9 6 z" fill="#3f6f32"/><path d="M0 -32 q7 -3 9 -9 q-6 1 -9 6 z" fill="#3f6f32"/><path d="M0 -38.7 q-7 -3 -9 -9 q6 1 9 6 z" fill="#3f6f32"/><path d="M0 -40.7 q7 -3 9 -9 q-6 1 -9 6 z" fill="#3f6f32"/><path d="M0 -47.3 q-7 -3 -9 -9 q6 1 9 6 z" fill="#3f6f32"/><path d="M0 -49.3 q7 -3 9 -9 q-6 1 -9 6 z" fill="#3f6f32"/></g>
+  <path d="M80 140 l12 -6 l12 6 v12 l-12 6 l-12 -6 z" fill="#fde68a" stroke="#f2c94c" stroke-width="1"/>
+  <path d="M80 140 l12 6 l12 -6 M92 146 v12" stroke="#f2c94c" stroke-width="1" fill="none"/>
+  <g transform="translate(146 146) scale(0.75)">
+    <path d="M0 -16 C-4 -10 -16 -6 -16 6 C-16 14 -8 18 0 18 C8 18 16 14 16 6 C16 -6 4 -10 0 -16 Z" fill="#f8f4ec" stroke="#e2d6c0" stroke-width="1.2"/>
+    <path d="M0 -12 C-3 -2 -4 8 -2 17 M0 -12 C3 -2 4 8 2 17 M-8 -2 C-11 6 -10 12 -6 16 M8 -2 C11 6 10 12 6 16" stroke="#e2d6c0" stroke-width="1.2" fill="none"/>
+  </g>
+</svg>

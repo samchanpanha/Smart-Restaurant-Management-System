@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" role="img" aria-label="Soup of the Day from above">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fffbeb"/><stop offset="1" stop-color="#f8de97"/></linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.4" r="0.62"><stop offset="0" stop-color="#ffffff" stop-opacity="0.7"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="320" height="200" fill="url(#bg)"/>
+  <rect width="320" height="200" fill="url(#glow)"/>
+  <circle cx="154" cy="106" r="80" fill="#0f172a" opacity="0.1"/>
+  <circle cx="150" cy="100" r="80" fill="#ffffff" stroke="#e3e7ec" stroke-width="1.5"/>
+  <circle cx="150" cy="100" r="66" fill="#f59f00"/>
+  <circle cx="150" cy="100" r="66" fill="none" stroke="#e8890c" stroke-width="4"/>
+  <path d="M150 100 m-4 0 a4 4 0 1 1 8 0 a10 10 0 1 1 -20 0 a16 16 0 1 1 32 0 a22 22 0 1 1 -44 0" stroke="#fff4dc" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <g transform="translate(176 78) rotate(30) scale(0.8)">
+    <path d="M0 0 C-6 -4 -8 -12 -2 -16 C2 -10 3 -5 0 0 Z" fill="#2f9e44"/>
+    <path d="M0 0 C6 -3 12 -2 13 4 C7 5 3 3 0 0 Z" fill="#2f9e44" opacity="0.9"/>
+    <path d="M0 0 C-5 2 -10 7 -8 12 C-3 9 -1 5 0 0 Z" fill="#2f9e44" opacity="0.85"/>
+  </g>
+  <g transform="translate(122 122) rotate(-20) scale(0.7)">
+    <path d="M0 0 C-6 -4 -8 -12 -2 -16 C2 -10 3 -5 0 0 Z" fill="#2f9e44"/>
+    <path d="M0 0 C6 -3 12 -2 13 4 C7 5 3 3 0 0 Z" fill="#2f9e44" opacity="0.9"/>
+    <path d="M0 0 C-5 2 -10 7 -8 12 C-3 9 -1 5 0 0 Z" fill="#2f9e44" opacity="0.85"/>
+  </g>
+  <rect x="181.5" y="115.5" width="9" height="9" rx="2" fill="#d9a35b" stroke="#b7793a" stroke-width="1" transform="rotate(20 186 120)"/>
+  <rect x="113.5" y="77.5" width="9" height="9" rx="2" fill="#d9a35b" stroke="#b7793a" stroke-width="1" transform="rotate(-10 118 82)"/>
+  <rect x="236" y="50" width="12" height="80" rx="6" fill="#ced4da" transform="rotate(16 242 90)"/>
+  <ellipse cx="256" cy="140" rx="14" ry="20" fill="#dee2e6" transform="rotate(16 256 140)"/>
+  <g transform="translate(268 70) rotate(-20) scale(0.9)">
+    <path d="M-26 14 C-30 -6 -22 -20 0 -20 C22 -20 30 -6 26 14 Z" fill="#c9843e"/>
+    <path d="M-20 10 C-24 -4 -16 -14 0 -14 C16 -14 24 -4 20 10 Z" fill="#f3d9a4"/>
+    <circle cx="-6" cy="-2" r="1.4" fill="#d9b77a"/><circle cx="6" cy="2" r="1.4" fill="#d9b77a"/><circle cx="0" cy="-8" r="1.2" fill="#d9b77a"/>
+  </g>
+</svg>

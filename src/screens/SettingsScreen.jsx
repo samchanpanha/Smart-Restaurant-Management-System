@@ -996,6 +996,12 @@ function FoodSection({ draft, patch }) {
             onChange={(value) => setFood('imagesOnGuestMenu', value)}
           />
           <Toggle
+            label="Show photos on the kitchen screen"
+            hint="Each ticket line gets a thumbnail; a tap opens every photo of the dish, large."
+            checked={food.imagesOnKitchen}
+            onChange={(value) => setFood('imagesOnKitchen', value)}
+          />
+          <Toggle
             label="Print photos on documents"
             hint="Thermal tickets should stay off; this is for invoice or menu-sheet style prints."
             checked={food.imagesInPrint}

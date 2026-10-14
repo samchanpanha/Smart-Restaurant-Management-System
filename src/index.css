@@ -1,7 +1,24 @@
 @import "tailwindcss";
 
+/* Khmer is the kitchen display's default language, and plenty of KDS
+   hardware (Raspberry Pi images, older Windows) ships without a Khmer
+   font — so one travels with the app. The unicode-range means it is only
+   downloaded when Khmer text is actually on screen. Noto Sans Khmer,
+   SIL Open Font License 1.1 (see assets/fonts/OFL-NotoSansKhmer.txt). */
+@font-face {
+  font-family: "Restora Khmer";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src:
+    url("./assets/fonts/noto-sans-khmer-khmer-wght.woff2") format("woff2-variations"),
+    url("./assets/fonts/noto-sans-khmer-khmer-wght.woff2") format("woff2");
+  unicode-range: U+1780-17FF, U+19E0-19FF, U+200C-200D, U+25CC;
+}
+
 @theme {
-  --font-sans: ui-sans-serif, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  /* "Restora Khmer" covers Khmer code points only; everything else falls through. */
+  --font-sans: "Restora Khmer", ui-sans-serif, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   /* Restora operational surfaces */
@@ -35,6 +52,40 @@ body {
   color: #e8eaf0;
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+}
+
+/* ─── Kitchen display in Khmer and Chinese ────────────────────────────
+   Khmer stacks vowels above and subscript consonants below the line, so
+   it needs taller lines than Latin to stay legible (and to never clip in
+   a truncated cell). Wide tracking breaks up both scripts. Tailwind's
+   text-* and leading-* utilities read these theme variables, so retuning
+   them on the screen root is enough. */
+.kds:lang(km) {
+  line-height: 1.7;
+  --text-xs--line-height: 1.7;
+  --text-sm--line-height: 1.7;
+  --text-base--line-height: 1.65;
+  --text-lg--line-height: 1.6;
+  --text-xl--line-height: 1.55;
+  --text-2xl--line-height: 1.5;
+  --text-3xl--line-height: 1.45;
+  --leading-snug: 1.6;
+}
+
+.kds:is(:lang(km), :lang(zh)) {
+  --tracking-tight: 0em;
+  --tracking-wide: 0.01em;
+  --tracking-wider: 0.01em;
+  --tracking-widest: 0.02em;
+}
+
+/* 10–11px is fine for Latin capitals, too small for Khmer or Hanzi strokes. */
+.kds:is(:lang(km), :lang(zh)) .text-\[11px\] { font-size: 12px; }
+.kds:is(:lang(km), :lang(zh)) .text-\[10px\] { font-size: 11px; }
+
+/* Simplified Chinese faces first, so CJK never falls back to Japanese forms. */
+.kds:lang(zh) {
+  font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", "Source Han Sans SC", var(--font-sans);
 }
 
 /* Large numerals for KPIs + ticket timers */
