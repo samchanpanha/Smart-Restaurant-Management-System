@@ -642,7 +642,7 @@ function shopReducerBase(state, action) {
       )
       let changed = false
       const tables = state.tables.map((t) => {
-        if (t.status !== 'seated' || t.seatedBy !== 'guest' || !t.seatedAt) return t
+        if (!['seated', 'occupied'].includes(t.status) || t.seatedBy !== 'guest' || !t.seatedAt) return t
         if (occupied.has(t.id)) return t
         const ageMin = (nowMs - new Date(t.seatedAt).getTime()) / 60000
         if (ageMin < limitMin) return t
@@ -677,6 +677,10 @@ function shopReducerBase(state, action) {
                 sessionToken,
                 seatedAt,
                 selfSeated: true,
+                // The stale-table sweep only releases tables a guest took
+                // themselves — a self-seated table is 'occupied', so the
+                // claim has to carry the same marker SEAT_PARTY sets.
+                seatedBy: 'guest',
                 lastActivityAt: seatedAt,
               }
             : t,

@@ -146,7 +146,7 @@ export default function App() {
   // The Telegram mini app is the guest menu with the platform chrome on top.
   if (miniApp) {
     return (
-      <RestoraProvider>
+      <RestoraProvider waitForServer={false}>
         <MiniAppFrame tableId={guest} />
       </RestoraProvider>
     )
@@ -154,7 +154,7 @@ export default function App() {
   // Guests get their own light app — same provider, same live ticket.
   if (guest) {
     return (
-      <RestoraProvider>
+      <RestoraProvider waitForServer={false}>
         <GuestScreen tableId={guest} />
       </RestoraProvider>
     )

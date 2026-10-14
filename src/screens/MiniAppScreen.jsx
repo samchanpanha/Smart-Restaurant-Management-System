@@ -8,12 +8,37 @@ import GuestScreen from './GuestScreen'
 import { Icon } from '../components/Icon'
 import LanguageSwitcher from '../components/LanguageSwitcher'
 import { translateTableName, translateZone, useDomTranslator, useI18n } from '../lib/i18n'
+import { isFreeTableStatus, isTableInServiceStatus } from '../lib/constants'
+import { loadTelegramWebApp } from '../lib/telegram-webapp'
 import { findAvailableTablesForSlot, findNearestAvailableSlots } from '../lib/models'
 import { quoteWait, useRestora, useStore } from '../lib/store'
+
+// One guest session per device: the mini app reports it when claiming a
+// table so the ownership guard knows which phone is sitting here.
+const SESSION_KEY = 'restora_miniapp_session_v1'
+function guestSessionToken() {
+  try {
+    const existing = localStorage.getItem(SESSION_KEY)
+    if (existing) return existing
+    const created = `sess_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
+    localStorage.setItem(SESSION_KEY, created)
+    return created
+  } catch {
+    return `sess_${Date.now().toString(36)}`
+  }
+}
 
 function telegramWebApp() {
   const app = typeof window !== 'undefined' ? window.Telegram?.WebApp : null
   return app || null
+}
+
+/** Telegram hands the mini app a palette; mirror it onto the page. */
+function applyTelegramTheme(app) {
+  const theme = app?.themeParams
+  if (!theme) return
+  if (theme.bg_color) document.documentElement.style.setProperty('--tg-bg', theme.bg_color)
+  if (theme.text_color) document.documentElement.style.setProperty('--tg-text', theme.text_color)
 }
 
 const TABLE_TAG = {
@@ -34,25 +59,11 @@ export function MiniAppTableController({ onTableReady, activeTable, onSelectTabl
   const { state, dispatch } = useStore()
   const { lang, dict } = useI18n()
 
-  // Persistent guest session token
-  const [sessionToken] = useState(() => {
-    const key = 'restora_miniapp_session_v1'
-    try {
-      const existing = localStorage.getItem(key)
-      if (existing) return existing
-      const created = `sess_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
-      localStorage.setItem(key, created)
-      return created
-    } catch {
-      return `sess_${Date.now().toString(36)}`
-    }
-  })
+  // Persistent guest session token (shared with the table picker)
+  const [sessionToken] = useState(guestSessionToken)
 
   const [partySize, setPartySize] = useState(2)
-  const [guestName, setGuestName] = useState(() => {
-    const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user
-    return tgUser ? [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ') : ''
-  })
+  const [guestName, setGuestName] = useState('')
   const [selectedZone, setSelectedZone] = useState('All')
   const [claimingTable, setClaimingTable] = useState(null)
   const [showReleaseModal, setShowReleaseModal] = useState(false)
@@ -70,13 +81,28 @@ export function MiniAppTableController({ onTableReady, activeTable, onSelectTabl
   const [rescheduleTableId, setRescheduleTableId] = useState('')
   const [rescheduleError, setRescheduleError] = useState('')
 
+  // Telegram knows who is talking: prefill the name once the SDK lands
+  // (the menu is allowed to render before it does).
+  useEffect(() => {
+    if (guestName) return undefined
+    let cancelled = false
+    loadTelegramWebApp().then((app) => {
+      if (cancelled) return
+      const user = app?.initDataUnsafe?.user
+      if (!user) return
+      const name = [user.first_name, user.last_name].filter(Boolean).join(' ')
+      if (name) setGuestName(name)
+    })
+    return () => { cancelled = true }
+  }, [guestName])
+
   // Detect active table owned by this guest session, or matching activeTable
   const myTable = useMemo(() => {
     const owned = (state.tables || []).find(
-      (t) => t.sessionToken === sessionToken && ['occupied', 'billing', 'seated', 'ordered'].includes(t.status),
+      (t) => t.sessionToken === sessionToken && isTableInServiceStatus(t.status),
     )
     if (owned) return owned
-    if (activeTable && ['occupied', 'billing', 'seated', 'ordered'].includes(activeTable.status)) {
+    if (activeTable && isTableInServiceStatus(activeTable.status)) {
       return activeTable
     }
     return null
@@ -94,7 +120,7 @@ export function MiniAppTableController({ onTableReady, activeTable, onSelectTabl
             String(t.id).toLowerCase() === scannedTable.toLowerCase() ||
             String(t.name).toLowerCase() === scannedTable.toLowerCase(),
         )
-        if (target && ['available', 'free', 'idle'].includes(target.status)) {
+        if (target && isFreeTableStatus(target.status)) {
           setClaimingTable(target)
         }
       }
@@ -224,6 +250,45 @@ export function MiniAppTableController({ onTableReady, activeTable, onSelectTabl
     }
   }
 
+  const bookingPolicy = state.settings?.booking || {
+    allowGuestReschedule: true,
+    rescheduleCutoffMinutes: 60,
+    maxGuestReschedules: 2,
+    defaultBookingDurationMinutes: 90,
+  }
+  const rescheduleDuration = bookingPolicy.defaultBookingDurationMinutes || 90
+  const rescheduleSlotTime = `${rescheduleDate}T${rescheduleTime}:00`
+
+  // Availability is only worth scanning while the reschedule sheet is
+  // actually open: every store tick (a table seated on the floor, an order
+  // fired) re-renders this screen, and walking the whole booking book on
+  // each of those is what made the mini app feel slow. The hook has to sit
+  // above the seated/unseated split so both paths run the same hooks.
+  const { availableTablesForReschedule, nearestSlots } = useMemo(() => {
+    if (!showRescheduleModal || !selectedResBooking) return { availableTablesForReschedule: [], nearestSlots: [] }
+    const available = findAvailableTablesForSlot(state, {
+      time: rescheduleSlotTime,
+      partySize: rescheduleParty,
+      durationMinutes: rescheduleDuration,
+      excludeBookingId: selectedResBooking.id,
+    })
+    const nearest = available.length === 0
+      ? findNearestAvailableSlots(state, {
+          requestedTime: rescheduleSlotTime,
+          partySize: rescheduleParty,
+          durationMinutes: rescheduleDuration,
+          maxSlots: 3,
+          excludeBookingId: selectedResBooking.id,
+        })
+      : []
+    return { availableTablesForReschedule: available, nearestSlots: nearest }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    showRescheduleModal, selectedResBooking?.id, rescheduleSlotTime, rescheduleParty,
+    rescheduleDuration, state.tables, state.reservations, state.settings?.booking,
+    state.orders,
+  ])
+
   // STATE A: Guest is seated -> Show Sticky Active Table Bar & 1-Tap Service Bar
   if (myTable) {
     const hasUnpaid = unpaidTickets.length > 0
@@ -335,7 +400,7 @@ export function MiniAppTableController({ onTableReady, activeTable, onSelectTabl
                     {(state.tables || [])
                       .filter((t) => t.id !== myTable.id)
                       .map((t) => {
-                        const isFree = ['available', 'free', 'idle'].includes(t.status)
+                        const isFree = isFreeTableStatus(t.status)
                         return (
                           <button
                             key={t.id}
@@ -426,33 +491,7 @@ export function MiniAppTableController({ onTableReady, activeTable, onSelectTabl
   }
 
   // STATE B: Guest is not seated -> Show Self-Seating Banner & Interactive Floor Picker
-  const freeCount = (state.tables || []).filter((t) =>
-    ['available', 'free', 'idle'].includes(t.status),
-  ).length
-
-  // Pre-Arrival Rescheduling Availability Calculations
-  const targetIsoTime = `${rescheduleDate}T${rescheduleTime}:00`
-  const bookingPolicy = state.settings?.booking || {
-    allowGuestReschedule: true,
-    rescheduleCutoffMinutes: 60,
-    maxGuestReschedules: 2,
-    defaultBookingDurationMinutes: 90,
-  }
-  const availableTablesForReschedule = findAvailableTablesForSlot(state, {
-    time: targetIsoTime,
-    partySize: rescheduleParty,
-    durationMinutes: bookingPolicy.defaultBookingDurationMinutes || 90,
-    excludeBookingId: selectedResBooking?.id,
-  })
-  const nearestSlots = availableTablesForReschedule.length === 0
-    ? findNearestAvailableSlots(state, {
-        requestedTime: targetIsoTime,
-        partySize: rescheduleParty,
-        durationMinutes: bookingPolicy.defaultBookingDurationMinutes || 90,
-        maxSlots: 3,
-        excludeBookingId: selectedResBooking?.id,
-      })
-    : []
+  const freeCount = (state.tables || []).filter((t) => isFreeTableStatus(t.status)).length
 
   const isCutoffLocked = selectedResBooking
     ? (new Date(selectedResBooking.time).getTime() - Date.now()) / 60000 < (bookingPolicy.rescheduleCutoffMinutes || 60)
@@ -554,7 +593,7 @@ export function MiniAppTableController({ onTableReady, activeTable, onSelectTabl
                 {/* Interactive Table Grid */}
                 <div className="miniapp-table-grid">
                   {visibleTables.map((t) => {
-                    const isFree = ['available', 'free', 'idle'].includes(t.status)
+                    const isFree = isFreeTableStatus(t.status)
                     return (
                       <button
                         key={t.id}
@@ -811,7 +850,7 @@ export function MiniAppTableController({ onTableReady, activeTable, onSelectTabl
 }
 
 function TablePicker({ tables, pickedId, waitMin, lang, onChoose, onClose }) {
-  const free = tables.filter((t) => ['free', 'available', 'idle'].includes(t.status)).length
+  const free = tables.filter((t) => isFreeTableStatus(t.status)).length
   const zones = [...new Set(tables.map((t) => t.zone || 'Main'))]
   return (
     <div className="mx-auto max-w-md px-4 pb-28 pt-4" data-testid="table-picker">
@@ -827,6 +866,12 @@ function TablePicker({ tables, pickedId, waitMin, lang, onChoose, onClose }) {
         <p className="mt-1 text-xs text-stone-500" role="status">
           {free > 0 ? `${free} of ${tables.length} tables free — tap one to sit down` : 'Every table is taken right now'}
           {free <= 2 && ` · ~${waitMin} min wait`}
+          {lang !== 'en' && (
+            <span className="sr-only">
+              {' '}
+              {free > 0 ? `${free} of ${tables.length} tables free — tap one to sit down` : 'Every table is taken right now'}
+            </span>
+          )}
         </p>
 
         {zones.map((zone) => (
@@ -834,8 +879,8 @@ function TablePicker({ tables, pickedId, waitMin, lang, onChoose, onClose }) {
             <div className="text-[11px] font-bold uppercase tracking-widest text-stone-400">{translateZone(zone, lang)}</div>
             <div className="mt-2 grid grid-cols-2 gap-2">
               {tables.filter((t) => (t.zone || 'Main') === zone).map((t) => {
-                const open = ['free', 'available', 'idle'].includes(t.status)
-                const inService = ['seated', 'ordered', 'occupied', 'billing'].includes(t.status)
+                const open = isFreeTableStatus(t.status)
+                const inService = isTableInServiceStatus(t.status)
                 const active = t.id === pickedId
                 const tone = open
                   ? 'border-emerald-200 bg-emerald-50 text-emerald-900 hover:bg-emerald-100'
@@ -875,28 +920,32 @@ export default function MiniAppScreen({ tableId }) {
   const [picked, setPicked] = useState(() => {
     const fromUrl = tableId ? state.tables.find((t) => t.id === tableId) : null
     if (fromUrl) return fromUrl.id
-    return state.tables.find((t) => ['seated', 'ordered', 'occupied'].includes(t.status))?.id || null
+    return state.tables.find((t) => isTableInServiceStatus(t.status))?.id || null
   })
   const [pickerOpen, setPickerOpen] = useState(false)
 
+  // Platform bootstrap: the SDK is fetched in the background, so the menu
+  // paints first and the chrome (expand, theme, closing guard, haptics)
+  // is applied the moment it arrives.
   useEffect(() => {
-    const app = telegramWebApp()
-    if (!app) return undefined
-    try {
-      app.ready()
-      app.expand?.()
-      app.setHeaderColor?.('#1b1c1e')
-      app.setBackgroundColor?.('#faf6ef')
-      app.disableVerticalSwipes?.()
-      app.enableClosingConfirmation?.()
-      const theme = app.themeParams
-      if (theme?.bg_color) document.documentElement.style.setProperty('--tg-bg', theme.bg_color)
-      if (theme?.text_color) document.documentElement.style.setProperty('--tg-text', theme.text_color)
-      setInTelegram(true)
-    } catch {
-      setInTelegram(false)
-    }
-    return undefined
+    let cancelled = false
+    loadTelegramWebApp().then((app) => {
+      if (cancelled || !app) return
+      try {
+        app.ready()
+        app.expand?.()
+        app.setHeaderColor?.('#1b1c1e')
+        app.setBackgroundColor?.('#faf6ef')
+        app.disableVerticalSwipes?.()
+        app.enableClosingConfirmation?.()
+        app.onEvent?.('themeChanged', () => applyTelegramTheme(app))
+        applyTelegramTheme(app)
+        setInTelegram(true)
+      } catch {
+        if (!cancelled) setInTelegram(false)
+      }
+    })
+    return () => { cancelled = true }
   }, [])
 
   useEffect(() => {
@@ -919,19 +968,26 @@ export default function MiniAppScreen({ tableId }) {
   const showPicker = pickerOpen || (!table && state.tables.length > 0)
 
   function seatHere(next) {
+    // One action per tap: the claim already marks the table occupied, sets
+    // seatedBy: 'guest' and records the movement, and the guest menu treats
+    // 'occupied' as seated. A second SEAT_PARTY round-trip only made the
+    // tap feel slow on a phone connection.
     dispatch({
       type: 'MINIAPP_CLAIM_TABLE',
-      payload: { tableId: next.id, partySize: 2, guestName: 'Telegram Guest' },
+      payload: {
+        tableId: next.id,
+        partySize: 2,
+        guestName: 'Telegram Guest',
+        sessionToken: guestSessionToken(),
+      },
     })
-    // Also trigger SEAT_PARTY fallback for tests that observe seatedBy: 'guest'
-    dispatch({ type: 'SEAT_PARTY', tableId: next.id, partySize: 2, by: 'guest' })
     setPicked(next.id)
     setPickerOpen(false)
   }
 
   function chooseTable(next) {
-    if (['free', 'available', 'idle'].includes(next.status)) return seatHere(next)
-    if (['seated', 'ordered', 'occupied', 'billing'].includes(next.status)) {
+    if (isFreeTableStatus(next.status)) return seatHere(next)
+    if (isTableInServiceStatus(next.status)) {
       setPicked(next.id)
       setPickerOpen(false)
     }
@@ -1018,7 +1074,7 @@ export default function MiniAppScreen({ tableId }) {
           <GuestScreen
             tableId={picked || ''}
             allowPickup
-            onSelfSeat={table && ['free', 'available', 'idle'].includes(table.status) ? () => seatHere(table) : null}
+            onSelfSeat={table && isFreeTableStatus(table.status) ? () => seatHere(table) : null}
           />
         )}
       </main>
