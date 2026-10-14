@@ -27,6 +27,28 @@ With the API running, extra environment (all optional — nothing breaks without
 | `TELEGRAM_WEBHOOK_SECRET` | Shared secret Telegram must echo back on every update. |
 | `RESTORA_PUBLIC_URL` | Public origin used for guest / mini-app links in replies. |
 | `RESTORA_DATA` | Where `restora.sqlite` lives (default `server/data/`). |
+| `SUPERADMIN_EMAIL` / `SUPERADMIN_PASSWORD` / `SUPERADMIN_NAME` | Seed (or promote) the platform super admin on boot. |
+| `RESTORA_TENANT` | Slug (or id) of the owner the Telegram bot serves; defaults to the first owner, else the legacy `default` tenant. |
+| `RESTORA_SECURE_COOKIES` | Set to `1` behind HTTPS so session cookies are marked `Secure`. |
+
+## Accounts & tenants
+
+One server hosts many restaurants. Signing in is required for the terminal
+workspace; the guest QR app and the Telegram mini app stay open.
+
+- **Register** creates a host owner (its own restaurant) plus the first owner
+  user; **sign in** sets an httpOnly `restora_session` cookie (7 days).
+- Users and Roles are scoped to their owner. A manager sees only their own
+  team, and nobody below a super admin can grant a role broader than their own.
+- A **super admin** (`SUPERADMIN_EMAIL` / `SUPERADMIN_PASSWORD`) gets a Host
+  owners console to add, suspend, or delete restaurants.
+- Every state table, read model, action log, and SSE stream is partitioned by
+  `owner_id`, so two restaurants never see each other's floor, stock, or menu.
+
+The API picks a tenant per request: a signed-in user is pinned to their own
+owner; a super admin names one with `?ownerId=`; guests and the mini app pick
+one with `?owner=<slug>` (a named tenant that does not exist is a `404`). The
+Telegram bot is bound to `RESTORA_TENANT` (first owner, else legacy `default`).
 
 ## Workspace tabs
 
@@ -289,7 +311,8 @@ does not retry a command that already ran), `POST /api/telegram/simulate`
 ## Guest QR ordering
 
 Each table has a QR tent card (Floor → table → 📱 Table QR code). Guests scan
-and get a light consumer app at `/?guest=<tableId>` — no login, no sidebar:
+and get a light consumer app at `/?guest=<tableId>&owner=<slug>` — no login, no
+sidebar:
 
 - Menu (86'd dishes vanish instantly) with required modifiers enforced
 - Cart → **Send to kitchen**: one atomic `GUEST_SEND` lands on the table's
@@ -317,6 +340,20 @@ history, and it *has* salmon). State shape v2 keeps a full shop per store:
 - Old v1 snapshots (server DB + localStorage) **migrate on boot**: v1 becomes
   Downtown, Riverside seeds fresh; bare pre-LOC actions still apply to Downtown
 
+## Deploy (Docker)
+
+`npm run build && npm run server` serves the built frontend and the API on one
+port. The bundled image does the same:
+
+```bash
+docker compose up --build            # → http://localhost:3001
+```
+
+SQLite lives on the `restora-data` volume. Provide `SUPERADMIN_EMAIL`,
+`SUPERADMIN_PASSWORD`, `RESTORA_TENANT`, and the `TELEGRAM_*` values through
+your environment (or a `.env` file beside `docker-compose.yml`) to configure
+the super admin and the hosted bot.
+
 ## Stack
 
 React 19 + Vite + Tailwind CSS v4. `useReducer` + context, synced to
@@ -336,6 +373,7 @@ Express + SQLite (`better-sqlite3`) via action log + SSE when a server is presen
 | 8 | Reports | ✅ Done | Sales/hour/category/day, service, voids audit, variance, P&L-lite — every report ends in an action |
 | 9 | Configuration, documents & catalog | ✅ Done | Settings sections (identity · money · templates · stock · POS · alerts · data), invoice/receipt/ticket/report designer + print, multi-currency, document registry, category tree, suppliers, live preview/print from Tickets & Reports |
 | 10 | Buy side, units & Telegram | ✅ Done | Purchase CRUD → stock with pack conversion, the signed movement ledger, sell/buy + P&L + top/bottom reports, units of measure, item photos, bot console + push notices + digest, and the Telegram mini app |
+| 11 | Accounts, roles & multi-tenant | ✅ Done | Owner accounts + owner-scoped users/roles, a super-admin host-owner console, per-owner isolation of every state table, read model, action log, and SSE stream (schema v3 migrates a legacy single-tenant file) |
 
 ## Key rules (from spec — enforced in code)
 
