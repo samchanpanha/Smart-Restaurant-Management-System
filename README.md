@@ -323,6 +323,10 @@ sidebar:
 - Pay the whole check with tip, or ask the server to take payment
 
 Demo routing is by table id; production tents would carry unguessable tokens.
+For the same reason, the guest app reads its restaurant by a public slug and
+loads the full tenant snapshot, then renders only the scanned table — a demo
+convenience. A production deployment should serve guests a scoped projection
+(menu + that table's ticket) instead of the whole snapshot.
 
 ## Multi-location
 
