@@ -435,6 +435,172 @@ app.post('/api/miniapp/tables/:tableId/release', async (req, res) => {
   }
 })
 
+app.patch('/api/bookings/:id/reschedule', async (req, res) => {
+  try {
+    const { id } = req.params
+    const {
+      tenantId = DEFAULT_TENANT,
+      locId = 'downtown',
+      newDate,
+      newTime,
+      newPartySize,
+      preferredTableId,
+      actor = 'guest',
+    } = req.body || {}
+
+    const state = await db.getState(tenantId)
+    if (!state) return res.status(404).json({ error: 'Tenant state not found' })
+
+    const booking = (state.reservations || []).find((r) => String(r.id) === String(id))
+    if (!booking) return res.status(404).json({ error: 'Booking not found' })
+
+    const action = {
+      type: 'RESCHEDULE_BOOKING',
+      payload: {
+        bookingId: id,
+        newDate,
+        newTime,
+        newPartySize,
+        preferredTableId,
+        actor,
+      },
+    }
+
+    const wrapped = { type: 'LOC', locId, action }
+    const runtime = runtimes.get(tenantId) || runtimeFor(tenantId)
+    const prevShop = runtime.state.locations?.[locId] || state
+    let nextEmpire
+    try {
+      nextEmpire = reducer(runtime.state, wrapped)
+    } catch (err) {
+      return res.status(400).json({ error: err.message })
+    }
+
+    if (nextEmpire === runtime.state) {
+      return res.status(400).json({ error: 'Reschedule produced no state change' })
+    }
+
+    const nextSeq = commitAction(runtime.ownerId, 'api', wrapped, nextEmpire)
+    runtime.state = nextEmpire
+    runtime.seq = nextSeq
+    broadcast(runtime, { seq: nextSeq, action: wrapped, clientId: 'api' })
+
+    const updatedShop = nextEmpire.locations?.[locId] || nextEmpire
+    await db.saveState(tenantId, updatedShop)
+
+    const updatedBooking = (updatedShop.reservations || []).find((r) => String(r.id) === String(id))
+    const prevTable = (prevShop.tables || []).find((t) => String(t.id) === String(booking.tableId))
+    const nextTable = (updatedShop.tables || []).find((t) => String(t.id) === String(updatedBooking?.tableId))
+
+    // Trigger Telegram diff notification
+    const oldFmt = booking.time ? new Date(booking.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''
+    const newFmt = updatedBooking?.time ? new Date(updatedBooking.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''
+    await (notifier?.sendTelegramEvent || sendTelegramEvent)(tenantId, {
+      type: 'BOOKING_RESCHEDULED',
+      text: `📅 *Booking Rescheduled*\n• Guest: *${booking.name}* (${updatedBooking?.partySize || booking.partySize} pax)\n• Old: ${oldFmt} (${prevTable?.name || 'Unassigned'})\n• New: *${newFmt}* (${nextTable?.name || 'Unassigned'})`,
+    }).catch(() => {})
+
+    res.json({ ok: true, booking: updatedBooking })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/tables/:id/transfer', async (req, res) => {
+  try {
+    const { id } = req.params
+    const { tenantId = DEFAULT_TENANT, locId = 'downtown', targetTableId, reason = '', actor = 'staff' } = req.body || {}
+
+    if (!targetTableId) {
+      return res.status(400).json({ error: 'targetTableId is required' })
+    }
+
+    const action = {
+      type: 'APPROVE_TABLE_TRANSFER',
+      payload: {
+        currentTableId: id,
+        targetTableId,
+        reason,
+        actor,
+      },
+    }
+
+    const wrapped = { type: 'LOC', locId, action }
+    const runtime = runtimes.get(tenantId) || runtimeFor(tenantId)
+    const prevShop = runtime.state.locations?.[locId]
+    let nextEmpire
+    try {
+      nextEmpire = reducer(runtime.state, wrapped)
+    } catch (err) {
+      return res.status(400).json({ error: err.message })
+    }
+
+    const nextSeq = commitAction(runtime.ownerId, 'api', wrapped, nextEmpire)
+    runtime.state = nextEmpire
+    runtime.seq = nextSeq
+    broadcast(runtime, { seq: nextSeq, action: wrapped, clientId: 'api' })
+
+    const updatedShop = nextEmpire.locations?.[locId] || nextEmpire
+    await db.saveState(tenantId, updatedShop)
+
+    const fromTable = (prevShop?.tables || []).find((t) => String(t.id) === String(id))
+    const toTable = (updatedShop.tables || []).find((t) => String(t.id) === String(targetTableId))
+
+    await (notifier?.sendTelegramEvent || sendTelegramEvent)(tenantId, {
+      type: 'TABLE_TRANSFERRED',
+      text: `🚀 *Table Transferred*\n• From: *${fromTable?.name || id}* ➔ To: *${toTable?.name || targetTableId}*\n• Guest: ${toTable?.guestName || 'Guest'} (${actor})\n• Status: Orders & active tickets rebound`,
+    }).catch(() => {})
+
+    res.json({ ok: true, fromTable: id, toTable: targetTableId })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/tables/:id/transfer-request', async (req, res) => {
+  try {
+    const { id } = req.params
+    const { tenantId = DEFAULT_TENANT, locId = 'downtown', targetTableId, reason = '', sessionToken } = req.body || {}
+
+    if (!targetTableId) {
+      return res.status(400).json({ error: 'targetTableId is required' })
+    }
+
+    const action = {
+      type: 'REQUEST_TABLE_TRANSFER',
+      payload: {
+        currentTableId: id,
+        targetTableId,
+        reason,
+        sessionToken,
+      },
+    }
+
+    const wrapped = { type: 'LOC', locId, action }
+    const runtime = runtimes.get(tenantId) || runtimeFor(tenantId)
+    const nextEmpire = reducer(runtime.state, wrapped)
+    const nextSeq = commitAction(runtime.ownerId, 'api', wrapped, nextEmpire)
+    runtime.state = nextEmpire
+    runtime.seq = nextSeq
+    broadcast(runtime, { seq: nextSeq, action: wrapped, clientId: 'api' })
+
+    const updatedShop = nextEmpire.locations?.[locId] || nextEmpire
+    await db.saveState(tenantId, updatedShop)
+
+    const fromTable = (updatedShop.tables || []).find((t) => String(t.id) === String(id))
+    const toTable = (updatedShop.tables || []).find((t) => String(t.id) === String(targetTableId))
+
+    await (notifier?.sendTelegramEvent || sendTelegramEvent)(tenantId, {
+      type: 'TABLE_TRANSFER_REQUESTED',
+      text: `🔄 *Table Transfer Requested*\n• From: *${fromTable?.name || id}* ➔ To: *${toTable?.name || targetTableId}*\n• Guest: ${fromTable?.guestName || 'Guest'}\n• Reason: ${reason || 'Guest requested'}`,
+    }).catch(() => {})
+
+    res.json({ ok: true, pendingTransfer: fromTable?.pendingTransfer })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 
 // ─── Telegram bot ───────────────────────────────────────────────
 // The bot runs the SAME reducer as the terminals: a /86 from a phone is

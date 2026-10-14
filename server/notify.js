@@ -92,6 +92,61 @@ export function noticesFor(prev, next, action = null, settings = null) {
     }
   }
 
+  // ── Booking reschedule diff ───────────────────────────────────────
+  if (inner?.type === 'RESCHEDULE_BOOKING') {
+    const bId = inner.payload?.bookingId || inner.bookingId
+    const nextRes = (next.reservations || []).find((r) => String(r.id) === String(bId))
+    const prevRes = (prev.reservations || []).find((r) => String(r.id) === String(bId))
+    if (nextRes) {
+      const prevTable = (prev.tables || []).find((t) => String(t.id) === String(prevRes?.tableId))
+      const nextTable = (next.tables || []).find((t) => String(t.id) === String(nextRes?.tableId))
+      out.push({
+        kind: 'booking_rescheduled',
+        payload: {
+          name: nextRes.name,
+          partySize: nextRes.partySize,
+          oldTime: prevRes?.time || nextRes.previousSlot?.time,
+          newTime: nextRes.time,
+          oldTable: prevTable?.name || 'Unassigned',
+          newTable: nextTable?.name || 'Unassigned',
+        },
+      })
+    }
+  }
+
+  // ── Table transfer request & execution ────────────────────────────
+  if (inner?.type === 'REQUEST_TABLE_TRANSFER') {
+    const cId = inner.payload?.currentTableId || inner.currentTableId
+    const tId = inner.payload?.targetTableId || inner.targetTableId
+    const fromTable = (next.tables || []).find((t) => String(t.id) === String(cId))
+    const toTable = (next.tables || []).find((t) => String(t.id) === String(tId))
+    out.push({
+      kind: 'table_transfer_requested',
+      payload: {
+        fromTable: fromTable?.name || cId,
+        toTable: toTable?.name || tId,
+        guestName: fromTable?.guestName || 'Guest',
+        reason: inner.payload?.reason || inner.reason || 'Guest requested',
+      },
+    })
+  }
+
+  if (inner?.type === 'APPROVE_TABLE_TRANSFER' || inner?.type === 'TRANSFER_TABLE') {
+    const cId = inner.payload?.currentTableId || inner.currentTableId
+    const tId = inner.payload?.targetTableId || inner.targetTableId
+    const fromTable = (prev.tables || []).find((t) => String(t.id) === String(cId))
+    const toTable = (next.tables || []).find((t) => String(t.id) === String(tId))
+    out.push({
+      kind: 'table_transferred',
+      payload: {
+        fromTable: fromTable?.name || cId,
+        toTable: toTable?.name || tId,
+        guestName: toTable?.guestName || fromTable?.guestName || 'Guest',
+        actor: inner.payload?.actor || inner.actor || 'staff',
+      },
+    })
+  }
+
   // ── Menu availability flipped ─────────────────────────────────────
   for (const item of next.menu || []) {
     const before = prevMenuById.get(item.id)

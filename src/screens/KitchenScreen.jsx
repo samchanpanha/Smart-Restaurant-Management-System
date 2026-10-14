@@ -219,7 +219,7 @@ function DishPhotoModal({ dish, initialIndex = 0, recipe, invById, lang, dict, o
 // One card = one order's fired lines for this column. Oldest first.
 
 function TicketCard({ order, tableName, server, lines, now, lang, dict, showImages, onInspectDish }) {
-  const { dispatch } = useRestora()
+  const { state, dispatch } = useRestora()
   const oldest = lines.reduce((a, b) => (new Date(a.firedAt) < new Date(b.firedAt) ? a : b))
   const cardAge = ageOf(oldest.firedAt, now)
   const firedLines = lines.filter((l) => l.status === 'fired')
@@ -227,6 +227,11 @@ function TicketCard({ order, tableName, server, lines, now, lang, dict, showImag
   function bumpAll() {
     for (const l of firedLines) dispatch({ type: 'BUMP_ITEM', orderId: order.id, itemId: l.id })
   }
+
+  const prevTable = order?.transferredFromTableId
+    ? state.tables?.find((t) => String(t.id) === String(order.transferredFromTableId))
+    : null
+  const prevTableName = prevTable ? translateTableName(prevTable.name, lang) : order?.transferredFromTableId
 
   return (
     <article
@@ -240,8 +245,14 @@ function TicketCard({ order, tableName, server, lines, now, lang, dict, showImag
     >
       <header className="flex items-center justify-between gap-2 border-b border-white/5 px-3 py-2">
         <div className="min-w-0">
-          <div className="truncate text-sm font-bold">
-            {translateTableName(tableName, lang)} <span className="font-normal text-zinc-500">· {server}</span>
+          <div className="flex items-center gap-1.5 flex-wrap truncate text-sm font-bold">
+            <span>{translateTableName(tableName, lang)}</span>
+            <span className="font-normal text-zinc-500">· {server}</span>
+            {order?.transferredFromTableId && (
+              <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-bold text-amber-300 ring-1 ring-inset ring-amber-500/40">
+                Moved: {prevTableName} ➔ {translateTableName(tableName, lang)}
+              </span>
+            )}
           </div>
           <div className="text-[11px] text-zinc-500">{dict.firedAt(formatClock(oldest.firedAt))}</div>
         </div>
@@ -277,6 +288,11 @@ function TicketCard({ order, tableName, server, lines, now, lang, dict, showImag
                     {isNew && (
                       <span className="animate-status-in ml-1.5 rounded bg-sky-500/20 px-1.5 py-0.5 align-middle text-[10px] font-bold text-sky-300 ring-1 ring-inset ring-sky-500/40">
                         {dict.newBadge}
+                      </span>
+                    )}
+                    {(l.transferredFromTableId || order?.transferredFromTableId) && (
+                      <span className="ml-1.5 rounded bg-amber-500/20 px-1.5 py-0.5 align-middle text-[10px] font-bold text-amber-300 ring-1 ring-inset ring-amber-500/40">
+                        Moved
                       </span>
                     )}
                   </div>

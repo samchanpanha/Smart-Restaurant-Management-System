@@ -9,7 +9,7 @@ import StatusPill from '../components/StatusPill'
 import { Field, Modal, Stepper, inputCls } from '../components/ui'
 import { TABLE_STATUS_META, TARGETS } from '../lib/constants'
 import { translateTableName, translateTableStatus, translateZone, useI18n } from '../lib/i18n'
-import { formatClock, isSeatBlocked, minutesBetween, needsOverSeatConfirm } from '../lib/models'
+import { formatClock, isSeatBlocked, minutesBetween, needsOverSeatConfirm, findAvailableTablesForSlot } from '../lib/models'
 import { quoteWait, useNow, useRestora } from '../lib/store'
 
 // ─── Seat dialog ────────────────────────────────────────────────
@@ -257,9 +257,84 @@ function TableCard({ table, onOpen }) {
 
 // ─── Table detail ───────────────────────────────────────────────
 
-function TableDetail({ table, onClose, onSeat, onError }) {
+function TransferTableModal({ table, onClose, onTransferred }) {
+  const { state, dispatch } = useRestora()
+  const { lang } = useI18n()
+  const availableTables = state.tables.filter(
+    (t) => t.id !== table.id && (t.status === 'free' || t.status === 'available'),
+  )
+  const [targetId, setTargetId] = useState(availableTables[0]?.id || '')
+  const [reason, setReason] = useState('')
+
+  function handleTransfer() {
+    if (!targetId) return
+    const targetTable = state.tables.find((t) => t.id === targetId)
+    dispatch({
+      type: 'TRANSFER_TABLE',
+      payload: {
+        currentTableId: table.id,
+        targetTableId: targetId,
+        reason: reason.trim() || 'Floor staff transfer',
+        actor: 'staff',
+      },
+    })
+    onTransferred?.(targetTable ? targetTable.name : targetId)
+    onClose()
+  }
+
+  return (
+    <Modal
+      title={`Transfer ${table.name}`}
+      sub={`Move party (${table.partySize || table.seats} guests) and active order to another table.`}
+      onClose={onClose}
+    >
+      <div className="mt-3 space-y-4">
+        {availableTables.length === 0 ? (
+          <div className="rounded-xl bg-amber-500/10 p-4 text-sm text-amber-200">
+            No tables are currently free or available to transfer to.
+          </div>
+        ) : (
+          <>
+            <Field label="Target Table">
+              <select
+                value={targetId}
+                onChange={(e) => setTargetId(e.target.value)}
+                className={inputCls}
+              >
+                {availableTables.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {translateTableName(t.name, lang)} · {t.seats} seats · {t.zone}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Reason (optional)">
+              <input
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="e.g. Guest requested quieter booth"
+                className={inputCls}
+                maxLength={60}
+              />
+            </Field>
+            <button
+              type="button"
+              onClick={handleTransfer}
+              className="min-h-[44px] w-full rounded-lg bg-amber-500 py-2.5 text-sm font-bold text-black hover:bg-amber-400"
+            >
+              Confirm Transfer
+            </button>
+          </>
+        )}
+      </div>
+    </Modal>
+  )
+}
+
+function TableDetail({ table, onClose, onSeat, onError, onFlash }) {
   const { state, dispatch, setScreen, setSelectedTableId } = useRestora()
   const [qrOpen, setQrOpen] = useState(false)
+  const [transferOpen, setTransferOpen] = useState(false)
   useNow(15000)
   const meta = TABLE_STATUS_META[table.status]
   const mins = table.seatedAt ? minutesBetween(table.seatedAt) : 0
@@ -292,6 +367,47 @@ function TableDetail({ table, onClose, onSeat, onError }) {
           </span>
         )}
       </div>
+
+      {table.pendingTransfer && table.pendingTransfer.status === 'pending' && (
+        <div className="mt-3 rounded-xl border border-amber-500/40 bg-amber-500/15 p-3 text-amber-200">
+          <div className="flex items-center gap-2 text-sm font-bold text-amber-100">
+            <span>🔄</span> Move requested to Table {table.pendingTransfer.targetTableName || table.pendingTransfer.targetTableId}
+          </div>
+          <div className="mt-1 text-xs text-amber-300/80">
+            Reason: {table.pendingTransfer.reason}
+          </div>
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              className="flex-1 rounded-lg bg-amber-500 py-2 text-xs font-bold text-black hover:bg-amber-400"
+              onClick={() => {
+                dispatch({
+                  type: 'APPROVE_TABLE_TRANSFER',
+                  payload: { currentTableId: table.id, targetTableId: table.pendingTransfer.targetTableId },
+                })
+                onFlash?.(`Approved move to ${table.pendingTransfer.targetTableName || table.pendingTransfer.targetTableId}`)
+                onClose()
+              }}
+            >
+              Approve move
+            </button>
+            <button
+              type="button"
+              className="flex-1 rounded-lg border border-amber-500/40 py-2 text-xs font-semibold text-amber-200 hover:bg-white/5"
+              onClick={() => {
+                dispatch({
+                  type: 'REJECT_TABLE_TRANSFER',
+                  payload: { currentTableId: table.id, reason: 'Declined by floor host' },
+                })
+                onFlash?.(`Declined move request for ${table.name}`)
+                onClose()
+              }}
+            >
+              Decline
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="mt-4 space-y-2">
         {(table.status === 'free' || table.status === 'reserved') && (
@@ -331,6 +447,13 @@ function TableDetail({ table, onClose, onSeat, onError }) {
               }}
             >
               {check ? `Open check · ${check.items.length} item${check.items.length === 1 ? '' : 's'}` : 'Start check'}
+            </button>
+            <button
+              type="button"
+              className={btnGhost}
+              onClick={() => setTransferOpen(true)}
+            >
+              🔄 Move / Transfer Table
             </button>
             <p className="text-center text-[11px] text-zinc-500">
               Billing happens on Tickets — the table follows the check.
@@ -392,6 +515,16 @@ function TableDetail({ table, onClose, onSeat, onError }) {
         </button>
       </div>
       {qrOpen && <QrModal table={table} onClose={() => setQrOpen(false)} />}
+      {transferOpen && (
+        <TransferTableModal
+          table={table}
+          onClose={() => setTransferOpen(false)}
+          onTransferred={(targetName) => {
+            onFlash?.(`Transferred ${table.name} ➔ ${targetName}`)
+            onClose()
+          }}
+        />
+      )}
     </Modal>
   )
 }
@@ -411,10 +544,112 @@ function localInputDefault(hoursAhead = 1) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
+function RescheduleModal({ reservation, onClose, onSaved }) {
+  const { state, dispatch } = useRestora()
+  const { lang, dict } = useI18n()
+  const f = dict.floor || {}
+  const [party, setParty] = useState(reservation.partySize || 2)
+  const [time, setTime] = useState(() => {
+    const d = new Date(reservation.time)
+    const pad = (n) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  })
+  const [tableId, setTableId] = useState(reservation.tableId || '')
+  const [error, setError] = useState('')
+
+  const availableTables = useMemo(() => {
+    try {
+      return findAvailableTablesForSlot(state, {
+        date: time ? time.slice(0, 10) : new Date().toISOString().slice(0, 10),
+        time: new Date(time).toISOString(),
+        partySize: party,
+        excludeBookingId: reservation.id,
+      })
+    } catch {
+      return []
+    }
+  }, [state, time, party, reservation.id])
+
+  function handleSave() {
+    try {
+      const isoTime = new Date(time).toISOString()
+      dispatch({
+        type: 'RESCHEDULE_BOOKING',
+        payload: {
+          bookingId: reservation.id,
+          newTime: isoTime,
+          newDate: time.slice(0, 10),
+          newPartySize: party,
+          preferredTableId: tableId || null,
+          actor: 'staff',
+        },
+      })
+      onSaved?.()
+      onClose()
+    } catch (err) {
+      setError(err.message || 'Could not reschedule reservation.')
+    }
+  }
+
+  return (
+    <Modal
+      title={`Reschedule · ${reservation.name}`}
+      sub="Update reservation date, time, party size, or assigned table."
+      onClose={onClose}
+    >
+      <div className="mt-3 space-y-4">
+        <div className="grid grid-cols-2 gap-3">
+          <Field label={f.partySize || 'Party'}>
+            <Stepper value={party} onChange={setParty} />
+          </Field>
+          <Field label={f.time || 'Time'}>
+            <input
+              type="datetime-local"
+              value={time}
+              onChange={(e) => setTime(e.target.value)}
+              className={inputCls}
+            />
+          </Field>
+        </div>
+
+        <Field label="Assign table (optional)">
+          <select
+            value={tableId}
+            onChange={(e) => setTableId(e.target.value)}
+            className={inputCls}
+          >
+            <option value="">Auto-assign or Unassigned</option>
+            {availableTables.map((t) => (
+              <option key={t.id} value={t.id}>
+                {translateTableName(t.name, lang)} · {t.seats} {f.seats || 'seats'}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        {error && (
+          <div className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-300 ring-1 ring-inset ring-red-500/30" role="alert">
+            {error}
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={handleSave}
+          className="min-h-[44px] w-full rounded-lg bg-amber-500 py-2.5 text-sm font-bold text-black hover:bg-amber-400"
+        >
+          Save Changes
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
 function ReservationsPanel({ onSeatRes, onError }) {
   const { state, dispatch } = useRestora()
   useNow(30000)
   const [adding, setAdding] = useState(false)
+  const [reschedulingRes, setReschedulingRes] = useState(null)
   const [name, setName] = useState('')
   const [party, setParty] = useState(2)
   const [time, setTime] = useState(localInputDefault(1))
@@ -544,6 +779,13 @@ function ReservationsPanel({ onSeatRes, onError }) {
                 </button>
                 <button
                   type="button"
+                  onClick={() => setReschedulingRes(r)}
+                  className="min-h-[44px] flex-1 rounded-lg border border-amber-500/50 px-2 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-500/10"
+                >
+                  {dict.common?.reschedule || 'Reschedule'}
+                </button>
+                <button
+                  type="button"
                   onClick={() => dispatch({ type: 'SET_RESERVATION', id: r.id, patch: { status: 'no_show' } })}
                   title={overdue ? 'Overdue — mark no-show' : 'Mark no-show'}
                   className={`min-h-[44px] flex-1 rounded-lg border px-2 py-1.5 text-xs hover:bg-white/5 ${
@@ -564,6 +806,13 @@ function ReservationsPanel({ onSeatRes, onError }) {
           )
         })}
       </ul>
+      {reschedulingRes && (
+        <RescheduleModal
+          reservation={reschedulingRes}
+          onClose={() => setReschedulingRes(null)}
+          onSaved={() => {}}
+        />
+      )}
 
       {past.length > 0 && (
         <details className="mt-2 text-xs text-zinc-500">
@@ -714,7 +963,7 @@ function TableEditorModal({ table = null, zones, onClose }) {
 
   function save() {
     if (!name.trim()) {
-      setError(lang === 'km' ? 'សូមដាក់ឈ្មោះតុ។' : 'Give the table a name.')
+      setError(lang === 'km' ? 'សូមដាក់ឈ្មោះតុ។' : lang === 'zh' ? '请为餐桌命名。' : 'Give the table a name.')
       return
     }
     if (editing) dispatch({ type: 'UPDATE_TABLE', tableId: table.id, patch: { name, seats, zone } })
@@ -722,14 +971,21 @@ function TableEditorModal({ table = null, zones, onClose }) {
     onClose()
   }
 
+  const modalTitle = editing
+    ? (lang === 'km' ? `កែប្រែ ${table.name}` : lang === 'zh' ? `编辑 ${table.name}` : `Edit ${table.name}`)
+    : (lang === 'km' ? 'បន្ថែមតុ' : lang === 'zh' ? '添加餐桌' : 'Add table')
+  const modalSub = editing
+    ? (lang === 'km' ? 'ប្តូរឈ្មោះ កែប្រែកៅអី ឬប្តូរទៅតំបន់ផ្សេង។' : lang === 'zh' ? '重命名、更改座位或移至其他区域。' : 'Rename, reseat, or move it to another zone.')
+    : (lang === 'km' ? 'បង្កើតតុថ្មីមួយនៅលើប្លង់ភោជនីយដ្ឋាន។' : lang === 'zh' ? '在平面图上创建一张新餐桌。' : 'Create a new table on the floor.')
+
   return (
     <Modal
-      title={editing ? `Edit ${table.name}` : (lang === 'km' ? 'បន្ថែមតុ' : 'Add table')}
-      sub={editing ? 'Rename, reseat, or move it to another zone.' : 'Create a new table on the floor.'}
+      title={modalTitle}
+      sub={modalSub}
       onClose={onClose}
     >
       <div className="mt-3 space-y-4">
-        <Field label="Name">
+        <Field label={lang === 'km' ? 'ឈ្មោះ' : lang === 'zh' ? '名称' : 'Name'}>
           <input
             value={name}
             onChange={(e) => { setName(e.target.value); setError('') }}
@@ -741,10 +997,10 @@ function TableEditorModal({ table = null, zones, onClose }) {
           />
         </Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Seats">
+          <Field label={lang === 'km' ? 'កៅអី' : lang === 'zh' ? '座位' : 'Seats'}>
             <Stepper value={seats} onChange={setSeats} min={1} max={24} />
           </Field>
-          <Field label="Zone">
+          <Field label={lang === 'km' ? 'តំបន់' : lang === 'zh' ? '区域' : 'Zone'}>
             <input
               value={zone}
               onChange={(e) => setZone(e.target.value)}
@@ -765,7 +1021,8 @@ function TableEditorModal({ table = null, zones, onClose }) {
           aria-label="Save table"
           className="min-h-[44px] w-full rounded-lg bg-amber-500 py-2.5 text-sm font-bold text-black hover:bg-amber-400"
         >
-          {editing ? 'Save table' : 'Add table'}
+          {editing ? (lang === 'km' ? 'រក្សាទុកតុ' : lang === 'zh' ? '保存餐桌' : 'Save table') : (lang === 'km' ? 'បន្ថែមតុ' : lang === 'zh' ? '添加餐桌' : 'Add table')}
+          {lang !== 'en' && <span className="sr-only"> {editing ? 'Save table' : 'Add table'}</span>}
         </button>
       </div>
     </Modal>
@@ -862,6 +1119,7 @@ export default function FloorScreen() {
   const freeCount = state.tables.filter((t) => t.status === 'free').length
   const dirtyCount = state.tables.filter((t) => t.status === 'dirty').length
   const zones = [...new Set(state.tables.map((t) => t.zone))]
+  const pendingTransfers = state.tables.filter((t) => t.pendingTransfer && t.pendingTransfer.status === 'pending')
 
   function removeTable(table) {
     const hasOpenCheck = state.orders.some(
@@ -925,7 +1183,10 @@ export default function FloorScreen() {
             aria-label="Manage tables"
             className={`min-h-10 rounded-xl border px-4 text-sm font-semibold shadow-sm transition-colors ${managing ? 'border-orange-500 bg-orange-500 text-white hover:bg-orange-600' : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50'}`}
           >
-            {managing ? (lang === 'km' ? 'រួចរាល់' : 'Done') : (lang === 'km' ? 'គ្រប់គ្រងតុ' : 'Manage tables')}
+            {managing
+              ? (lang === 'km' ? 'រួចរាល់' : lang === 'zh' ? '完成' : 'Done')
+              : (lang === 'km' ? 'គ្រប់គ្រងតុ' : lang === 'zh' ? '管理餐桌' : 'Manage tables')}
+            {lang !== 'en' && <span className="sr-only"> {managing ? 'Done' : 'Manage tables'}</span>}
           </button>
         </div>
       </header>
@@ -933,6 +1194,64 @@ export default function FloorScreen() {
       {banner && (
         <div className="animate-status-in rounded-xl bg-amber-500/10 px-4 py-3 text-sm text-amber-200 ring-1 ring-inset ring-amber-500/40" role="alert">
           {banner}
+        </div>
+      )}
+
+      {pendingTransfers.length > 0 && (
+        <div className="space-y-2">
+          {pendingTransfers.map((tbl) => {
+            const targetTbl = state.tables.find((x) => String(x.id) === String(tbl.pendingTransfer?.targetTableId))
+            const targetLabel = targetTbl ? targetTbl.name : `Table #${tbl.pendingTransfer?.targetTableId}`
+            return (
+              <div
+                key={tbl.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-amber-200 shadow-sm"
+                role="alert"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 text-lg">
+                    🔄
+                  </span>
+                  <div>
+                    <div className="font-bold text-amber-100">
+                      Move Request: {tbl.name} ➔ {targetLabel}
+                    </div>
+                    <div className="text-xs text-amber-300/80">
+                      {tbl.guestName ? `${tbl.guestName} · ` : ''}{tbl.pendingTransfer?.reason || 'Guest requested table change'}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      dispatch({
+                        type: 'APPROVE_TABLE_TRANSFER',
+                        payload: { currentTableId: tbl.id, targetTableId: tbl.pendingTransfer?.targetTableId },
+                      })
+                      flash(`Approved move: ${tbl.name} ➔ ${targetLabel}`)
+                    }}
+                    className="min-h-[38px] rounded-lg bg-amber-500 px-4 text-xs font-bold text-black hover:bg-amber-400"
+                  >
+                    Approve Move
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      dispatch({
+                        type: 'REJECT_TABLE_TRANSFER',
+                        payload: { currentTableId: tbl.id, reason: 'Staff declined request' },
+                      })
+                      flash(`Declined move request for ${tbl.name}`)
+                    }}
+                    className="min-h-[38px] rounded-lg border border-amber-500/40 px-3 text-xs font-semibold text-amber-200 hover:bg-amber-500/20"
+                  >
+                    Decline
+                  </button>
+                </div>
+              </div>
+            )
+          })}
         </div>
       )}
 
@@ -956,7 +1275,8 @@ export default function FloorScreen() {
                   className="w-full rounded-2xl border-2 border-dashed border-orange-300 bg-orange-50/60 px-4 py-3 text-sm font-bold text-orange-600 hover:bg-orange-50"
                   aria-label="Add table"
                 >
-                  + {lang === 'km' ? 'បន្ថែមតុ' : 'Add table'}
+                  + {lang === 'km' ? 'បន្ថែមតុ' : lang === 'zh' ? '添加餐桌' : 'Add table'}
+                  {lang !== 'en' && <span className="sr-only"> Add table</span>}
                 </button>
               )}
               {zones.map((zone) => {
@@ -974,10 +1294,12 @@ export default function FloorScreen() {
                             </div>
                             <div className="flex gap-2">
                               <button type="button" onClick={() => setEditor({ table })} className="min-h-[36px] rounded-lg border border-[var(--color-ink-600)] px-3 text-xs font-semibold text-zinc-200 hover:bg-white/5">
-                                {lang === 'km' ? 'កែ' : 'Edit'}
+                                {lang === 'km' ? 'កែ' : lang === 'zh' ? '编辑' : 'Edit'}
+                                {lang !== 'en' && <span className="sr-only"> Edit</span>}
                               </button>
                               <button type="button" onClick={() => removeTable(table)} className="min-h-[36px] rounded-lg border border-red-500/40 px-3 text-xs font-semibold text-red-300 hover:bg-red-500/10">
-                                {lang === 'km' ? 'លុប' : 'Delete'}
+                                {lang === 'km' ? 'លុប' : lang === 'zh' ? '删除' : 'Delete'}
+                                {lang !== 'en' && <span className="sr-only"> Delete</span>}
                               </button>
                             </div>
                           </li>
@@ -990,7 +1312,13 @@ export default function FloorScreen() {
                 )
               })}
               {managing && zones.length === 0 && (
-                <p className="text-sm text-zinc-500">{lang === 'km' ? 'មិនមានតុនៅឡើយទេ។ បន្ថែមតុដំបូងរបស់អ្នក។' : 'No tables yet. Add your first one.'}</p>
+                <p className="text-sm text-zinc-500">
+                  {lang === 'km'
+                    ? 'មិនមានតុនៅឡើយទេ។ បន្ថែមតុដំបូងរបស់អ្នក។'
+                    : lang === 'zh'
+                      ? '暂无餐桌，请添加第一张餐桌。'
+                      : 'No tables yet. Add your first one.'}
+                </p>
               )}
             </div>
           )}
@@ -1014,6 +1342,7 @@ export default function FloorScreen() {
           onClose={() => { setDetailTableId(null); setSelectedTableId(null); setTabCtx({ floorTable: null }) }}
           onSeat={(id) => setSeatCtx({ tableId: id, party: 2, name: '' })}
           onError={flash}
+          onFlash={flash}
         />
       )}
       {seatCtx && (

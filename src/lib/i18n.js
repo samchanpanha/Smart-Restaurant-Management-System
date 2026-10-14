@@ -184,9 +184,10 @@ export const APP_TRANSLATIONS = {
       Bakery: 'នំប៉័ង និងនំខេក',
     },
     zones: {
-      Bar: 'បារ (Bar)',
-      Main: 'សាលធំ (Main)',
-      Patio: 'ระเบียงក្រៅ (Patio)',
+      All: 'គ្រប់តំបន់',
+      Bar: 'បារ',
+      Main: 'សាលធំ',
+      Patio: 'រានហាលក្រៅ',
     },
     tableStatuses: {
       free: 'ទំនេរ',
@@ -529,7 +530,7 @@ export const APP_TRANSLATIONS = {
       host: 'Alex · Host',
     },
     categories: {},
-    zones: { Bar: 'Bar', Main: 'Main', Patio: 'Patio' },
+    zones: { All: 'All', Bar: 'Bar', Main: 'Main', Patio: 'Patio' },
     tableStatuses: {
       free: 'Free',
       reserved: 'Reserved',
@@ -893,9 +894,10 @@ export const APP_TRANSLATIONS = {
       Bakery: '烘焙糕点',
     },
     zones: {
-      Bar: '吧台区 (Bar)',
-      Main: '主厅 (Main)',
-      Patio: '露台区 (Patio)',
+      All: '全部区域',
+      Bar: '吧台区',
+      Main: '主厅',
+      Patio: '露台',
     },
     tableStatuses: {
       free: '空闲',
@@ -1230,6 +1232,17 @@ function enrichLangDict(langCode, raw) {
           ? `${roleName} 角色无权访问 ${screenName} 页面。`
           : `${roleName} role cannot access ${screenName}.`,
   }
+  raw.common = {
+    ...raw.common,
+    transferTable: isKm ? 'ប្តូរតុ' : isZh ? '转台/换桌' : 'Transfer Table',
+    move: isKm ? 'ប្តូរតុ' : isZh ? '换桌' : 'Move',
+    requestMove: isKm ? 'ស្នើសុំប្តូរតុ' : isZh ? '申请换桌' : 'Request Table Move',
+    approveMove: isKm ? 'យល់ព្រមប្តូរតុ' : isZh ? '批准换桌' : 'Approve Move',
+    declineMove: isKm ? 'បដិសេធ' : isZh ? '拒绝' : 'Decline',
+    pendingMove: isKm ? 'បានស្នើសុំប្តូរតុ' : isZh ? '待确认换桌' : 'Table move requested',
+    reschedule: isKm ? 'កែប្រែម៉ោងកក់' : isZh ? '修改预订' : 'Reschedule',
+    movedFrom: isKm ? 'ប្តូរពី' : isZh ? '转台自' : 'Moved from',
+  }
   raw.floor = {
     ...raw.floor,
     kicker: raw.floor?.eyebrow || raw.floor?.kicker,
@@ -1247,10 +1260,33 @@ function enrichLangDict(langCode, raw) {
     partySize: isKm ? 'ចំនួនភ្ញៀវ' : isZh ? '用餐人数' : 'Party',
     guestName: isKm ? 'ឈ្មោះភ្ញៀវ' : isZh ? '宾客姓名' : 'Name',
     time: isKm ? 'ម៉ោង' : isZh ? '时间' : 'Time',
-    saveReservation: isKm ? 'កត់ត្រាការកក់តុ' : isZh ? '确认预订' : 'Book reservation',
-    addWaitlist: isKm ? 'បន្ថែមទៅបញ្ជីរង់ចាំ' : isZh ? '加入候位名单' : 'Add to waitlist',
     noReservations: isKm ? 'មិនមានការកក់តុពេលខាងមុខទេ។' : isZh ? '暂无即将到来的预订。' : 'No upcoming reservations.',
     noWaitlist: isKm ? 'មិនមានភ្ញៀវកំពុងរង់ចាំទេ។' : isZh ? '当前无人排队候位。' : 'Nobody waiting.',
+    reschedule: isKm ? 'កែប្រែម៉ោងកក់' : isZh ? '修改预订' : 'Reschedule',
+    transferTable: isKm ? 'ប្តូរតុ' : isZh ? '转台/换桌' : 'Transfer Table',
+    requestMove: isKm ? 'ស្នើសុំប្តូរតុ' : isZh ? '申请换桌' : 'Request Table Move',
+    approveMove: isKm ? 'យល់ព្រមប្តូរតុ' : isZh ? '批准换桌' : 'Approve Move',
+    declineMove: isKm ? 'បដិសេធ' : isZh ? '拒绝' : 'Decline',
+    pendingMove: isKm ? 'កំពុងរង់ចាំការប្តូរតុ' : isZh ? '待确认换桌' : 'Pending Move',
+    movedFrom: isKm ? 'ប្តូរពី' : isZh ? '转台自' : 'Moved from',
+    saveReservation: isKm ? 'កត់ត្រាការកក់តុ' : isZh ? '提交预订' : 'Book reservation',
+    addWaitlist: isKm ? 'បន្ថែមទៅបញ្ជីរង់ចាំ' : isZh ? '加入候位名单' : 'Add to waitlist',
+  }
+  raw.miniapp = {
+    ...raw.miniapp,
+    table: isKm ? 'តុ' : isZh ? '餐桌' : 'Table',
+    choose: isKm ? 'ជ្រើសរើស' : isZh ? '选择' : 'Choose',
+    inTelegram: isKm ? 'ក្នុង Telegram' : isZh ? 'Telegram 内' : 'In Telegram',
+    webPreview: isKm ? 'មើលជាមុនលើ Web' : isZh ? '网页预览' : 'Web preview',
+    noTableSelected: isKm ? 'មិនទាន់ជ្រើសរើសតុ' : isZh ? '未选择餐桌' : 'No table selected',
+    tableNotFound: isKm ? 'រកមិនឃើញតុទេ' : isZh ? '未找到餐桌' : 'Table not found',
+    sentToKitchen: isKm ? 'បានផ្ញើទៅផ្ទះបាយ' : isZh ? '已发送至后厨' : 'Sent to the kitchen',
+    moveTable: isKm ? 'ប្តូរតុ' : isZh ? '换桌' : 'Move Table',
+    water: isKm ? 'ទឹកផឹក' : isZh ? '加水' : 'Water',
+    napkins: isKm ? 'ក្រដាសជូតមាត់' : isZh ? '纸巾' : 'Napkins',
+    callWaiter: isKm ? 'ហៅបុគ្គលិក' : isZh ? '呼叫服务员' : 'Call Waiter',
+    bill: isKm ? 'គិតលុយ' : isZh ? '结账' : 'Bill',
+    check: isKm ? 'គិតលុយ' : isZh ? '结账' : 'Check',
   }
   raw.tickets = {
     ...raw.tickets,
@@ -1260,6 +1296,7 @@ function enrichLangDict(langCode, raw) {
     activeTab: raw.tickets?.tabs?.active,
     readyTab: raw.tickets?.tabs?.ready,
     paidTab: raw.tickets?.tabs?.paid,
+    movedBadge: isKm ? 'បានប្តូរតុពី' : isZh ? '已转台自' : 'Moved from',
   }
   raw.menu = {
     ...raw.menuScreen,

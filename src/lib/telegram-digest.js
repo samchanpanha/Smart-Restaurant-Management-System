@@ -90,7 +90,18 @@ export function digestDue(settings, now = Date.now(), lastKey = null, { force = 
 // return null (the caller drops them) — no notice is better than a
 // half-built sentence.
 
-export const NOTICE_KINDS = ['order', 'paid', 'void', '86', 'un86', 'purchase', 'lowStock']
+export const NOTICE_KINDS = [
+  'order',
+  'paid',
+  'void',
+  '86',
+  'un86',
+  'purchase',
+  'lowStock',
+  'booking_rescheduled',
+  'table_transfer_requested',
+  'table_transferred',
+]
 
 export function noticeText(kind, payload = {}, settings = null) {
   switch (kind) {
@@ -120,6 +131,20 @@ export function noticeText(kind, payload = {}, settings = null) {
     }
     case 'lowStock':
       return `📉 ${lowStockLine(payload, settings)}`
+    case 'booking_rescheduled': {
+      const { name = 'Guest', partySize = 2, oldTime, newTime, oldTable = 'Unassigned', newTable = 'Unassigned' } = payload
+      const oldFmt = oldTime ? new Date(oldTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Earlier'
+      const newFmt = newTime ? new Date(newTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'New slot'
+      return `📅 Booking Rescheduled: ${name} (${partySize} pax)\n• Old: ${oldFmt} (${oldTable}) ➔ New: ${newFmt} (${newTable})`
+    }
+    case 'table_transfer_requested': {
+      const { fromTable = 'Table', toTable = 'Table', guestName = 'Guest', reason = 'Guest requested' } = payload
+      return `🔄 Table Transfer Requested: ${fromTable} ➔ ${toTable}\n• Guest: ${guestName}\n• Reason: ${reason}`
+    }
+    case 'table_transferred': {
+      const { fromTable = 'Table', toTable = 'Table', guestName = 'Guest', actor = 'staff' } = payload
+      return `🚀 Table Transferred: ${fromTable} ➔ ${toTable}\n• Guest: ${guestName} (${actor})\n• Orders & active kitchen items migrated`
+    }
     default:
       return null
   }

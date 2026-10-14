@@ -182,7 +182,14 @@ function TicketList({ tab, setTab, tableFilter, setTableFilter, serverFilter, se
                 }`}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-bold">{orderLabel(o, tableById[o.tableId])}</span>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="font-bold">{orderLabel(o, tableById[o.tableId])}</span>
+                    {o.transferredFromTableId && (
+                      <StatusPill tone="info" size="sm">
+                        🔄 Moved: {tableById[o.transferredFromTableId]?.name ? translateTableName(tableById[o.transferredFromTableId].name, lang) : o.transferredFromTableId}
+                      </StatusPill>
+                    )}
+                  </div>
                   <StatusPill tone={meta.tone} size="sm">
                     {translateTicketStatus(o.status, lang)}
                   </StatusPill>
@@ -754,6 +761,7 @@ function FiredLine({ order, item, onComp, onVoid }) {
 
 function TicketWorkspace({ orderId, onError }) {
   const { state, dispatch, issueDocument, link, locId } = useRestora()
+  const { lang } = useI18n()
   useNow(15000)
   const [paying, setPaying] = useState(false)
   const [banner, setBanner] = useState(null)
@@ -849,7 +857,17 @@ function TicketWorkspace({ orderId, onError }) {
       <div className="rounded-2xl border border-[var(--color-ink-700)] bg-[var(--color-ink-900)] p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h2 className="text-xl font-bold tracking-tight">{orderLabel(order, table)}</h2>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-xl font-bold tracking-tight">{orderLabel(order, table)}</h2>
+              {order.transferredFromTableId && (
+                <StatusPill tone="info" size="sm">
+                  🔄 Moved from {(() => {
+                    const prevTbl = state.tables.find((t) => String(t.id) === String(order.transferredFromTableId))
+                    return prevTbl ? translateTableName(prevTbl.name, lang) : order.transferredFromTableId
+                  })()}
+                </StatusPill>
+              )}
+            </div>
             <div className="mt-0.5 text-xs text-zinc-400">
               {serverName(order.serverId)} · opened {formatClock(order.createdAt)} · {minutesBetween(order.createdAt)}m ago
               {order.sentAt && <> · sent {formatClock(order.sentAt)}</>}

@@ -233,8 +233,16 @@ export default function GuestScreen({ tableId, allowPickup = false, onSelfSeat =
   const [pickup, setPickup] = useState(false)
   const [pickupOrderId, setPickupOrderId] = useState(null)
   const [nameError, setNameError] = useState(false)
+  const [moveModalOpen, setMoveModalOpen] = useState(false)
+  const [moveTargetId, setMoveTargetId] = useState('')
+  const [moveReason, setMoveReason] = useState('')
+  const [moveSubmitted, setMoveSubmitted] = useState(false)
 
   const table = state.tables.find((t) => t.id === tableId)
+  const moveCandidates = useMemo(
+    () => state.tables.filter((t) => t.id !== tableId && (t.status === 'free' || t.status === 'available')),
+    [state.tables, tableId],
+  )
   const pickupOrder = pickupOrderId
     ? state.orders.find((o) => o.id === pickupOrderId && !['paid', 'void'].includes(o.status))
     : null
@@ -461,25 +469,52 @@ export default function GuestScreen({ tableId, allowPickup = false, onSelfSeat =
               </span>
             )}
           </div>
-          {!pickup && (serverCalled ? (
-            <span
-              className="flex min-h-[44px] items-center rounded-full border border-emerald-200 bg-emerald-50 px-4 text-sm font-bold text-emerald-700"
-              role="status"
-            >
-              ✓ {gu.serverCalled || 'Server notified'}
-              {lang !== 'en' && <span className="sr-only"> Server notified</span>}
-            </span>
-          ) : (
-            <button
-              type="button"
-              onClick={() => dispatch({ type: 'CALL_SERVER', tableId })}
-              className="min-h-[44px] rounded-full border border-stone-200 bg-white px-4 text-sm font-bold text-stone-700 shadow-sm active:bg-stone-100"
-            >
-              🙋 {gu.callServer || 'Call server'}
-              {lang !== 'en' && <span className="sr-only"> Call server</span>}
-            </button>
-          ))}
+          <div className="flex items-center gap-2">
+            {!pickup && (
+              <button
+                type="button"
+                onClick={() => setMoveModalOpen(true)}
+                className="min-h-[44px] rounded-full border border-stone-200 bg-white px-3.5 text-xs font-bold text-stone-700 shadow-sm active:bg-stone-100"
+              >
+                🔄 {dict.common?.transferTable || 'Move'}
+              </button>
+            )}
+            {!pickup && (serverCalled ? (
+              <span
+                className="flex min-h-[44px] items-center rounded-full border border-emerald-200 bg-emerald-50 px-4 text-sm font-bold text-emerald-700"
+                role="status"
+              >
+                ✓ {gu.serverCalled || 'Server notified'}
+                {lang !== 'en' && <span className="sr-only"> Server notified</span>}
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => dispatch({ type: 'CALL_SERVER', tableId })}
+                className="min-h-[44px] rounded-full border border-stone-200 bg-white px-4 text-sm font-bold text-stone-700 shadow-sm active:bg-stone-100"
+              >
+                🙋 {gu.callServer || 'Call server'}
+                {lang !== 'en' && <span className="sr-only"> Call server</span>}
+              </button>
+            ))}
+          </div>
         </header>
+
+        {table?.pendingTransfer && table.pendingTransfer.status === 'pending' && (
+          <div className="mt-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-xs text-amber-900 shadow-sm" role="status">
+            <div className="font-bold flex items-center gap-1.5">
+              <span>🔄</span> {dict.common?.pendingMove || 'Table move requested'}: {table.name} ➔ {table.pendingTransfer.targetTableName || `Table #${table.pendingTransfer.targetTableId}`}
+            </div>
+            <div className="mt-1 text-stone-600">
+              Floor staff has been notified and will come guide you once your table is ready.
+            </div>
+          </div>
+        )}
+        {moveSubmitted && (
+          <div className="mt-3 rounded-2xl border border-emerald-300 bg-emerald-50 p-3 text-xs font-bold text-emerald-900 shadow-sm" role="status">
+            ✓ Request sent to floor staff!
+          </div>
+        )}
 
         <input
           value={guestName}
@@ -726,6 +761,86 @@ export default function GuestScreen({ tableId, allowPickup = false, onSelfSeat =
 
         {payOpen && order && (
           <PaySheet order={order} onClose={() => setPayOpen(false)} onPaid={() => { setPayOpen(false); setTab('bill') }} />
+        )}
+
+        {moveModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label="Request Table Move" onClick={() => setMoveModalOpen(false)}>
+            <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-t-3xl bg-white p-6 shadow-2xl sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between pb-3 border-b border-stone-100">
+                <h2 className="text-lg font-extrabold text-stone-900">
+                  🔄 {dict.common?.transferTable || 'Request Table Move'}
+                </h2>
+                <button type="button" onClick={() => setMoveModalOpen(false)} className="rounded-full p-2 text-stone-400 hover:bg-stone-100">
+                  ✕
+                </button>
+              </div>
+              <p className="mt-2 text-xs text-stone-500">
+                Want a different spot? Choose an open table and our floor staff will assist you with moving.
+              </p>
+              {moveCandidates.length === 0 ? (
+                <div className="mt-4 rounded-2xl bg-amber-50 p-4 text-xs text-amber-900">
+                  All other tables are currently occupied or being cleaned. Please speak with your server for assistance.
+                </div>
+              ) : (
+                <div className="mt-4 space-y-3">
+                  <label className="block text-xs font-bold text-stone-700">
+                    Select available table:
+                  </label>
+                  <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+                    {moveCandidates.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setMoveTargetId(t.id)}
+                        className={`rounded-2xl border p-3 text-left transition ${
+                          (moveTargetId || moveCandidates[0]?.id) === t.id
+                            ? 'border-amber-500 bg-amber-500/10 ring-2 ring-amber-500/30'
+                            : 'border-stone-200 bg-white hover:border-stone-300'
+                        }`}
+                      >
+                        <div className="font-bold text-stone-900">{translateTableName(t.name, lang)}</div>
+                        <div className="text-[11px] text-stone-500">{t.seats} seats · {t.zone}</div>
+                      </button>
+                    ))}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-stone-700 mb-1">
+                      Reason (optional):
+                    </label>
+                    <input
+                      value={moveReason}
+                      onChange={(e) => setMoveReason(e.target.value)}
+                      placeholder="e.g. Near window, AC draft, quieter"
+                      className="w-full rounded-2xl border border-stone-200 bg-stone-50 px-4 py-2 text-xs text-stone-800"
+                      maxLength={60}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const chosen = moveTargetId || moveCandidates[0]?.id
+                      if (!chosen) return
+                      dispatch({
+                        type: 'REQUEST_TABLE_TRANSFER',
+                        payload: {
+                          currentTableId: tableId,
+                          targetTableId: chosen,
+                          reason: moveReason.trim() || 'Guest requested move',
+                          sessionToken: table?.sessionToken,
+                        },
+                      })
+                      setMoveModalOpen(false)
+                      setMoveSubmitted(true)
+                      window.setTimeout(() => setMoveSubmitted(false), 6000)
+                    }}
+                    className="mt-2 min-h-[48px] w-full rounded-2xl bg-amber-500 text-sm font-extrabold text-stone-950 hover:bg-amber-400"
+                  >
+                    Send Move Request
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         )}
       </div>
     </div>

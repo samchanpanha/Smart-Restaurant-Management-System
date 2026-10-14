@@ -6,7 +6,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import GuestScreen from './GuestScreen'
 import { Icon } from '../components/Icon'
-import { translateTableName, translateZone, useI18n } from '../lib/i18n'
+import LanguageSwitcher from '../components/LanguageSwitcher'
+import { translateTableName, translateZone, useDomTranslator, useI18n } from '../lib/i18n'
+import { findAvailableTablesForSlot, findNearestAvailableSlots } from '../lib/models'
 import { quoteWait, useRestora, useStore } from '../lib/store'
 
 function telegramWebApp() {
@@ -30,6 +32,7 @@ const TABLE_TAG = {
 
 export function MiniAppTableController({ onTableReady, activeTable, onSelectTable }) {
   const { state, dispatch } = useStore()
+  const { lang, dict } = useI18n()
 
   // Persistent guest session token
   const [sessionToken] = useState(() => {
@@ -55,6 +58,17 @@ export function MiniAppTableController({ onTableReady, activeTable, onSelectTabl
   const [showReleaseModal, setShowReleaseModal] = useState(false)
   const [showMapDrawer, setShowMapDrawer] = useState(false)
   const [serviceFeedback, setServiceFeedback] = useState('')
+  const [showTransferDrawer, setShowTransferDrawer] = useState(false)
+  const [transferTarget, setTransferTarget] = useState(null)
+  const [transferReason, setTransferReason] = useState('')
+
+  const [showRescheduleModal, setShowRescheduleModal] = useState(false)
+  const [selectedResBooking, setSelectedResBooking] = useState(null)
+  const [rescheduleDate, setRescheduleDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [rescheduleTime, setRescheduleTime] = useState('19:00')
+  const [rescheduleParty, setRescheduleParty] = useState(2)
+  const [rescheduleTableId, setRescheduleTableId] = useState('')
+  const [rescheduleError, setRescheduleError] = useState('')
 
   // Detect active table owned by this guest session, or matching activeTable
   const myTable = useMemo(() => {
@@ -165,10 +179,56 @@ export function MiniAppTableController({ onTableReady, activeTable, onSelectTabl
     setTimeout(() => setServiceFeedback(''), 3000)
   }
 
+  const handleRequestTableMove = (e) => {
+    e.preventDefault()
+    if (!myTable || !transferTarget) return
+    dispatch({
+      type: 'REQUEST_TABLE_TRANSFER',
+      payload: {
+        currentTableId: myTable.id,
+        targetTableId: transferTarget.id,
+        reason: transferReason,
+        sessionToken,
+      },
+    })
+    window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.('success')
+    setShowTransferDrawer(false)
+    setTransferTarget(null)
+    setTransferReason('')
+    setServiceFeedback(`Move requested to ${transferTarget.name || transferTarget.id} · Awaiting staff approval`)
+    setTimeout(() => setServiceFeedback(''), 3500)
+  }
+
+  const handleRescheduleSubmit = (e) => {
+    e.preventDefault()
+    if (!selectedResBooking) return
+    setRescheduleError('')
+    try {
+      dispatch({
+        type: 'RESCHEDULE_BOOKING',
+        payload: {
+          bookingId: selectedResBooking.id,
+          newDate: rescheduleDate,
+          newTime: rescheduleTime,
+          newPartySize: rescheduleParty,
+          preferredTableId: rescheduleTableId || undefined,
+          actor: 'guest',
+        },
+      })
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.('success')
+      setShowRescheduleModal(false)
+      setServiceFeedback('Reservation rescheduled successfully!')
+      setTimeout(() => setServiceFeedback(''), 3500)
+    } catch (err) {
+      setRescheduleError(err.message || 'Reschedule failed')
+    }
+  }
+
   // STATE A: Guest is seated -> Show Sticky Active Table Bar & 1-Tap Service Bar
   if (myTable) {
     const hasUnpaid = unpaidTickets.length > 0
     const isBilling = myTable.status === 'billing'
+    const pending = myTable.pendingTransfer && myTable.pendingTransfer.status === 'pending'
 
     return (
       <>
@@ -199,8 +259,28 @@ export function MiniAppTableController({ onTableReady, activeTable, onSelectTabl
           </button>
         </div>
 
-        {/* 1-Tap Quick Service Request Bar */}
+        {pending && (
+          <div className="miniapp-pending-banner">
+            <span>🔄 Move to <strong>{myTable.pendingTransfer.targetTableName || myTable.pendingTransfer.targetTableId}</strong> requested</span>
+            <button
+              type="button"
+              onClick={() => dispatch({ type: 'REJECT_TABLE_TRANSFER', payload: { currentTableId: myTable.id, reason: 'Guest cancelled' } })}
+              className="font-bold text-amber-200 underline"
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+
+        {/* 1-Tap Quick Service Request Bar with Switch Table Option */}
         <div className="miniapp-service-bar" role="toolbar" aria-label="Quick table services">
+          <button
+            type="button"
+            className="miniapp-service-btn btn-switch"
+            onClick={() => setShowTransferDrawer(true)}
+          >
+            🔄 Move Table
+          </button>
           <button
             type="button"
             className="miniapp-service-btn"
@@ -234,6 +314,79 @@ export function MiniAppTableController({ onTableReady, activeTable, onSelectTabl
         {serviceFeedback && (
           <div className="fixed inset-x-0 bottom-24 z-50 mx-auto w-fit rounded-full bg-slate-900/90 px-4 py-2 text-xs font-semibold text-emerald-400 shadow-xl backdrop-blur-md" role="status">
             ✓ {serviceFeedback}
+          </div>
+        )}
+
+        {/* Move / Switch Table Drawer for Seated Diner */}
+        {showTransferDrawer && (
+          <div className="miniapp-overlay" onClick={() => { setShowTransferDrawer(false); setTransferTarget(null) }}>
+            <div className="miniapp-sheet miniapp-sheet--tall" onClick={(e) => e.stopPropagation()}>
+              <div className="miniapp-sheet__handle" />
+              {!transferTarget ? (
+                <>
+                  <div className="miniapp-sheet__header">
+                    <span className="miniapp-eyebrow">ACTIVE DINING MOVE</span>
+                    <h3 className="miniapp-sheet__title">Select New Table</h3>
+                    <p className="miniapp-sheet__text">
+                      Currently at <strong>{myTable.name || `Table ${myTable.id}`}</strong>. Choose an open table to request a move.
+                    </p>
+                  </div>
+                  <div className="miniapp-table-grid">
+                    {(state.tables || [])
+                      .filter((t) => t.id !== myTable.id)
+                      .map((t) => {
+                        const isFree = ['available', 'free', 'idle'].includes(t.status)
+                        return (
+                          <button
+                            key={t.id}
+                            type="button"
+                            disabled={!isFree}
+                            className={`miniapp-table-tile status-${t.status}`}
+                            onClick={() => setTransferTarget(t)}
+                          >
+                            <div className="tile-top">
+                              <span className="tile-name">{t.name || `T-${t.id}`}</span>
+                              <span className="tile-cap">{t.capacity || t.seats || 4} seats</span>
+                            </div>
+                            <div className="tile-status">
+                              {isFree ? 'Available • Tap to pick' : t.status}
+                            </div>
+                          </button>
+                        )
+                      })}
+                  </div>
+                </>
+              ) : (
+                <form onSubmit={handleRequestTableMove} className="miniapp-claim-form">
+                  <span className="miniapp-eyebrow">CONFIRM TABLE TRANSFER</span>
+                  <h3 className="miniapp-sheet__title">Move to {transferTarget.name || `Table ${transferTarget.id}`}</h3>
+                  <p className="miniapp-sheet__text">
+                    Your open tickets and active kitchen orders will automatically migrate. Floor staff will approve the move.
+                  </p>
+                  <label className="miniapp-field">
+                    <span>Reason for move (Optional)</span>
+                    <input
+                      type="text"
+                      placeholder="e.g., Want window seat / quieter area"
+                      value={transferReason}
+                      onChange={(e) => setTransferReason(e.target.value)}
+                    />
+                  </label>
+                  <div className="miniapp-sheet__actions">
+                    <button
+                      type="button"
+                      className="miniapp-btn-secondary"
+                      onClick={() => setTransferTarget(null)}
+                    >
+                      Back
+                    </button>
+                    <button type="submit" className="miniapp-btn-primary">
+                      Request Move
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
           </div>
         )}
 
@@ -277,23 +430,76 @@ export function MiniAppTableController({ onTableReady, activeTable, onSelectTabl
     ['available', 'free', 'idle'].includes(t.status),
   ).length
 
+  // Pre-Arrival Rescheduling Availability Calculations
+  const targetIsoTime = `${rescheduleDate}T${rescheduleTime}:00`
+  const bookingPolicy = state.settings?.booking || {
+    allowGuestReschedule: true,
+    rescheduleCutoffMinutes: 60,
+    maxGuestReschedules: 2,
+    defaultBookingDurationMinutes: 90,
+  }
+  const availableTablesForReschedule = findAvailableTablesForSlot(state, {
+    time: targetIsoTime,
+    partySize: rescheduleParty,
+    durationMinutes: bookingPolicy.defaultBookingDurationMinutes || 90,
+    excludeBookingId: selectedResBooking?.id,
+  })
+  const nearestSlots = availableTablesForReschedule.length === 0
+    ? findNearestAvailableSlots(state, {
+        requestedTime: targetIsoTime,
+        partySize: rescheduleParty,
+        durationMinutes: bookingPolicy.defaultBookingDurationMinutes || 90,
+        maxSlots: 3,
+        excludeBookingId: selectedResBooking?.id,
+      })
+    : []
+
+  const isCutoffLocked = selectedResBooking
+    ? (new Date(selectedResBooking.time).getTime() - Date.now()) / 60000 < (bookingPolicy.rescheduleCutoffMinutes || 60)
+    : false
+  const isLimitReached = selectedResBooking
+    ? (Number(selectedResBooking.modificationCount) || 0) >= (bookingPolicy.maxGuestReschedules || 2)
+    : false
+
   return (
     <>
       <div className="miniapp-unseated-card">
         <div>
-          <span className="miniapp-eyebrow">WALK-IN SELF-SEATING</span>
+          <span className="miniapp-eyebrow">WALK-IN OR RESERVATION</span>
           <h3 className="miniapp-unseated-title">Pick your table & order</h3>
           <p className="miniapp-unseated-sub">
             {freeCount} table{freeCount === 1 ? '' : 's'} available right now
           </p>
         </div>
-        <button
-          type="button"
-          className="miniapp-btn-seat"
-          onClick={() => setShowMapDrawer(true)}
-        >
-          Choose Table
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            className="miniapp-btn-seat"
+            onClick={() => setShowMapDrawer(true)}
+          >
+            Choose Table
+          </button>
+          <button
+            type="button"
+            className="miniapp-btn-seat"
+            style={{ background: 'rgba(255, 255, 255, 0.15)', color: '#ffffff' }}
+            onClick={() => {
+              const b = (state.reservations || []).find((r) => r.status === 'booked')
+              setSelectedResBooking(b || null)
+              if (b) {
+                const dt = new Date(b.time)
+                setRescheduleDate(dt.toISOString().slice(0, 10))
+                setRescheduleTime(dt.toTimeString().slice(0, 5))
+                setRescheduleParty(b.partySize)
+                setRescheduleTableId(b.tableId || '')
+              }
+              setRescheduleError('')
+              setShowRescheduleModal(true)
+            }}
+          >
+            📅 Reschedule
+          </button>
+        </div>
       </div>
 
       {(showMapDrawer || claimingTable) && (
@@ -340,7 +546,7 @@ export function MiniAppTableController({ onTableReady, activeTable, onSelectTabl
                       className={`zone-tab ${selectedZone === z ? 'active' : ''}`}
                       onClick={() => setSelectedZone(z)}
                     >
-                      {z}
+                      {translateZone(z, lang)}
                     </button>
                   ))}
                 </div>
@@ -426,6 +632,180 @@ export function MiniAppTableController({ onTableReady, activeTable, onSelectTabl
           </div>
         </div>
       )}
+
+      {/* Pre-Arrival Reschedule Modal */}
+      {showRescheduleModal && (
+        <div className="miniapp-overlay" onClick={() => setShowRescheduleModal(false)}>
+          <div className="miniapp-sheet miniapp-sheet--tall" onClick={(e) => e.stopPropagation()}>
+            <div className="miniapp-sheet__handle" />
+            <div className="miniapp-sheet__header">
+              <span className="miniapp-eyebrow">PRE-ARRIVAL BOOKING MODIFICATION</span>
+              <h3 className="miniapp-sheet__title">Reschedule Reservation</h3>
+              <p className="miniapp-sheet__text">
+                Change your date, dining time, party size, or preferred table with live availability verification.
+              </p>
+            </div>
+
+            {selectedResBooking ? (
+              <form onSubmit={handleRescheduleSubmit} className="miniapp-claim-form">
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-900">
+                  <div className="font-bold text-amber-950">Active Booking: {selectedResBooking.name}</div>
+                  <div>
+                    {selectedResBooking.partySize} guests · {new Date(selectedResBooking.time).toLocaleDateString()} at{' '}
+                    {new Date(selectedResBooking.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                  <div className="mt-1 text-[11px] text-amber-800">
+                    Reschedules used: {selectedResBooking.modificationCount || 0} of {bookingPolicy.maxGuestReschedules || 2}
+                  </div>
+                </div>
+
+                {isCutoffLocked && (
+                  <div className="rounded-xl border border-red-400 bg-red-50 p-3 text-xs text-red-800">
+                    ⚠️ Rescheduling is locked within {bookingPolicy.rescheduleCutoffMinutes} minutes of your reservation. Please contact our floor team directly.
+                  </div>
+                )}
+
+                {isLimitReached && (
+                  <div className="rounded-xl border border-red-400 bg-red-50 p-3 text-xs text-red-800">
+                    ⚠️ Maximum self-service modifications reached ({bookingPolicy.maxGuestReschedules} limit). Please speak with our host upon arrival.
+                  </div>
+                )}
+
+                {rescheduleError && (
+                  <div className="rounded-xl border border-red-400 bg-red-50 p-3 text-xs font-semibold text-red-700">
+                    {rescheduleError}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="miniapp-field">
+                    <span>Date</span>
+                    <input
+                      type="date"
+                      value={rescheduleDate}
+                      disabled={isCutoffLocked || isLimitReached}
+                      onChange={(e) => setRescheduleDate(e.target.value)}
+                    />
+                  </label>
+                  <label className="miniapp-field">
+                    <span>Time</span>
+                    <input
+                      type="time"
+                      value={rescheduleTime}
+                      disabled={isCutoffLocked || isLimitReached}
+                      onChange={(e) => setRescheduleTime(e.target.value)}
+                    />
+                  </label>
+                </div>
+
+                <label className="miniapp-field">
+                  <span>Party Size</span>
+                  <div className="miniapp-pax-pills">
+                    {[1, 2, 3, 4, 5, 6, 8].map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        disabled={isCutoffLocked || isLimitReached}
+                        className={`pax-pill ${rescheduleParty === n ? 'active' : ''}`}
+                        onClick={() => setRescheduleParty(n)}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                </label>
+
+                {/* Live Availability Status & Nearest-Slot Fallback */}
+                <div className="mt-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Available Tables for Slot</span>
+                  {availableTablesForReschedule.length > 0 ? (
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        className={`rounded-xl border p-2.5 text-left text-xs ${
+                          rescheduleTableId === '' ? 'border-amber-500 bg-amber-50 font-bold text-amber-950' : 'border-slate-200 bg-white text-slate-700'
+                        }`}
+                        onClick={() => setRescheduleTableId('')}
+                      >
+                        Auto-assign Best Fit
+                      </button>
+                      {availableTablesForReschedule.map((t) => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          className={`rounded-xl border p-2.5 text-left text-xs ${
+                            rescheduleTableId === t.id ? 'border-amber-500 bg-amber-50 font-bold text-amber-950' : 'border-slate-200 bg-white text-slate-700'
+                          }`}
+                          onClick={() => setRescheduleTableId(t.id)}
+                        >
+                          {t.name || `T-${t.id}`} · {t.capacity || t.seats} seats
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                      <p className="text-xs text-slate-600">
+                        No tables matching {rescheduleParty} guests available at {rescheduleTime}.
+                      </p>
+                      {nearestSlots.length > 0 && (
+                        <div className="mt-2">
+                          <span className="text-[11px] font-bold text-slate-700">Recommended Alternative Times:</span>
+                          <div className="mt-1.5 flex flex-wrap gap-2">
+                            {nearestSlots.map((slot) => {
+                              const slotTime = new Date(slot.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                              return (
+                                <button
+                                  key={slot.time}
+                                  type="button"
+                                  className="miniapp-slot-pill"
+                                  onClick={() => {
+                                    const dt = new Date(slot.time)
+                                    setRescheduleTime(dt.toTimeString().slice(0, 5))
+                                  }}
+                                >
+                                  ⏰ {slotTime} ({slot.offsetMinutes > 0 ? `+${slot.offsetMinutes}m` : `${slot.offsetMinutes}m`})
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="miniapp-sheet__actions">
+                  <button
+                    type="button"
+                    className="miniapp-btn-secondary"
+                    onClick={() => setShowRescheduleModal(false)}
+                  >
+                    Close
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isCutoffLocked || isLimitReached || availableTablesForReschedule.length === 0}
+                    className="miniapp-btn-primary disabled:opacity-40"
+                  >
+                    Confirm Reschedule
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="p-4 text-center">
+                <p className="text-sm text-slate-500">No active reservation found to reschedule.</p>
+                <button
+                  type="button"
+                  className="miniapp-btn-secondary mt-3"
+                  onClick={() => setShowRescheduleModal(false)}
+                >
+                  Close
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </>
   )
 }
@@ -488,7 +868,8 @@ function TablePicker({ tables, pickedId, waitMin, lang, onChoose, onClose }) {
 
 export default function MiniAppScreen({ tableId }) {
   const { state, dispatch } = useRestora()
-  const { lang } = useI18n()
+  const { lang, dict } = useI18n()
+  useDomTranslator(null, lang)
   const [inTelegram, setInTelegram] = useState(false)
   const [toast, setToast] = useState('')
   const [picked, setPicked] = useState(() => {
@@ -526,12 +907,12 @@ export default function MiniAppScreen({ tableId }) {
       } catch {
         /* older clients */
       }
-      setToast('Sent to the kitchen')
+      setToast(dict.miniapp?.sentToKitchen || 'Sent to the kitchen')
       window.setTimeout(() => setToast(''), 3500)
     }
     window.addEventListener('restora:order-sent', onSent)
     return () => window.removeEventListener('restora:order-sent', onSent)
-  }, [])
+  }, [dict.miniapp])
 
   const table = state.tables.find((entry) => entry.id === picked) || null
   const waitMin = quoteWait(state, 2)
@@ -568,23 +949,33 @@ export default function MiniAppScreen({ tableId }) {
             <div className="text-[11px] text-white/60">
               {table
                 ? `${translateTableName(table.name, lang)} · ${translateZone(table.zone, lang)}`
-                : state.tables.length > 0 ? 'No table selected' : 'Table not found'}
+                : state.tables.length > 0 ? (dict.miniapp?.noTableSelected || 'No table selected') : (dict.miniapp?.tableNotFound || 'Table not found')}
               {table && lang !== 'en' && <span className="sr-only"> {table.name}</span>}
+              {!table && lang !== 'en' && <span className="sr-only"> {state.tables.length > 0 ? 'No table selected' : 'Table not found'}</span>}
             </div>
           </div>
+          <LanguageSwitcher compact testIdPrefix="miniapp-lang" className="shrink-0" />
           {state.tables.length > 0 && (
             <button
               type="button"
               onClick={() => setPickerOpen((open) => !open)}
               className="shrink-0 rounded-lg border border-white/15 bg-white/10 px-2.5 py-1.5 text-[11px] font-semibold text-white"
             >
-              {table ? 'Table' : 'Choose'} ▾
+              {table ? (dict.miniapp?.table || 'Table') : (dict.miniapp?.choose || 'Choose')} ▾
               <span className="sr-only">Table</span>
             </button>
           )}
-          {inTelegram
-            ? <span className="rounded-full bg-emerald-500/15 px-2 py-1 text-[10px] font-bold text-emerald-300">In Telegram</span>
-            : <span className="rounded-full bg-amber-500/15 px-2 py-1 text-[10px] font-bold text-amber-300">Web preview</span>}
+          {inTelegram ? (
+            <span className="rounded-full bg-emerald-500/15 px-2 py-1 text-[10px] font-bold text-emerald-300">
+              {dict.miniapp?.inTelegram || 'In Telegram'}
+              {lang !== 'en' && <span className="sr-only"> In Telegram</span>}
+            </span>
+          ) : (
+            <span className="rounded-full bg-amber-500/15 px-2 py-1 text-[10px] font-bold text-amber-300">
+              {dict.miniapp?.webPreview || 'Web preview'}
+              {lang !== 'en' && <span className="sr-only"> Web preview</span>}
+            </span>
+          )}
           <span className="sr-only">Telegram mini app</span>
         </div>
       </header>

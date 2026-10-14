@@ -410,6 +410,15 @@ export function defaultSettings(locationLabel = 'Downtown') {
       printerKitchen: '',
     },
 
+    // Booking & table modification rules
+    booking: {
+      allowGuestTableChange: true,
+      allowGuestReschedule: true,
+      rescheduleCutoffMinutes: 60,
+      defaultBookingDurationMinutes: 90,
+      maxGuestReschedules: 2,
+    },
+
     // Units of measure: the vocabulary the owner maintains (label, short
     // label, family, factor) plus the pack labels offered when packaging an
     // item, so "package / bottle / size" are data rather than code.
@@ -732,6 +741,14 @@ export function sanitizeSettings(raw, locationLabel = 'Downtown') {
       printTicketCopies: Math.trunc(clampNumber(source.pos?.printTicketCopies, 1, 4, 1)),
       printerReceipt: clampText(source.pos?.printerReceipt, 60),
       printerKitchen: clampText(source.pos?.printerKitchen, 60),
+    },
+
+    booking: {
+      allowGuestTableChange: source.booking?.allowGuestTableChange !== false,
+      allowGuestReschedule: source.booking?.allowGuestReschedule !== false,
+      rescheduleCutoffMinutes: Math.trunc(clampNumber(source.booking?.rescheduleCutoffMinutes, 0, 1440, base.booking.rescheduleCutoffMinutes)),
+      defaultBookingDurationMinutes: Math.trunc(clampNumber(source.booking?.defaultBookingDurationMinutes, 15, 360, base.booking.defaultBookingDurationMinutes)),
+      maxGuestReschedules: Math.trunc(clampNumber(source.booking?.maxGuestReschedules, 1, 10, base.booking.maxGuestReschedules)),
     },
 
     templates: Object.fromEntries(DOC_KINDS.map((kind) => [kind, sanitizeTemplate(source.templates?.[kind], kind)])),

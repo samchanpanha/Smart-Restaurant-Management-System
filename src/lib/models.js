@@ -337,3 +337,104 @@ export function orderStatusFromItems(items) {
   if (items.some((i) => i.status === 'fired')) return 'in_prep'
   return 'open'
 }
+
+// ─── Booking & Table Availability Helpers ─────────────────────────
+
+/**
+ * Checks whether a specific table is available for a given time window.
+ * Verifies both overlapping reservations and active table occupancy.
+ */
+export function isTableAvailable(state, { tableId, time, durationMinutes = 90, excludeBookingId = null, now = Date.now() }) {
+  if (!state || !tableId) return false
+  const targetTable = (state.tables || []).find((t) => String(t.id) === String(tableId))
+  if (!targetTable) return false
+
+  const reqMs = new Date(time).getTime()
+  if (!Number.isFinite(reqMs)) return false
+  const durMs = (Number(durationMinutes) || 90) * 60000
+
+  // 1. Conflict check against booked reservations
+  const hasReservationConflict = (state.reservations || []).some((r) => {
+    if (r.status !== 'booked') return false
+    if (String(r.tableId) !== String(tableId)) return false
+    if (excludeBookingId && String(r.id) === String(excludeBookingId)) return false
+    const rTimeMs = new Date(r.time).getTime()
+    if (!Number.isFinite(rTimeMs)) return false
+    return Math.abs(rTimeMs - reqMs) < durMs
+  })
+  if (hasReservationConflict) return false
+
+  // 2. Active table occupancy check for slots near the current moment
+  const isNearCurrentTurn = Math.abs(reqMs - now) < durMs
+  if (isNearCurrentTurn) {
+    if (['occupied', 'seated', 'ordered', 'billing'].includes(targetTable.status)) {
+      return false
+    }
+  }
+
+  return true
+}
+
+/**
+ * Finds all tables with capacity for `partySize` that are free at the requested time slot.
+ * Returns tables sorted by best capacity fit.
+ */
+export function findAvailableTablesForSlot(state, { time, partySize = 2, durationMinutes = 90, zone = null, excludeBookingId = null, now = Date.now() }) {
+  if (!state || !Array.isArray(state.tables)) return []
+  const party = Number(partySize) || 2
+  const durMin = Number(durationMinutes) || 90
+
+  return (state.tables || [])
+    .filter((table) => {
+      const cap = Number(table.capacity || table.seats) || 4
+      if (cap < party) return false
+      if (zone && zone !== 'All' && (table.zone || 'Main') !== zone) return false
+      return isTableAvailable(state, { tableId: table.id, time, durationMinutes: durMin, excludeBookingId, now })
+    })
+    .sort((a, b) => {
+      const capA = Number(a.capacity || a.seats) || 4
+      const capB = Number(b.capacity || b.seats) || 4
+      return (capA - party) - (capB - party) || (a.name || '').localeCompare(b.name || '')
+    })
+}
+
+/**
+ * If a selected time slot is full, returns the closest alternative available time slots.
+ * E.g., -30 min, +30 min, +60 min offsets.
+ */
+export function findNearestAvailableSlots(state, { requestedTime, partySize = 2, durationMinutes = 90, maxSlots = 3, excludeBookingId = null, now = Date.now() }) {
+  if (!requestedTime) return []
+  const reqMs = new Date(requestedTime).getTime()
+  if (!Number.isFinite(reqMs)) return []
+
+  const offsets = [-30, 30, -60, 60, -90, 90, -120, 120]
+  const suggestions = []
+
+  for (const offset of offsets) {
+    const candidateMs = reqMs + offset * 60000
+    // Skip slots in the past
+    if (candidateMs < now - 5 * 60000) continue
+
+    const candidateIso = new Date(candidateMs).toISOString()
+    const available = findAvailableTablesForSlot(state, {
+      time: candidateIso,
+      partySize,
+      durationMinutes,
+      excludeBookingId,
+      now,
+    })
+
+    if (available.length > 0) {
+      suggestions.push({
+        time: candidateIso,
+        offsetMinutes: offset,
+        availableTablesCount: available.length,
+        tables: available,
+      })
+      if (suggestions.length >= maxSlots) break
+    }
+  }
+
+  return suggestions
+}
+

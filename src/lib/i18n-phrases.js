@@ -249,6 +249,159 @@ export const PHRASES_KM = {
   'Check paid — needs bussing': 'បង់ប្រាក់រួច — ត្រូវសម្អាតតុ',
   'Needs bussing + reset': 'ត្រូវប្រមូលចាន និងរៀបចំតុឡើងវិញ',
   'No tables are seatable right now.': 'មិនមានតុទំនេរសម្រាប់ដាក់ភ្ញៀវអង្គុយនៅពេលនេះទេ។',
+  'Every table is occupied, billed, or dirty. Bus a dirty table or add the party to the waitlist with an honest quoted wait.': 'គ្រប់តុទាំងអស់សុទ្ធតែមានភ្ញៀវ បង់ប្រាក់រួច ឬប្រឡាក់។ សូមប្រមូលចានតុប្រឡាក់ ឬបន្ថែមភ្ញៀវទៅបញ្ជីរង់ចាំ។',
+  'Back to floor': 'ត្រឡប់ទៅប្លង់តុ',
+  'Seating from reservation book': 'រៀបចំតុពីសៀវភៅកក់តុ',
+  'Seating from waitlist': 'រៀបចំតុពីបញ្ជីរង់ចាំ',
+  'Walk-in seating': 'រៀបចំតុសម្រាប់ភ្ញៀវមកផ្ទាល់',
+  'Seat anyway — I take responsibility': 'ដាក់អង្គុយទោះលើសចំណុះ — ខ្ញុំទទួលខុសត្រូវ',
+  'Host confirm required. The squeeze is on you, Alex.': 'ត្រូវការការបញ្ជាក់ពីបុគ្គលិកទទួលភ្ញៀវ។ ការបន្ថែមមនុស្សលើសជាទំនួលខុសត្រូវរបស់អ្នក។',
+  'Hold as reserved': 'រក្សាទុកជាតុបានកក់',
+  'Release hold → free': 'ដោះលែងការកក់ → ទំនេរ',
+  'Bus table → dirty': 'ប្រមូលចានតុ → តុប្រឡាក់',
+  'Start check': 'ចាប់ផ្តើមវិក្កយបត្រ',
+  'Billing happens on Tickets — the table follows the check.': 'ការគិតលុយធ្វើឡើងលើផ្ទាំងការកម្មង់ — តុដើរតាមវិក្កយបត្រ។',
+  'Transfer Table': 'ប្តូរតុ',
+  'Transfer': 'ប្តូរតុ',
+  'Move Table': 'ប្តូរតុ',
+  'Move': 'ប្តូរតុ',
+  'Move / Transfer Table': 'ប្តូរតុ / ផ្ទេរតុ',
+  '🔄 Move / Transfer Table': '🔄 ប្តូរតុ / ផ្ទេរតុ',
+  '🔄 Move': '🔄 ប្តូរតុ',
+  'Request Table Move': 'ស្នើសុំប្តូរតុ',
+  '🔄 Request Table Move': '🔄 ស្នើសុំប្តូរតុ',
+  'Request Move': 'ស្នើសុំប្តូរតុ',
+  'Confirm Transfer': 'បញ្ជាក់ការប្តូរតុ',
+  'Approve move': 'យល់ព្រមប្តូរតុ',
+  'Approve Move': 'យល់ព្រមប្តូរតុ',
+  'Decline': 'បដិសេធ',
+  'Target Table': 'តុគោលដៅ',
+  'Reason (optional)': 'មូលហេតុ (មិនបាច់ដាក់ក៏បាន)',
+  'Reason for move (Optional)': 'មូលហេតុប្តូរតុ (មិនបាច់ដាក់ក៏បាន)',
+  'e.g. Guest requested quieter booth': 'ឧ. ភ្ញៀវសុំកៅអីស្ងប់ស្ងាត់ជាង',
+  'e.g., Want window seat / quieter area': 'ឧ. ចង់បានកៅអីជិតបង្អួច / កន្លែងស្ងប់ស្ងាត់',
+  'No tables are currently free or available to transfer to.': 'បច្ចុប្បន្នគ្មានតុទំនេរដែលអាចប្តូរបានទេ។',
+  'Table move requested': 'បានស្នើសុំប្តូរតុ',
+  'Table move requested:': 'បានស្នើសុំប្តូរតុ៖',
+  'Pending Move': 'កំពុងរង់ចាំការប្តូរតុ',
+  'Moved': 'បានប្តូរតុ',
+  'Moved from': 'ប្តូរពី',
+  'Reschedule': 'កែប្រែម៉ោងកក់',
+  'Reschedule booking': 'កែប្រែម៉ោងកក់',
+  'Reschedule Reservation': 'កែប្រែការកក់តុ',
+  '📅 Reschedule': '📅 កែប្រែម៉ោងកក់',
+  'Update reservation date, time, party size, or assigned table.': 'កែប្រែកាលបរិច្ឆេទ ពេលវេលា ចំនួនភ្ញៀវ ឬតុដែលបានកំណត់។',
+  'Auto-assign or Unassigned': 'ចាត់ចែងស្វ័យប្រវត្តិ ឬមិនទាន់កំណត់',
+  'Auto-assign Best Fit': 'ចាត់ចែងស្វ័យប្រវត្តិតាមទំហំសមស្រប',
+  'Could not reschedule reservation.': 'មិនអាចកែប្រែការកក់តុបានទេ។',
+  'Save Changes': 'រក្សាទុកការផ្លាស់ប្តូរ',
+  'Confirm Reschedule': 'បញ្ជាក់ការកែប្រែម៉ោងកក់',
+  'No active reservation found to reschedule.': 'រកមិនឃើញការកក់សកម្មសម្រាប់កែប្រែទេ។',
+  'Reservation rescheduled successfully!': 'បានកែប្រែការកក់តុដោយជោគជ័យ!',
+  'Nearest Available Slots': 'ម៉ោងទំនេរជិតបំផុត',
+  'Recommended Alternative Times:': 'ម៉ោងណែនាំជំនួស៖',
+  'Available Tables for Slot': 'តុទំនេរសម្រាប់ម៉ោងនេះ',
+  'Available Tables for this slot': 'តុទំនេរសម្រាប់ម៉ោងនេះ',
+  'PRE-ARRIVAL BOOKING MODIFICATION': 'ការកែប្រែការកក់មុនពេលមកដល់',
+  'Change your date, dining time, party size, or preferred table with live availability verification.': 'ផ្លាស់ប្តូរកាលបរិច្ឆេទ ម៉ោងពិសា ចំនួនភ្ញៀវ ឬតុដែលពេញចិត្ត ជាមួយការផ្ទៀងផ្ទាត់តុទំនេរផ្ទាល់។',
+  'ACTIVE DINING MOVE': 'ការប្តូរតុពេលកំពុងទទួលទាន',
+  'Select New Table': 'ជ្រើសរើសតុថ្មី',
+  'CONFIRM TABLE TRANSFER': 'បញ្ជាក់ការប្តូរតុ',
+  'Your open tickets and active kitchen orders will automatically migrate. Floor staff will approve the move.': 'ការកម្មង់ដែលបើក និងការបញ្ជាទិញផ្ទះបាយនឹងផ្ទេរស្វ័យប្រវត្តិ។ បុគ្គលិកសាលនឹងអនុម័តការប្តូរតុ។',
+  'Request Bill & Release Table?': 'ស្នើសុំគិតលុយ និងចាកចេញពីតុ?',
+  'Leave & Release Table?': 'ចាកចេញ និងលែងតុ?',
+  'Keep Table': 'រក្សាតុដដែល',
+  'Notify Staff & Pay': 'ជូនដំណឹងបុគ្គលិក & ទូទាត់',
+  'Release Table Now': 'លែងតុឥឡូវនេះ',
+  'Bill Requested': 'បានស្នើសុំគិតលុយ',
+  'Check & Leave': 'គិតលុយ & ចាកចេញ',
+  'Release Table': 'លែងតុ',
+  'Server notified • Bringing your check': 'បុគ្គលិកបានដឹង • កំពុងយកវិក្កយបត្រមក',
+  'Self-seated • Tap menu items to order': 'អង្គុយដោយខ្លួនឯង • ចុចមុខម្ហូបដើម្បីកម្មង់',
+  'WALK-IN OR RESERVATION': 'ភ្ញៀវទូទៅ ឬការកក់ទុក',
+  'Pick your table & order': 'ជ្រើសរើសតុ និងកម្មង់ម្ហូប',
+  'Choose Table': 'ជ្រើសរើសតុ',
+  'Select Your Table': 'ជ្រើសរើសតុរបស់អ្នក',
+  'Filter by party size and dining zone': 'ច្រោះតាមចំនួនភ្ញៀវ និងតំបន់តុ',
+  'Party Size:': 'ចំនួនភ្ញៀវ៖',
+  'Available • Tap to sit': 'ទំនេរ • ចុចដើម្បីអង្គុយ',
+  'Available • Tap to pick': 'ទំនេរ • ចុចដើម្បីជ្រើសរើស',
+  'Being cleaned': 'កំពុងសម្អាត',
+  'CONFIRM YOUR SEAT': 'បញ្ជាក់កៅអីរបស់អ្នក',
+  'Your Name (Optional)': 'ឈ្មោះរបស់អ្នក (មិនបាច់ដាក់ក៏បាន)',
+  'Number of Guests': 'ចំនួនភ្ញៀវ',
+  'Check In & Start Ordering': 'ចូលតុ & ចាប់ផ្តើមកម្មង់',
+  'Choose a table': 'ជ្រើសរើសតុ',
+  'In Telegram': 'ក្នុង Telegram',
+  'Web preview': 'មើលជាមុនលើ Web',
+  'No table selected': 'មិនទាន់ជ្រើសរើសតុ',
+  'Table not found': 'រកមិនឃើញតុទេ',
+  'Sent to the kitchen': 'បានផ្ញើទៅផ្ទះបាយ',
+  '💧 Water': '💧 ទឹកផឹក',
+  '🧻 Napkins': '🧻 ក្រដាសជូតមាត់',
+  '🙋 Call Waiter': '🙋 ហៅបុគ្គលិក',
+  '💳 Bill': '💳 គិតលុយ',
+  '💳 Check': '💳 គិតលុយ',
+  'Water': 'ទឹកផឹក',
+  'Napkins': 'ក្រដាសជូតមាត់',
+  'Call Waiter': 'ហៅបុគ្គលិក',
+  'Waiter': 'បុគ្គលិក',
+  'Check': 'គិតលុយ',
+  'Bill': 'គិតលុយ',
+  'Guest': 'ភ្ញៀវ',
+  'Table Guest': 'ភ្ញៀវតុ',
+  'Telegram Guest': 'ភ្ញៀវ Telegram',
+  'Free · sit here': 'ទំនេរ · អង្គុយទីនេះ',
+  'In service': 'កំពុងបម្រើ',
+  'Your table': 'តុរបស់អ្នក',
+  'Paying': 'កំពុងទូទាត់ប្រាក់',
+  'Every table is taken right now': 'តុទាំងអស់សុទ្ធតែមានភ្ញៀវនៅពេលនេះ',
+  'Reservations & Table Transfers': 'ការកក់តុ និងការប្តូរតុ',
+  'Self-service rescheduling cutoff windows, modification limits, and table change policies.': 'ដែនកំណត់ម៉ោងកែប្រែកក់ដោយខ្លួនឯង ចំនួនលើកអនុញ្ញាត និងគោលការណ៍ប្តូរតុ។',
+  'Reschedule cutoff (mins)': 'រយៈពេលកំណត់មុនកែប្រែ (នាទី)',
+  'Minutes before booking when self-service locks.': 'ចំនួននាទីមុនម៉ោងកក់ដែលប្រព័ន្ធចាក់សោការកែប្រែដោយខ្លួនឯង។',
+  'Default duration (mins)': 'រយៈពេលកក់លំនាំដើម (នាទី)',
+  'Standard seating slot duration.': 'រយៈពេលនៃជុំតុស្តង់ដារ។',
+  'Max guest reschedules': 'ចំនួនលើកកែប្រែអតិបរមា',
+  'Limit self-service date/time changes per booking.': 'កំណត់ចំនួនលើកប្តូរកាលបរិច្ឆេទ/ម៉ោងក្នុងមួយការកក់។',
+  'Allow guest rescheduling': 'អនុញ្ញាតឱ្យភ្ញៀវកែប្រែម៉ោងកក់',
+  'Allow guests to update their booking time & date before the cutoff window.': 'អនុញ្ញាតឱ្យភ្ញៀវកែប្រែកាលបរិច្ឆេទ និងម៉ោងកក់មុនពេលកំណត់ចាក់សោ។',
+  'Allow guest table change': 'អនុញ្ញាតឱ្យភ្ញៀវប្តូរតុ',
+  'Allow guests to select preferred tables or request seated table moves.': 'អនុញ្ញាតឱ្យភ្ញៀវជ្រើសរើសតុដែលពេញចិត្ត ឬស្នើសុំប្តូរតុពេលកំពុងអង្គុយ។',
+  'Want a different spot? Choose an open table and our floor staff will assist you with moving.': 'ចង់បានកន្លែងផ្សេង? ជ្រើសរើសតុទំនេរ ហើយបុគ្គលិករបស់យើងនឹងជួយអ្នកក្នុងការប្តូរ។',
+  'All other tables are currently occupied or being cleaned. Please speak with your server for assistance.': 'តុផ្សេងទៀតទាំងអស់បច្ចុប្បន្នមានភ្ញៀវ ឬកំពុងសម្អាត។ សូមទាក់ទងបុគ្គលិករត់តុដើម្បីជួយសម្រួល។',
+  'Select available table:': 'ជ្រើសរើសតុទំនេរ៖',
+  'Reason (optional):': 'មូលហេតុ (មិនបាច់ដាក់ក៏បាន)៖',
+  'e.g. Near window, AC draft, quieter': 'ឧ. ជិតបង្អួច ត្រជាក់ម៉ាស៊ីនត្រជាក់ពេក ស្ងប់ស្ងាត់ជាង',
+  'Send Move Request': 'ផ្ញើសំណើប្តូរតុ',
+  'Floor staff has been notified and will come guide you once your table is ready.': 'បុគ្គលិកសាលបានទទួលដំណឹងហើយ នឹងមកជួយនាំផ្លូវអ្នកនៅពេលតុរៀបចំរួចរាល់។',
+  '✓ Request sent to floor staff!': '✓ បានផ្ញើសំណើទៅកាន់បុគ្គលិកសាល!',
+  'Request sent to floor staff!': 'បានផ្ញើសំណើទៅកាន់បុគ្គលិកសាល!',
+  'Floor is clear — seat straight away.': 'សាលទំនេរ — អាចដាក់ភ្ញៀវអង្គុយបានភ្លាមៗ។',
+  'Rename, reseat, or move it to another zone.': 'ប្តូរឈ្មោះ ចំនួនកៅអី ឬផ្លាស់ទីទៅតំបន់ផ្សេង។',
+  'Create a new table on the floor.': 'បង្កើតតុថ្មីនៅលើប្លង់សាល។',
+  'Save table': 'រក្សាទុកតុ',
+  'Add table': 'បន្ថែមតុ',
+  'Manage tables': 'គ្រប់គ្រងតុ',
+  'Done': 'រួចរាល់',
+  'Guest requested table change': 'ភ្ញៀវបានស្នើសុំប្តូរតុ',
+  'Staff declined request': 'បុគ្គលិកបានបដិសេធសំណើ',
+  'Declined by floor host': 'បានបដិសេធដោយបុគ្គលិកទទួលភ្ញៀវ',
+  'Guest cancelled': 'ភ្ញៀវបានបោះបង់',
+  'Floor staff transfer': 'ការប្តូរតុដោយបុគ្គលិកសាល',
+  'Guest requested move': 'ភ្ញៀវបានស្នើសុំប្តូរតុ',
+  'Give the table a name.': 'សូមដាក់ឈ្មោះតុ។',
+  'Restaurant floor': 'ប្លង់តុភោជនីយដ្ឋាន',
+  'Live table status · tap a table for actions': 'ស្ថានភាពតុផ្ទាល់ · ចុចលើតុសម្រាប់សកម្មភាព',
+  'Live view': 'ទិដ្ឋភាពផ្ទាល់',
+  'Entrance': 'ច្រកចូល',
+  'Map': 'ប្លង់តុ',
+  'List': 'បញ្ជី',
+  'Delete table': 'លុបតុ',
+  'Mark served': 'សម្គាល់ថាបានដាក់ជូន',
+  'Void check': 'បោះបង់វិក្កយបត្រ',
+  'Print & file receipt': 'បោះពុម្ព & រក្សាទុកបង្កាន់ដៃ',
+  'Send held items before payment — the kitchen must see the whole ticket.': 'សូមផ្ញើមុខម្ហូបដែលផ្អាកមុនពេលទូទាត់ — ផ្ទះបាយត្រូវមើលឃើញវិក្កយបត្រទាំងមូល។',
 
   // Tickets / POS Screen
   'Orders': 'ការកម្មង់ និងវិក្កយបត្រ',
@@ -935,6 +1088,159 @@ export const PHRASES_ZH = {
   'Check paid — needs bussing': '已结账 — 待收台清理',
   'Needs bussing + reset': '待收台与重新摆台',
   'No tables are seatable right now.': '当前没有可安排入座的餐桌。',
+  'Every table is occupied, billed, or dirty. Bus a dirty table or add the party to the waitlist with an honest quoted wait.': '所有餐桌均已占用、结账中或待清理。请清理餐桌或将客人加入候位名单。',
+  'Back to floor': '返回平面图',
+  'Seating from reservation book': '从预订名册安排入座',
+  'Seating from waitlist': '从候位名单安排入座',
+  'Walk-in seating': '现场到店安排入座',
+  'Seat anyway — I take responsibility': '坚持入座 — 我承担责任',
+  'Host confirm required. The squeeze is on you, Alex.': '需要领位员确认。加座责任由您承担。',
+  'Hold as reserved': '设为预留桌',
+  'Release hold → free': '取消预留 → 设为空闲',
+  'Bus table → dirty': '收台 → 待清洁',
+  'Start check': '开始账单',
+  'Billing happens on Tickets — the table follows the check.': '结账在账单页面处理 — 餐桌跟随账单。',
+  'Transfer Table': '转台/换桌',
+  'Transfer': '转台',
+  'Move Table': '更换餐桌',
+  'Move': '换桌',
+  'Move / Transfer Table': '换桌 / 转台',
+  '🔄 Move / Transfer Table': '🔄 换桌 / 转台',
+  '🔄 Move': '🔄 换桌',
+  'Request Table Move': '申请换桌',
+  '🔄 Request Table Move': '🔄 申请换桌',
+  'Request Move': '申请换桌',
+  'Confirm Transfer': '确认换桌',
+  'Approve move': '批准换桌',
+  'Approve Move': '批准换桌',
+  'Decline': '拒绝',
+  'Target Table': '目标餐桌',
+  'Reason (optional)': '原因（选填）',
+  'Reason for move (Optional)': '换桌原因（选填）',
+  'e.g. Guest requested quieter booth': '例如：客人希望换到安静卡座',
+  'e.g., Want window seat / quieter area': '例如：想要靠窗位 / 安静区域',
+  'No tables are currently free or available to transfer to.': '当前暂无可用空桌可供更换。',
+  'Table move requested': '已申请换桌',
+  'Table move requested:': '已申请换桌：',
+  'Pending Move': '待确认换桌',
+  'Moved': '已转台',
+  'Moved from': '转台自',
+  'Reschedule': '修改预订',
+  'Reschedule booking': '修改预订',
+  'Reschedule Reservation': '修改预订',
+  '📅 Reschedule': '📅 修改预订',
+  'Update reservation date, time, party size, or assigned table.': '更新预订日期、时间、人数或分配餐桌。',
+  'Auto-assign or Unassigned': '自动分配或暂不分配',
+  'Auto-assign Best Fit': '自动分配最合适餐桌',
+  'Could not reschedule reservation.': '无法修改预订。',
+  'Save Changes': '保存更改',
+  'Confirm Reschedule': '确认修改预订',
+  'No active reservation found to reschedule.': '未找到可修改的有效预订。',
+  'Reservation rescheduled successfully!': '预订修改成功！',
+  'Nearest Available Slots': '最近可用时段',
+  'Recommended Alternative Times:': '建议备选时间：',
+  'Available Tables for Slot': '该时段可用餐桌',
+  'Available Tables for this slot': '该时段可用餐桌',
+  'PRE-ARRIVAL BOOKING MODIFICATION': '到店前预订修改',
+  'Change your date, dining time, party size, or preferred table with live availability verification.': '更改就餐日期、时间、人数或心仪餐桌，支持实时空位验证。',
+  'ACTIVE DINING MOVE': '就餐中换桌',
+  'Select New Table': '选择新餐桌',
+  'CONFIRM TABLE TRANSFER': '确认换桌',
+  'Your open tickets and active kitchen orders will automatically migrate. Floor staff will approve the move.': '您的未结账单和后厨订单将自动转移。前厅员工将确认批准换桌。',
+  'Request Bill & Release Table?': '申请结账并释放餐桌？',
+  'Leave & Release Table?': '离开并释放餐桌？',
+  'Keep Table': '保留餐桌',
+  'Notify Staff & Pay': '通知员工并结账',
+  'Release Table Now': '立即释放餐桌',
+  'Bill Requested': '已呼叫结账',
+  'Check & Leave': '结账离开',
+  'Release Table': '释放餐桌',
+  'Server notified • Bringing your check': '已通知服务员 • 正在打印账单',
+  'Self-seated • Tap menu items to order': '自主入座 • 点击菜单加菜',
+  'WALK-IN OR RESERVATION': '到店入座或预订',
+  'Pick your table & order': '自选餐桌并点餐',
+  'Choose Table': '选择餐桌',
+  'Select Your Table': '选择您的餐桌',
+  'Filter by party size and dining zone': '按就餐人数和就餐区筛选',
+  'Party Size:': '用餐人数：',
+  'Available • Tap to sit': '空闲 • 点击入座',
+  'Available • Tap to pick': '空闲 • 点击选择',
+  'Being cleaned': '清理中',
+  'CONFIRM YOUR SEAT': '确认您的座位',
+  'Your Name (Optional)': '您的姓名（选填）',
+  'Number of Guests': '就餐人数',
+  'Check In & Start Ordering': '入座并开始点餐',
+  'Choose a table': '选择餐桌',
+  'In Telegram': 'Telegram 内',
+  'Web preview': '网页预览',
+  'No table selected': '未选择餐桌',
+  'Table not found': '未找到餐桌',
+  'Sent to the kitchen': '已发送至后厨',
+  '💧 Water': '💧 加水',
+  '🧻 Napkins': '🧻 纸巾',
+  '🙋 Call Waiter': '🙋 呼叫服务员',
+  '💳 Bill': '💳 结账',
+  '💳 Check': '💳 结账',
+  'Water': '加水',
+  'Napkins': '纸巾',
+  'Call Waiter': '呼叫服务员',
+  'Waiter': '服务员',
+  'Check': '结账',
+  'Bill': '结账',
+  'Guest': '宾客',
+  'Table Guest': '就餐宾客',
+  'Telegram Guest': 'Telegram 宾客',
+  'Free · sit here': '空闲 · 点击入座',
+  'In service': '服务中',
+  'Your table': '您的餐桌',
+  'Paying': '结账中',
+  'Every table is taken right now': '当前所有餐桌均已满座',
+  'Reservations & Table Transfers': '预订管理与换桌规则',
+  'Self-service rescheduling cutoff windows, modification limits, and table change policies.': '自助改期截止时间窗口、修改次数上限及换桌政策。',
+  'Reschedule cutoff (mins)': '改期截止时间（分钟）',
+  'Minutes before booking when self-service locks.': '预订开始前多少分钟锁定自助改期。',
+  'Default duration (mins)': '默认就餐时长（分钟）',
+  'Standard seating slot duration.': '标准就餐时段时长。',
+  'Max guest reschedules': '客人自助改期次数上限',
+  'Limit self-service date/time changes per booking.': '限制每笔预订允许自助修改日期/时间的次数。',
+  'Allow guest rescheduling': '允许客人自助改期',
+  'Allow guests to update their booking time & date before the cutoff window.': '允许客人在截止窗口前修改预订日期和时间。',
+  'Allow guest table change': '允许客人换桌/选桌',
+  'Allow guests to select preferred tables or request seated table moves.': '允许客人自选餐桌或就座后申请换桌。',
+  'Want a different spot? Choose an open table and our floor staff will assist you with moving.': '想换个位置？选择一张空桌，我们的前厅员工将协助您换桌。',
+  'All other tables are currently occupied or being cleaned. Please speak with your server for assistance.': '所有其他餐桌当前均已占用或正在清理中。如需协助请咨询服务员。',
+  'Select available table:': '选择可用餐桌：',
+  'Reason (optional):': '换桌原因（选填）：',
+  'e.g. Near window, AC draft, quieter': '例如：靠近窗户、空调直吹、想要更安静',
+  'Send Move Request': '发送换桌申请',
+  'Floor staff has been notified and will come guide you once your table is ready.': '前厅服务员已收到通知，待餐桌准备就绪后会前来引导您。',
+  '✓ Request sent to floor staff!': '✓ 换桌申请已发送给前厅员工！',
+  'Request sent to floor staff!': '换桌申请已发送给前厅员工！',
+  'Floor is clear — seat straight away.': '全场有空位 — 可直接安排入座。',
+  'Rename, reseat, or move it to another zone.': '重命名、更改座位数或移动至其他区域。',
+  'Create a new table on the floor.': '在前厅平面图上创建新餐桌。',
+  'Save table': '保存餐桌',
+  'Add table': '添加餐桌',
+  'Manage tables': '管理餐桌',
+  'Done': '完成',
+  'Guest requested table change': '客人申请换桌',
+  'Staff declined request': '服务员拒绝了换桌申请',
+  'Declined by floor host': '领位员已拒绝申请',
+  'Guest cancelled': '客人已取消',
+  'Floor staff transfer': '前厅员工调桌',
+  'Guest requested move': '客人申请换桌',
+  'Give the table a name.': '请为餐桌输入名称。',
+  'Restaurant floor': '餐厅餐桌平面图',
+  'Live table status · tap a table for actions': '实时桌台状态 · 点击餐桌进行操作',
+  'Live view': '实时视图',
+  'Entrance': '入口',
+  'Map': '平面图',
+  'List': '列表',
+  'Delete table': '删除餐桌',
+  'Mark served': '标记已上菜',
+  'Void check': '作废账单',
+  'Print & file receipt': '打印并归档收据',
+  'Send held items before payment — the kitchen must see the whole ticket.': '结账前请先发送暂挂菜品 — 后厨必须查看完整账单。',
 
   // Tickets / POS Screen
   'Orders': '订单与账单',
@@ -1450,13 +1756,241 @@ function lookupSingle(trimmed, lang) {
   return null
 }
 
+function localTable(name, lang) {
+  if (!name) return ''
+  const direct = lookupSingle(name, lang)
+  if (direct) return direct
+  let m = /^Table\s*#?\s*(\d+)$/i.exec(name)
+  if (m) return lang === 'km' ? `តុលេខ ${m[1]}` : `${m[1]}号桌`
+  m = /^T-?(\d+)$/i.exec(name)
+  if (m) return lang === 'km' ? `តុលេខ ${m[1]}` : `${m[1]}号桌`
+  return name
+}
+
 function translatePattern(trimmed, lang) {
   if (lang === 'en') return trimmed
   const isKm = lang === 'km'
 
-  // Table N
+  // Table N / T-N
   let m = /^Table\s+(\d+)$/i.exec(trimmed)
   if (m) return isKm ? `តុលេខ ${m[1]}` : `${m[1]}号桌`
+  m = /^T-?(\d+)$/i.exec(trimmed)
+  if (m) return isKm ? `តុលេខ ${m[1]}` : `${m[1]}号桌`
+
+  // Seat party dialog title
+  m = /^Seat party(?:\s*·\s*(.+))?$/i.exec(trimmed)
+  if (m) {
+    if (!m[1]) return isKm ? 'ដាក់ភ្ញៀវអង្គុយ' : '安排入座'
+    const tbl = localTable(m[1].trim(), lang)
+    return isKm ? `ដាក់ភ្ញៀវអង្គុយ · ${tbl}` : `安排入座 · ${tbl}`
+  }
+
+  // Table transfers & moves
+  m = /^Transfer\s+(.+)$/i.exec(trimmed)
+  if (m) {
+    const tbl = localTable(m[1].trim(), lang)
+    return isKm ? (tbl.startsWith('តុ') ? `ប្តូរ${tbl}` : `ប្តូរ ${tbl}`) : `转台 ${tbl}`
+  }
+
+  m = /^Reschedule\s*·\s*(.+)$/i.exec(trimmed)
+  if (m) return isKm ? `កែប្រែម៉ោងកក់ · ${m[1]}` : `修改预订 · ${m[1]}`
+
+  m = /^Move party \((\d+) guests?\) and active order to another table\.?$/i.exec(trimmed)
+  if (m) return isKm ? `ផ្លាស់ប្តូរក្រុម (${m[1]} ភ្ញៀវ) និងការកម្មង់សកម្មទៅតុផ្សេង។` : `将 (${m[1]} 位宾客) 及当前订单移动到另一张餐桌。`
+
+  m = /^(?:🔄\s*)?(?:Table move requested|Move requested|Move Request):\s*(.+?)\s*➔\s*(.+)$/i.exec(trimmed)
+  if (m) {
+    const from = localTable(m[1].trim(), lang)
+    const to = localTable(m[2].trim(), lang)
+    return isKm ? `បានស្នើសុំប្តូរតុ៖ ${from} ➔ ${to}` : `已申请换桌：${from} ➔ ${to}`
+  }
+
+  m = /^Move requested to\s+(?:Table\s+)?(.+?)(?:\s*·\s*Awaiting staff approval)?$/i.exec(trimmed)
+  if (m) {
+    const to = localTable(m[1].trim(), lang)
+    return isKm
+      ? `បានស្នើសុំប្តូរទៅតុ ${to}${trimmed.includes('approval') ? ' · កំពុងរង់ចាំការអនុម័តពីបុគ្គលិក' : ''}`
+      : `已申请换桌至 ${to}${trimmed.includes('approval') ? ' · 等待服务员批准' : ''}`
+  }
+
+  m = /^(?:Transferred|Moved)(?::)?\s*(.+?)\s*➔\s*(.+)$/i.exec(trimmed)
+  if (m) {
+    const from = localTable(m[1].trim(), lang)
+    const to = localTable(m[2].trim(), lang)
+    return isKm ? `បានប្តូរតុ៖ ${from} ➔ ${to}` : `已转台：${from} ➔ ${to}`
+  }
+
+  m = /^(?:🔄\s*)?Moved from\s+(?:Table\s+)?(.+)$/i.exec(trimmed)
+  if (m) {
+    const from = localTable(m[1].trim(), lang)
+    return isKm
+      ? (from.startsWith('តុ') ? `🔄 ប្តូរពី${from}` : `🔄 ប្តូរពីតុ ${from}`)
+      : `🔄 转台自 ${from}`
+  }
+
+  m = /^(?:🔄\s*)?Moved:\s*(.+)$/i.exec(trimmed)
+  if (m) {
+    const from = localTable(m[1].trim(), lang)
+    return isKm
+      ? (from.startsWith('តុ') ? `🔄 ប្តូរពី${from}` : `🔄 បានប្តូរពីតុ ${from}`)
+      : `🔄 已转台自：${from}`
+  }
+
+  m = /^(?:🔄\s*)?Move to\s+(.+?)\s+requested$/i.exec(trimmed)
+  if (m) {
+    const to = localTable(m[1].trim(), lang)
+    return isKm ? `🔄 បានស្នើសុំប្តូរទៅ ${to}` : `🔄 申请换桌至 ${to}`
+  }
+
+  m = /^Sit at\s+(.+)$/i.exec(trimmed)
+  if (m) {
+    const tbl = localTable(m[1].trim(), lang)
+    return isKm ? `អង្គុយនៅ ${tbl}` : `就坐于 ${tbl}`
+  }
+
+  m = /^Move to\s+(.+)$/i.exec(trimmed)
+  if (m) {
+    const tbl = localTable(m[1].trim(), lang)
+    return isKm ? `ប្តូរទៅ ${tbl}` : `换桌至 ${tbl}`
+  }
+
+  m = /^Currently at\s+(.+?)\.\s*Choose an open table to request a move\.?$/i.exec(trimmed)
+  if (m) {
+    const tbl = localTable(m[1].trim(), lang)
+    return isKm
+      ? `បច្ចុប្បន្ននៅ ${tbl}។ សូមជ្រើសរើសតុទំនេរដើម្បីស្នើសុំប្តូរតុ។`
+      : `当前在 ${tbl}。请选择空桌申请换桌。`
+  }
+
+  m = /^(\d+)\s+tables?\s+available right now$/i.exec(trimmed)
+  if (m) return isKm ? `បច្ចុប្បន្នមាន ${m[1]} តុទំនេរ` : `当前有 ${m[1]} 张空桌`
+
+  m = /^(\d+)\s+active order\(s\) at your table$/i.exec(trimmed)
+  if (m) return isKm ? `មាន ${m[1]} ការកម្មង់សកម្មនៅតុរបស់អ្នក` : `您桌上有 ${m[1]} 笔未完成订单`
+
+  m = /^Active Booking:\s*(.+)$/i.exec(trimmed)
+  if (m) return isKm ? `ការកក់សកម្ម៖ ${m[1]}` : `当前预订：${m[1]}`
+
+  m = /^Reschedules used:\s*(\d+)\s*of\s*(\d+)$/i.exec(trimmed)
+  if (m) return isKm ? `កែប្រែបានប្រើ៖ ${m[1]} នៃ ${m[2]}` : `已修改次数：${m[1]} / ${m[2]}`
+
+  m = /^⚠️?\s*Rescheduling is locked within (\d+) minutes of your reservation\.\s*Please contact our floor team directly\.?$/i.exec(trimmed)
+  if (m) return isKm
+    ? `⚠️ ការកែប្រែម៉ោងកក់ត្រូវបានចាក់សោក្នុងរយៈពេល ${m[1]} នាទីមុនម៉ោងកក់។ សូមទាក់ទងបុគ្គលិកផ្ទាល់។`
+    : `⚠️ 距离预订时间不足 ${m[1]} 分钟，自助改期已锁定。请直接联系前厅员工。`
+
+  m = /^⚠️?\s*Maximum self-service modifications reached \((\d+) limit\)\.\s*Please speak with our host upon arrival\.?$/i.exec(trimmed)
+  if (m) return isKm
+    ? `⚠️ ឈានដល់ចំនួនកែប្រែអតិបរមាហើយ (កំណត់ត្រឹម ${m[1]} ដង)។ សូមទាក់ទងបុគ្គលិកទទួលភ្ញៀវពេលមកដល់។`
+    : `⚠️ 已达自助修改次数上限（上限 ${m[1]} 次）。请在到店时联系前台。`
+
+  m = /^No tables matching (\d+) guests? available at (.+?)\.?$/i.exec(trimmed)
+  if (m) return isKm
+    ? `គ្មានតុសមស្របសម្រាប់ភ្ញៀវ ${m[1]} នាក់នៅម៉ោង ${m[2]} ទេ។`
+    : `在 ${m[2]} 暂无可容纳 ${m[1]} 人的空桌。`
+
+  m = /^Capacity:\s*up to (\d+) guests? • (.+)$/i.exec(trimmed)
+  if (m) {
+    const z = lookupSingle(m[2].trim(), lang) || m[2].trim()
+    return isKm ? `ចំណុះ៖ រហូតដល់ ${m[1]} ភ្ញៀវ • ${z}` : `容纳：最多 ${m[1]} 位宾客 • ${z}`
+  }
+
+  m = /^(.+?)\s+requested\s*·\s*Staff notified$/i.exec(trimmed)
+  if (m) {
+    const item = lookupSingle(m[1].trim(), lang) || m[1].trim()
+    return isKm ? `បានស្នើសុំ ${item} · បុគ្គលិកបានទទួលដំណឹង` : `已请求 ${item} · 已通知服务员`
+  }
+
+  m = /^You have (\d+) open tickets? on (.+?)\.\s*We will notify staff to finalize your payment and release the table\.?$/i.exec(trimmed)
+  if (m) {
+    const tbl = localTable(m[2].trim(), lang)
+    return isKm
+      ? `អ្នកមាន ${m[1]} ការកម្មង់កំពុងបើកលើ ${tbl}។ យើងនឹងជូនដំណឹងដល់បុគ្គលិកដើម្បីទូទាត់ប្រាក់ និងលែងតុ។`
+      : `您在 ${tbl} 上有 ${m[1]} 笔未结账单。我们将通知员工为您结账并释放餐桌。`
+  }
+
+  m = /^Finished dining or haven't ordered yet\?\s*Releasing (.+?) immediately frees it for other guests\.?$/i.exec(trimmed)
+  if (m) {
+    const tbl = localTable(m[1].trim(), lang)
+    return isKm
+      ? `ពិសាចប់ ឬមិនទាន់បានកម្មង់? ការលែង ${tbl} នឹងបើកឱ្យភ្ញៀវផ្សេងទៀតអាចអង្គុយបានភ្លាមៗ។`
+      : `用餐完毕或尚未点餐？立即释放 ${tbl} 可供其他宾客使用。`
+  }
+
+  m = /^Approved move:\s*(.+?)\s*➔\s*(.+)$/i.exec(trimmed)
+  if (m) {
+    const f = localTable(m[1].trim(), lang)
+    const t = localTable(m[2].trim(), lang)
+    return isKm ? `បានយល់ព្រមប្តូរតុ៖ ${f} ➔ ${t}` : `已批准换桌：${f} ➔ ${t}`
+  }
+  m = /^Approved move to (.+)$/i.exec(trimmed)
+  if (m) {
+    const tbl = localTable(m[1].trim(), lang)
+    return isKm ? `បានយល់ព្រមប្តូរទៅ ${tbl}` : `已批准换桌至 ${tbl}`
+  }
+
+  m = /^Declined move request for (.+)$/i.exec(trimmed)
+  if (m) {
+    const tbl = localTable(m[1].trim(), lang)
+    return isKm ? `បានបដិសេធសំណើប្តូរតុសម្រាប់ ${tbl}` : `已拒绝 ${tbl} 的换桌申请`
+  }
+
+  m = /^Party of (\d+)\s*·\s*(\d+)m seated$/i.exec(trimmed)
+  if (m) return isKm ? `ក្រុមភ្ញៀវ ${m[1]} នាក់ · អង្គុយបាន ${m[2]} នាទី` : `${m[1]} 位宾客 · 已入座 ${m[2]} 分钟`
+  m = /^Party of (\d+)$/i.exec(trimmed)
+  if (m) return isKm ? `ក្រុមភ្ញៀវ ${m[1]} នាក់` : `${m[1]} 位宾客`
+  m = /^(\d+)m seated$/i.exec(trimmed)
+  if (m) return isKm ? `អង្គុយបាន ${m[1]} នាទី` : `已入座 ${m[1]} 分钟`
+
+  m = /^target\s+turn\s+(\d+)m$/i.exec(trimmed)
+  if (m) return isKm ? `ជុំតុគោលដៅ ${m[1]} នាទី` : `目标翻台 ${m[1]} 分钟`
+
+  m = /^Reserved:\s*(.+?)\s*·\s*(\d+)\s*·\s*(.+)$/i.exec(trimmed)
+  if (m) return isKm ? `បានកក់៖ ${m[1]} · ${m[2]} នាក់ · ${m[3]}` : `已预订：${m[1]} · ${m[2]} 人 · ${m[3]}`
+
+  m = /^Open check\s*·\s*(\d+)\s+items?$/i.exec(trimmed)
+  if (m) return isKm ? `បើកវិក្កយបត្រ · ${m[1]} មុខ` : `打开账单 · ${m[1]} 项`
+
+  m = /^Edit\s+(.+)$/i.exec(trimmed)
+  if (m) {
+    const target = localTable(m[1].trim(), lang)
+    return isKm ? `កែសម្រួល ${target}` : `编辑 ${target}`
+  }
+
+  m = /^Pay\s*·\s*(.+)$/i.exec(trimmed)
+  if (m) return isKm ? `ទូទាត់ · ${m[1]}` : `结账 · ${m[1]}`
+
+  m = /^Earlier:\s*(\d+)\s+seated\s*\/\s*no-show\s*\/\s*cancelled$/i.exec(trimmed)
+  if (m) return isKm ? `មុននេះ៖ ${m[1]} បានអង្គុយ / មិនមក / បានបោះបង់` : `较早：${m[1]} 已入座 / 爽约 / 已取消`
+
+  m = /^Honest quote:\s*~(\d+)\s+min\s*—\s*today['’]s average turn for a party of (\d+)\.?$/i.exec(trimmed)
+  if (m) return isKm
+    ? `ពេលវេលាប៉ាន់ស្មាន៖ ~${m[1]} នាទី — ជាមធ្យមនៃជុំតុថ្ងៃនេះសម្រាប់ក្រុម ${m[2]} នាក់។`
+    : `准确预估：~${m[1]} 分钟 — 今日 ${m[2]} 人桌平均翻台时长。`
+
+  m = /^Over capacity:\s*party of (\d+) on a (\d+)-top\.?$/i.exec(trimmed)
+  if (m) return isKm ? `លើសចំណុះ៖ ក្រុម ${m[1]} នាក់លើតុ ${m[2]} កៅអី។` : `超出容纳上限：${m[1]} 人安排在 ${m[2]} 人桌。`
+
+  m = /^(\d+)\s+of\s+(\d+)\s+tables free — tap one to sit down$/i.exec(trimmed)
+  if (m) return isKm ? `នៅសល់ ${m[1]} នៃ ${m[2]} តុទំនេរ — ចុចដើម្បីអង្គុយ` : `共 ${m[2]} 桌中 ${m[1]} 桌空闲 — 点击入座`
+
+  m = /^·\s*~(\d+)\s+min\s+wait$/i.exec(trimmed)
+  if (m) return isKm ? `· រង់ចាំប្រហែល ~${m[1]} នាទី` : `· 预计等位 ~${m[1]} 分钟`
+
+  m = /^⏰\s*(.+?)\s*\(([+-]?\d+m)\)$/.exec(trimmed)
+  if (m) return `⏰ ${m[1]} (${m[2]})`
+
+  m = /^(\d+)\s+Guests?$/i.exec(trimmed)
+  if (m) return isKm ? `${m[1]} ភ្ញៀវ` : `${m[1]} 位宾客`
+
+  m = /^Reason:\s*(.+)$/i.exec(trimmed)
+  if (m) return isKm ? `មូលហេតុ៖ ${m[1]}` : `原因：${m[1]}`
+
+  m = /^·\s*(\d+)\s+seats?\s*(?:·\s*(.+))?$/i.exec(trimmed)
+  if (m) {
+    const z = m[2] ? ` · ${lookupSingle(m[2].trim(), lang) || m[2].trim()}` : ''
+    return isKm ? `· ${m[1]} កៅអី${z}` : `· ${m[1]} 座${z}`
+  }
 
   // N seats / N seat
   m = /^(\d+)\s+seats?$/i.exec(trimmed)

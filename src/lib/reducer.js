@@ -9,6 +9,8 @@ import {
   applyAuto86,
   assertTableTransition,
   costingFor,
+  findAvailableTablesForSlot,
+  isTableAvailable,
   minutesBetween,
   money,
   orderSubtotal,
@@ -54,6 +56,7 @@ function mergeSettings(current, patch) {
     ...patch,
     stock: { ...current.stock, ...(patch.stock || {}) },
     pos: { ...current.pos, ...(patch.pos || {}) },
+    booking: { ...current.booking, ...(patch.booking || {}) },
     notifications: { ...current.notifications, ...(patch.notifications || {}) },
     telegram: { ...current.telegram, ...(patch.telegram || {}) },
     numbering: { ...current.numbering, ...(patch.numbering || {}) },
@@ -1333,6 +1336,380 @@ function shopReducerBase(state, action) {
       const { id, patch } = action
       const reservations = state.reservations.map((r) => (r.id === id ? { ...r, ...patch } : r))
       return { ...state, reservations }
+    }
+
+    case 'RESCHEDULE_BOOKING': {
+      const payload = action.payload || action
+      const { bookingId, newDate, newTime, newPartySize, preferredTableId, actor = 'guest' } = payload
+      const booking = (state.reservations || []).find((r) => String(r.id) === String(bookingId))
+      if (!booking) return state
+
+      // Parse target time (handle separate newDate & newTime or ISO newTime)
+      let targetTime = newTime
+      if (newDate && newTime && !String(newTime).includes('T')) {
+        targetTime = new Date(`${newDate}T${newTime}`).toISOString()
+      } else if (newTime) {
+        targetTime = new Date(newTime).toISOString()
+      } else {
+        targetTime = booking.time
+      }
+
+      const bookingPolicy = state.settings?.booking || {
+        allowGuestReschedule: true,
+        allowGuestTableChange: true,
+        rescheduleCutoffMinutes: 60,
+        defaultBookingDurationMinutes: 90,
+        maxGuestReschedules: 2,
+      }
+
+      // Guest self-service validation guards
+      if (actor === 'guest') {
+        if (bookingPolicy.allowGuestReschedule === false) {
+          throw new Error('Guest rescheduling is disabled by restaurant policy.')
+        }
+        const modCount = Number(booking.modificationCount) || 0
+        const maxMods = Number(bookingPolicy.maxGuestReschedules) || 2
+        if (modCount >= maxMods) {
+          throw new Error(`Maximum self-service reschedule limit (${maxMods}) reached. Please contact restaurant staff.`)
+        }
+        const cutoffMin = Number(bookingPolicy.rescheduleCutoffMinutes) || 60
+        const currentBookingMs = new Date(booking.time).getTime()
+        const minsUntil = (currentBookingMs - Date.now()) / 60000
+        if (minsUntil < cutoffMin) {
+          throw new Error(`Modifications cannot be made within ${cutoffMin} minutes of reservation time. Please contact restaurant staff.`)
+        }
+      }
+
+      const party = Number(newPartySize || booking.partySize) || 2
+      const durMin = Number(bookingPolicy.defaultBookingDurationMinutes) || 90
+
+      // Table reassignment logic: check preferred table or smart auto-reassign
+      let targetTableId = preferredTableId !== undefined ? preferredTableId : booking.tableId
+      if (targetTableId) {
+        const isPrefAvail = isTableAvailable(state, {
+          tableId: targetTableId,
+          time: targetTime,
+          durationMinutes: durMin,
+          excludeBookingId: booking.id,
+        })
+        if (!isPrefAvail) {
+          // Auto-reassign to equivalent available table
+          const available = findAvailableTablesForSlot(state, {
+            time: targetTime,
+            partySize: party,
+            durationMinutes: durMin,
+            excludeBookingId: booking.id,
+          })
+          targetTableId = available[0]?.id || null
+          // If preferred was explicitly requested and no tables open at all, block
+          if (!targetTableId && preferredTableId) {
+            throw new Error('Preferred table is not available at the selected time.')
+          }
+        }
+      } else {
+        const available = findAvailableTablesForSlot(state, {
+          time: targetTime,
+          partySize: party,
+          durationMinutes: durMin,
+          excludeBookingId: booking.id,
+        })
+        targetTableId = available[0]?.id || null
+      }
+
+      const prevTable = (state.tables || []).find((t) => String(t.id) === String(booking.tableId))
+      const newTable = (state.tables || []).find((t) => String(t.id) === String(targetTableId))
+      const nowIso = new Date().toISOString()
+
+      const updatedBooking = {
+        ...booking,
+        time: targetTime,
+        partySize: party,
+        tableId: targetTableId,
+        updatedAt: nowIso,
+        modificationCount: (Number(booking.modificationCount) || 0) + 1,
+        previousSlot: {
+          time: booking.time,
+          tableId: booking.tableId,
+          partySize: booking.partySize,
+        },
+      }
+
+      const reservations = state.reservations.map((r) =>
+        String(r.id) === String(booking.id) ? updatedBooking : r,
+      )
+
+      // Adjust table status if table changed
+      let tables = state.tables
+      if (booking.tableId && booking.tableId !== targetTableId) {
+        tables = tables.map((t) => {
+          if (t.id === booking.tableId && t.status === 'reserved') {
+            return { ...t, status: 'available' }
+          }
+          return t
+        })
+      }
+
+      return {
+        ...state,
+        reservations,
+        tables,
+        movements: [
+          {
+            id: `mov-${Date.now()}`,
+            type: 'BOOKING_RESCHEDULED',
+            bookingId: booking.id,
+            guestName: booking.name,
+            oldTime: booking.time,
+            newTime: targetTime,
+            oldTable: prevTable?.name || 'Unassigned',
+            newTable: newTable?.name || 'Unassigned',
+            detail: `${booking.name} rescheduled: ${booking.time} (${prevTable?.name || 'Unassigned'}) ➔ ${targetTime} (${newTable?.name || 'Unassigned'})`,
+            timestamp: nowIso,
+          },
+          ...(state.movements || []),
+        ],
+      }
+    }
+
+    case 'CHANGE_BOOKING_TABLE': {
+      const payload = action.payload || action
+      const { bookingId, newTableId, actor = 'guest' } = payload
+      const booking = (state.reservations || []).find((r) => String(r.id) === String(bookingId))
+      if (!booking) return state
+
+      const bookingPolicy = state.settings?.booking || { allowGuestTableChange: true }
+      if (actor === 'guest' && bookingPolicy.allowGuestTableChange === false) {
+        throw new Error('Guest table selection is disabled by restaurant policy.')
+      }
+
+      if (newTableId) {
+        const isAvail = isTableAvailable(state, {
+          tableId: newTableId,
+          time: booking.time,
+          durationMinutes: bookingPolicy.defaultBookingDurationMinutes || 90,
+          excludeBookingId: booking.id,
+        })
+        if (!isAvail) {
+          throw new Error('Selected table is not available for this reservation window.')
+        }
+      }
+
+      const nowIso = new Date().toISOString()
+      const prevTable = (state.tables || []).find((t) => String(t.id) === String(booking.tableId))
+      const newTable = (state.tables || []).find((t) => String(t.id) === String(newTableId))
+
+      const updatedBooking = {
+        ...booking,
+        tableId: newTableId,
+        updatedAt: nowIso,
+        modificationCount: (Number(booking.modificationCount) || 0) + 1,
+        previousSlot: {
+          time: booking.time,
+          tableId: booking.tableId,
+          partySize: booking.partySize,
+        },
+      }
+
+      return {
+        ...state,
+        reservations: state.reservations.map((r) =>
+          String(r.id) === String(booking.id) ? updatedBooking : r,
+        ),
+        movements: [
+          {
+            id: `mov-${Date.now()}`,
+            type: 'BOOKING_TABLE_CHANGED',
+            bookingId: booking.id,
+            guestName: booking.name,
+            oldTable: prevTable?.name || 'Unassigned',
+            newTable: newTable?.name || 'Unassigned',
+            detail: `${booking.name} changed table: ${prevTable?.name || 'Unassigned'} ➔ ${newTable?.name || 'Unassigned'}`,
+            timestamp: nowIso,
+          },
+          ...(state.movements || []),
+        ],
+      }
+    }
+
+    case 'REQUEST_TABLE_TRANSFER': {
+      const payload = action.payload || action
+      const { currentTableId, targetTableId, reason = '', sessionToken } = payload
+      const currentTable = (state.tables || []).find((t) => String(t.id) === String(currentTableId))
+      const targetTable = (state.tables || []).find((t) => String(t.id) === String(targetTableId))
+      if (!currentTable || !targetTable) return state
+
+      // Ownership guard
+      if (sessionToken && currentTable.sessionToken && currentTable.sessionToken !== sessionToken) {
+        return state
+      }
+
+      const nowIso = new Date().toISOString()
+      const transferReq = {
+        targetTableId,
+        targetTableName: targetTable.name || targetTableId,
+        reason: reason?.trim() || 'Guest requested table change',
+        requestedAt: nowIso,
+        status: 'pending',
+      }
+
+      return {
+        ...state,
+        tables: state.tables.map((t) =>
+          String(t.id) === String(currentTableId)
+            ? { ...t, pendingTransfer: transferReq }
+            : t,
+        ),
+        movements: [
+          {
+            id: `mov-${Date.now()}`,
+            type: 'TABLE_TRANSFER_REQUESTED',
+            tableId: currentTableId,
+            targetTableId,
+            guestName: currentTable.guestName || 'Guest',
+            fromTable: currentTable.name || currentTableId,
+            toTable: targetTable.name || targetTableId,
+            reason: transferReq.reason,
+            detail: `${currentTable.name || currentTableId} requested move to ${targetTable.name || targetTableId} (${transferReq.reason})`,
+            timestamp: nowIso,
+          },
+          ...(state.movements || []),
+        ],
+      }
+    }
+
+    case 'REJECT_TABLE_TRANSFER': {
+      const payload = action.payload || action
+      const { currentTableId, reason = '' } = payload
+      const currentTable = (state.tables || []).find((t) => String(t.id) === String(currentTableId))
+      if (!currentTable) return state
+
+      const nowIso = new Date().toISOString()
+      return {
+        ...state,
+        tables: state.tables.map((t) =>
+          String(t.id) === String(currentTableId)
+            ? { ...t, pendingTransfer: null }
+            : t,
+        ),
+        movements: [
+          {
+            id: `mov-${Date.now()}`,
+            type: 'TABLE_TRANSFER_REJECTED',
+            tableId: currentTableId,
+            detail: `Move request for ${currentTable.name || currentTableId} rejected${reason ? `: ${reason}` : ''}`,
+            timestamp: nowIso,
+          },
+          ...(state.movements || []),
+        ],
+      }
+    }
+
+    case 'APPROVE_TABLE_TRANSFER':
+    case 'TRANSFER_TABLE': {
+      const payload = action.payload || action
+      const { currentTableId, targetTableId, reason = '', actor = 'staff' } = payload
+      const currentTable = (state.tables || []).find((t) => String(t.id) === String(currentTableId))
+      const targetTable = (state.tables || []).find((t) => String(t.id) === String(targetTableId))
+      if (!currentTable || !targetTable) return state
+
+      const nowIso = new Date().toISOString()
+
+      // Check whether guest had active tickets or ordered food
+      const orderList = state.orders || []
+      const hasOrderedItems = orderList.some(
+        (o) =>
+          String(o.tableId) === String(currentTableId) &&
+          !['paid', 'void', 'closed'].includes(o.status) &&
+          (o.items || []).some((i) => i.status === 'fired' || i.status === 'bump'),
+      )
+
+      // Rebind active tickets/orders and their items to the target table
+      const migrateOrder = (order) => {
+        if (String(order.tableId) !== String(currentTableId) || ['paid', 'void', 'closed'].includes(order.status)) {
+          return order
+        }
+        return {
+          ...order,
+          tableId: targetTableId,
+          transferredFromTableId: currentTableId,
+          transferredAt: nowIso,
+          items: (order.items || []).map((item) => ({
+            ...item,
+            transferredFromTableId: currentTableId,
+            transferredAt: nowIso,
+          })),
+        }
+      }
+
+      const nextOrders = (state.orders || []).map(migrateOrder)
+      const nextTickets = state.tickets ? state.tickets.map(migrateOrder) : undefined
+
+      // Old table transitions to cleaning if items were already fired, else available
+      const oldTableNextStatus = hasOrderedItems ? 'cleaning' : 'available'
+
+      const nextTables = state.tables.map((t) => {
+        if (String(t.id) === String(currentTableId)) {
+          return {
+            ...t,
+            status: oldTableNextStatus,
+            guestName: null,
+            partySize: null,
+            guestPhone: null,
+            sessionToken: null,
+            seatedAt: null,
+            selfSeated: false,
+            pendingTransfer: null,
+            currentCheckId: null,
+          }
+        }
+        if (String(t.id) === String(targetTableId)) {
+          return {
+            ...t,
+            status: currentTable.status === 'ordered' ? 'ordered' : 'occupied',
+            guestName: currentTable.guestName,
+            partySize: currentTable.partySize,
+            guestPhone: currentTable.guestPhone,
+            sessionToken: currentTable.sessionToken,
+            seatedAt: currentTable.seatedAt || nowIso,
+            selfSeated: currentTable.selfSeated,
+            lastActivityAt: nowIso,
+            pendingTransfer: null,
+            transferredFromTableId: currentTableId,
+            transferredAt: nowIso,
+          }
+        }
+        return t
+      })
+
+      // Link any reservations currently referencing currentTableId to targetTableId
+      const nextReservations = (state.reservations || []).map((r) =>
+        String(r.tableId) === String(currentTableId) && r.status === 'booked'
+          ? { ...r, tableId: targetTableId, updatedAt: nowIso }
+          : r,
+      )
+
+      const nextState = {
+        ...state,
+        tables: nextTables,
+        orders: nextOrders,
+        reservations: nextReservations,
+        movements: [
+          {
+            id: `mov-${Date.now()}`,
+            type: 'TABLE_TRANSFERRED',
+            fromTableId: currentTableId,
+            toTableId: targetTableId,
+            fromTable: currentTable.name || currentTableId,
+            toTable: targetTable.name || targetTableId,
+            guestName: currentTable.guestName || 'Guest',
+            detail: `Table transferred: ${currentTable.name || currentTableId} ➔ ${targetTable.name || targetTableId} (${actor})${reason ? ` - ${reason}` : ''}`,
+            timestamp: nowIso,
+          },
+          ...(state.movements || []),
+        ],
+      }
+      if (nextTickets) nextState.tickets = nextTickets
+      return nextState
     }
 
     case 'ADD_WAITLIST': {

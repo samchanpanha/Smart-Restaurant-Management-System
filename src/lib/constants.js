@@ -6,12 +6,12 @@ export const TABLE_STATUSES = ['free', 'reserved', 'seated', 'ordered', 'billed'
 
 // Strict machine with 4-state self-seating support (available -> occupied -> billing -> cleaning -> available)
 export const TABLE_TRANSITIONS = {
-  free: ['seated', 'reserved', 'occupied'],
-  available: ['seated', 'reserved', 'occupied'],
+  free: ['seated', 'reserved', 'occupied', 'ordered'],
+  available: ['seated', 'reserved', 'occupied', 'ordered'],
   reserved: ['seated', 'free', 'available', 'occupied'],
   seated: ['ordered', 'dirty', 'billing', 'cleaning', 'available', 'free', 'occupied'],
   occupied: ['ordered', 'dirty', 'billing', 'cleaning', 'available', 'free', 'seated'],
-  ordered: ['billed', 'billing', 'cleaning'],
+  ordered: ['billed', 'billing', 'cleaning', 'dirty', 'available', 'free'],
   billed: ['dirty', 'cleaning', 'available', 'free'],
   billing: ['dirty', 'cleaning', 'available', 'free'],
   dirty: ['free', 'available'],

@@ -202,3 +202,56 @@ test('noticeText stays silent about transitions that are not news', () => {
   assert.equal(noticeText('something-else', {}), null)
   assert.equal(noticeText('86', {}), '🚫 86’d: item')
 })
+
+test('rescheduling a booking triggers formatted Telegram diff alert', () => {
+  const empire = warm()
+  const futureTime1 = new Date(Date.now() + 4 * 3600 * 1000).toISOString()
+  const futureTime2 = new Date(Date.now() + 7 * 3600 * 1000).toISOString()
+  const resAction = {
+    type: 'ADD_RESERVATION',
+    reservation: { id: 'res_tg_1', name: 'Kimberly', partySize: 3, time: futureTime1, tableId: 't01' },
+  }
+  const withRes = act(empire, resAction)
+
+  const rescheduleAction = {
+    type: 'RESCHEDULE_BOOKING',
+    payload: { bookingId: 'res_tg_1', newTime: futureTime2, actor: 'guest' },
+  }
+  const after = act(withRes, rescheduleAction)
+  const rows = ofKind(diff(withRes, after, { type: 'LOC', locId: 'downtown', action: rescheduleAction }), 'booking_rescheduled')
+
+  assert.equal(rows.length, 1)
+  assert.match(rows[0].text, /📅 Booking Rescheduled: Kimberly \(3 pax\)/)
+})
+
+test('requesting and approving a table transfer produces Telegram alerts', () => {
+  const empire = warm()
+  const t1 = shopOf(empire).tables[0]
+  const t2 = shopOf(empire).tables[1]
+
+  const seated = act(empire, {
+    type: 'MINIAPP_CLAIM_TABLE',
+    payload: { tableId: t1.id, guestName: 'Dara', partySize: 2, sessionToken: 'sess_123' },
+  })
+
+  // 1. Transfer request notice
+  const reqAction = {
+    type: 'REQUEST_TABLE_TRANSFER',
+    payload: { currentTableId: t1.id, targetTableId: t2.id, reason: 'Too drafty here' },
+  }
+  const requested = act(seated, reqAction)
+  const reqRows = ofKind(diff(seated, requested, { type: 'LOC', locId: 'downtown', action: reqAction }), 'table_transfer_requested')
+  assert.equal(reqRows.length, 1)
+  assert.match(reqRows[0].text, /🔄 Table Transfer Requested/)
+  assert.match(reqRows[0].text, /Too drafty here/)
+
+  // 2. Transfer approved / executed notice
+  const transferAction = {
+    type: 'APPROVE_TABLE_TRANSFER',
+    payload: { currentTableId: t1.id, targetTableId: t2.id, actor: 'staff' },
+  }
+  const transferred = act(requested, transferAction)
+  const transRows = ofKind(diff(requested, transferred, { type: 'LOC', locId: 'downtown', action: transferAction }), 'table_transferred')
+  assert.equal(transRows.length, 1)
+  assert.match(transRows[0].text, /🚀 Table Transferred/)
+})
