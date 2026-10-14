@@ -115,7 +115,7 @@ export default function MiniAppScreen({ tableId }) {
       )}
 
       <main className="mx-auto max-w-md">
-        <GuestScreen tableId={picked} />
+        <GuestScreen tableId={picked} allowPickup />
       </main>
     </div>
   )

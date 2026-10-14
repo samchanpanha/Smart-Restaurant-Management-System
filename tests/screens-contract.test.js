@@ -368,3 +368,50 @@ test('editing a delivery order updates the customer block and fee', () => {
   assert.equal(order.deliveryFee, 4)
 })
 
+// MiniAppScreen / GuestScreen "order for pickup": the guest has no table, so
+// it creates one takeout ticket, appends every cart line, then fires it.
+test('a pickup order from the mini app creates and fires a takeout ticket', () => {
+  let empire = buildEmpire()
+  const shop = shopOf(empire)
+  const dish = shop.menu.find((m) => m.available && m.active !== false)
+  assert.ok(dish, 'a menu dish is available to order')
+
+  const orderId = 'o-pickup-1'
+  empire = act(empire, 'downtown', {
+    type: 'CREATE_ORDER',
+    id: orderId,
+    orderType: 'takeout',
+    customer: { name: 'Nita Sok', phone: '012345678' },
+  })
+  for (const line of [{ qty: 2 }, { qty: 1 }]) {
+    empire = act(empire, 'downtown', {
+      type: 'ADD_ITEM',
+      orderId,
+      menuItemId: dish.id,
+      qty: line.qty,
+      by: 'guest',
+      guest: 'Nita Sok',
+    })
+  }
+  empire = act(empire, 'downtown', { type: 'SEND_ORDER', orderId })
+
+  const ticket = shopOf(empire).orders.find((o) => o.id === orderId)
+  assert.equal(ticket.type, 'takeout')
+  assert.equal(ticket.tableId, null)
+  assert.equal(ticket.customer.name, 'Nita Sok')
+  assert.equal(ticket.items.length, 2)
+  assert.ok(ticket.items.every((item) => item.status === 'fired'), 'all lines fired to the kitchen')
+  assert.ok(ticket.items.every((item) => item.by === 'guest' && item.guest === 'Nita Sok'))
+  assert.equal(ticket.status, 'sent')
+
+  // A second send reuses the same ticket instead of spawning another.
+  empire = act(empire, 'downtown', {
+    type: 'ADD_ITEM', orderId, menuItemId: dish.id, qty: 1, by: 'guest', guest: 'Nita Sok',
+  })
+  empire = act(empire, 'downtown', { type: 'SEND_ORDER', orderId })
+  const takeouts = shopOf(empire).orders.filter((o) => o.type === 'takeout')
+  assert.equal(takeouts.length, 1, 'one open takeout ticket per guest session')
+  assert.equal(takeouts[0].items.length, 3)
+  assert.equal(takeouts[0].status, 'in_prep')
+})
+

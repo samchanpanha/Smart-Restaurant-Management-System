@@ -201,6 +201,25 @@ test('the mini app route is the guest menu with Telegram chrome', async () => {
   assert.match(document.body.textContent, /isn’t seated yet|isn't seated yet/)
 })
 
+test('a table that is not seated can still order for pickup from the mini app', async () => {
+  await fresh()
+  dom.reconfigure({ url: 'http://localhost:5173/?tg=1&guest=t12' })
+  mountMiniApp()
+  await settle(80)
+
+  // The honest gate is still there…
+  assert.match(document.body.textContent, /isn’t seated yet|isn't seated yet/)
+  // …but it is no longer a dead end: the guest can order for pickup.
+  const pickup = byText('button', 'Order for pickup')
+  assert.ok(pickup, 'the gate offers an order-for-pickup escape hatch')
+  click(pickup)
+  await settle(60)
+
+  const text = document.body.textContent
+  assert.match(text, /Pickup order/, 'the surface switches into pickup mode')
+  assert.match(text, /Restora Burger/, 'and the menu unlocks')
+})
+
 test('opened from the chat the mini app starts on a table in service and lets the guest switch', async () => {
   await fresh()
   dom.reconfigure({ url: 'http://localhost:5173/?tg=1' })

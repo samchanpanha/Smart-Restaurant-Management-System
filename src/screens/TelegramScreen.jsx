@@ -52,7 +52,11 @@ export default function TelegramScreen() {
   const [apply, setApply] = useState(false)
   const [draft, setDraft] = useState('')
   const [busy, setBusy] = useState(false)
-  const [tableId, setTableId] = useState(state.tables[0]?.id || '')
+  const [tableId, setTableId] = useState(() => (
+    state.tables.find((table) => table.status === 'seated' || table.status === 'ordered')?.id
+    || state.tables[0]?.id
+    || ''
+  ))
   const [digest, setDigest] = useState(null)
   const [digestNote, setDigestNote] = useState('')
   const [digestBusy, setDigestBusy] = useState(false)
@@ -69,6 +73,8 @@ export default function TelegramScreen() {
   const ownerParam = ownerSlug ? `&owner=${encodeURIComponent(ownerSlug)}` : ''
   const miniAppUrl = `${origin}/?tg=1&guest=${encodeURIComponent(tableId || state.tables[0]?.id || '')}${ownerParam}`
   const commands = useMemo(() => commandsFor(botRole), [botRole])
+  const previewTable = state.tables.find((table) => table.id === tableId)
+  const previewSeated = previewTable && (previewTable.status === 'seated' || previewTable.status === 'ordered')
 
   useEffect(() => {
     if (link.status !== 'live') return undefined
@@ -493,6 +499,13 @@ export default function TelegramScreen() {
             </select>
           </div>
         </div>
+
+        {previewTable && !previewSeated && (
+          <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            {translateTableName(previewTable.name, lang)} isn&apos;t seated yet — a guest opening this link sees the
+            menu locked, with an <strong>Order for pickup</strong> option so they can still order.
+          </p>
+        )}
 
         <div className="mt-4 grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
           <div className="rounded-2xl bg-white p-4 text-center ring-1 ring-zinc-200">

@@ -13,7 +13,7 @@ import {
   useDomTranslator,
   useI18n,
 } from '../lib/i18n'
-import { money, orderTotals } from '../lib/models'
+import { money, orderTotals, uid } from '../lib/models'
 import { useMenuCatalog } from '../lib/useMenuCatalog'
 import { useNow, useRestora } from '../lib/store'
 
@@ -201,7 +201,7 @@ function PaySheet({ order, onClose, onPaid }) {
 
 // ─── Guest app ────────────────────────────────────────────────────
 
-export default function GuestScreen({ tableId }) {
+export default function GuestScreen({ tableId, allowPickup = false }) {
   const { state, dispatch, locId, link } = useRestora()
   const { lang, dict } = useI18n()
   useDomTranslator(null, lang)
@@ -216,10 +216,20 @@ export default function GuestScreen({ tableId }) {
   const [cartOpen, setCartOpen] = useState(false)
   const [payOpen, setPayOpen] = useState(false)
   const [justSent, setJustSent] = useState(false)
+  // Pickup: the mini app (and any guest with no table) can order takeout.
+  const [pickup, setPickup] = useState(false)
+  const [pickupOrderId, setPickupOrderId] = useState(null)
+  const [nameError, setNameError] = useState(false)
 
   const table = state.tables.find((t) => t.id === tableId)
-  const order = table ? openOrderFor(state, tableId) : null
-  const paid = table ? paidOrderFor(state, tableId) : null
+  const pickupOrder = pickupOrderId
+    ? state.orders.find((o) => o.id === pickupOrderId && !['paid', 'void'].includes(o.status))
+    : null
+  const pickupPaid = pickupOrderId
+    ? state.orders.find((o) => o.id === pickupOrderId && o.status === 'paid')
+    : null
+  const order = pickup ? pickupOrder : (table ? openOrderFor(state, tableId) : null)
+  const paid = !pickup && table ? paidOrderFor(state, tableId) : null
   const menuById = useMemo(() => Object.fromEntries(catalogMenu.map((m) => [m.id, m])), [catalogMenu])
   const activeMenu = useMemo(() => catalogMenu.filter((m) => m.active !== false), [catalogMenu])
   const cats = useMemo(() => [...new Set(activeMenu.map((m) => m.category))], [activeMenu])
@@ -239,19 +249,48 @@ export default function GuestScreen({ tableId }) {
 
   function sendCart() {
     if (!cart.length) return
-    dispatch({
-      type: 'GUEST_SEND',
-      tableId,
-      items: cart.map((c) => ({ ...c, guest: guestName.trim() || null })),
-    })
+    const name = guestName.trim()
+    if (pickup) {
+      if (!name) {
+        setNameError(true)
+        setCartOpen(false)
+        return
+      }
+      // One takeout ticket per guest session: create it once, then append.
+      const orderId = pickupOrderId || uid('o')
+      if (!pickupOrderId) {
+        setPickupOrderId(orderId)
+        dispatch({ type: 'CREATE_ORDER', id: orderId, orderType: 'takeout', customer: { name } })
+      }
+      for (const c of cart) {
+        dispatch({
+          type: 'ADD_ITEM',
+          orderId,
+          menuItemId: c.menuItemId,
+          qty: c.qty,
+          modifiers: c.modifiers,
+          course: c.course,
+          notes: c.notes,
+          by: 'guest',
+          guest: name,
+        })
+      }
+      dispatch({ type: 'SEND_ORDER', orderId })
+    } else {
+      dispatch({
+        type: 'GUEST_SEND',
+        tableId,
+        items: cart.map((c) => ({ ...c, guest: guestName.trim() || null })),
+      })
+    }
     setCart([])
     setCartOpen(false)
     setJustSent(true)
     setTab('status')
     window.setTimeout(() => setJustSent(false), 5000)
     // The Telegram mini app listens for this to fire a haptic tap and to
-    // collapse its cart sheet; in a plain browser nobody is listening.
-    window.dispatchEvent(new CustomEvent('restora:order-sent', { detail: { tableId } }))
+    // clear its cart bar — a plain browser just sees the status flip.
+    window.dispatchEvent(new CustomEvent('restora:order-sent', { detail: { tableId: tableId || null } }))
   }
 
   // Photo policy lives in Settings → Food & menu so a slow connection can
@@ -264,17 +303,26 @@ export default function GuestScreen({ tableId }) {
     </div>
   )
 
-  if (!table) {
+  if (!pickup && !table) {
     return shell(
       <div className="rounded-3xl bg-white p-8 text-center shadow-sm">
         <div className="text-4xl">🧾</div>
         <h1 className="mt-3 text-xl font-extrabold">Hmm, that code didn&apos;t scan.</h1>
         <p className="mt-1 text-sm text-stone-500">Try the tent card on your table again, or ask your server.</p>
+        {allowPickup && (
+          <button
+            type="button"
+            onClick={() => setPickup(true)}
+            className="mt-5 min-h-[48px] w-full rounded-2xl bg-stone-900 text-sm font-extrabold text-white"
+          >
+            {gu.orderForPickup || '🍽 Order for pickup instead'}
+          </button>
+        )}
       </div>,
     )
   }
 
-  if (table.status === 'billed' || (paid && !order)) {
+  if (!pickup && (table.status === 'billed' || (paid && !order))) {
     const t = paid ? orderTotals(paid, menuById, state.settings.taxPct) : null
     return shell(
       <div className="rounded-3xl bg-white p-8 text-center shadow-sm">
@@ -294,12 +342,50 @@ export default function GuestScreen({ tableId }) {
     )
   }
 
-  if (!['seated', 'ordered'].includes(table.status)) {
+  if (!pickup && !['seated', 'ordered'].includes(table.status)) {
+    const openTables = state.tables.filter((t) => t.status === 'seated' || t.status === 'ordered')
     return shell(
       <div className="rounded-3xl bg-white p-8 text-center shadow-sm">
         <div className="text-4xl">🪑</div>
         <h1 className="mt-3 text-xl font-extrabold">{translateTableName(table.name, lang)}{lang === 'km' ? ' មិនទាន់បានដាក់ភ្ញៀវអង្គុយទេ។' : lang === 'zh' ? ' 尚未入座。' : " isn't seated yet."}{lang !== 'en' && <span className="sr-only"> {table.name} isn&apos;t seated yet.</span>}</h1>
         <p className="mt-1 text-sm text-stone-500">{lang === 'km' ? 'បុគ្គលិកទទួលភ្ញៀវនឹងដាក់លោកអ្នកអង្គុយ បន្ទាប់មកមុខម្ហូបនេះនឹងបើក។ ការរង់ចាំគឺមានតម្លៃ។' : lang === 'zh' ? '接待员安排入座后，菜单即会解锁。等待是值得的。' : 'Your host will seat you, then this menu unlocks. The wait is worth it.'}</p>
+        {allowPickup && (
+          <div className="mt-5 space-y-3">
+            <button
+              type="button"
+              onClick={() => setPickup(true)}
+              className="min-h-[48px] w-full rounded-2xl bg-stone-900 text-sm font-extrabold text-white"
+            >
+              {gu.orderForPickup || '🍽 Order for pickup instead'}
+            </button>
+            <p className="text-[11px] leading-relaxed text-stone-400">
+              {openTables.length
+                ? 'Or scan the QR tent once your host has seated you.'
+                : 'No tables are open yet — order now and we\u2019ll have it ready.'}
+            </p>
+          </div>
+        )}
+      </div>,
+    )
+  }
+
+  if (pickup && !pickupOrder && pickupPaid) {
+    const t = orderTotals(pickupPaid, menuById, state.settings.taxPct)
+    return shell(
+      <div className="rounded-3xl bg-white p-8 text-center shadow-sm">
+        <div className="text-4xl">🎉</div>
+        <h1 className="mt-3 text-xl font-extrabold">Thanks — your order is in!</h1>
+        <p className="mt-1 text-sm text-stone-500">We&apos;ll call your name when it&apos;s ready for pickup.</p>
+        <div className="tnum mt-4 rounded-2xl bg-stone-50 p-4 text-sm">
+          <div className="flex justify-between"><span>Total paid</span><strong>{money(t.total + (pickupPaid.tip || 0))}</strong></div>
+        </div>
+        <button
+          type="button"
+          onClick={() => { setPickupOrderId(null); setTab('menu'); setPickup(true) }}
+          className="mt-5 min-h-[48px] w-full rounded-2xl bg-stone-900 text-sm font-extrabold text-white"
+        >
+          Start another order
+        </button>
       </div>,
     )
   }
@@ -307,6 +393,7 @@ export default function GuestScreen({ tableId }) {
   const heldAny = order ? order.items.some((i) => i.status === 'held' && !i.voided) : false
   const payable = order && ['sent', 'in_prep', 'ready', 'served'].includes(order.status) && !heldAny
   const bill = order ? orderTotals(order, menuById, state.settings.taxPct) : null
+  const heading = pickup ? (gu.pickupOrder || 'Pickup order') : translateTableName(table.name, lang)
 
   return (
     <div className="min-h-screen bg-[#faf6ef] text-stone-900">
@@ -317,29 +404,41 @@ export default function GuestScreen({ tableId }) {
         <header className="flex items-center justify-between">
           <div>
             <div className="text-xs font-bold uppercase tracking-widest text-amber-700">
-              {gu.orderAtTable || 'Restora · order at table'}
-              {lang !== 'en' && <span className="sr-only"> Restora · order at table</span>}
+              {pickup ? (gu.pickupEyebrow || 'Restora · order for pickup') : (gu.orderAtTable || 'Restora · order at table')}
+              {lang !== 'en' && <span className="sr-only"> {pickup ? 'Restora · order for pickup' : 'Restora · order at table'}</span>}
             </div>
             <h1 className="text-2xl font-extrabold tracking-tight">
-              {translateTableName(table.name, lang)}
-              {lang !== 'en' && <span className="sr-only"> {table.name}</span>}
+              {heading}
+              {!pickup && lang !== 'en' && <span className="sr-only"> {table.name}</span>}
             </h1>
           </div>
-          <button
-            type="button"
-            onClick={() => dispatch({ type: 'CALL_SERVER', tableId })}
-            className="min-h-[44px] rounded-full border border-stone-200 bg-white px-4 text-sm font-bold text-stone-700 shadow-sm"
-          >
-            🙋 {gu.callServer || 'Call server'}
-            {lang !== 'en' && <span className="sr-only"> Call server</span>}
-          </button>
+          {!pickup && (
+            <button
+              type="button"
+              onClick={() => dispatch({ type: 'CALL_SERVER', tableId })}
+              className="min-h-[44px] rounded-full border border-stone-200 bg-white px-4 text-sm font-bold text-stone-700 shadow-sm"
+            >
+              🙋 {gu.callServer || 'Call server'}
+              {lang !== 'en' && <span className="sr-only"> Call server</span>}
+            </button>
+          )}
         </header>
 
         <input
-          value={guestName} onChange={(e) => setGuestName(e.target.value)} maxLength={24}
-          placeholder={gu.yourName || 'Your name (optional — helps the kitchen)'}
-          className="mt-3 min-h-[44px] w-full rounded-2xl border border-stone-200 bg-white px-4 text-sm shadow-sm"
+          value={guestName}
+          onChange={(e) => { setGuestName(e.target.value); setNameError(false) }}
+          maxLength={24}
+          aria-label="Your name"
+          placeholder={pickup
+            ? (gu.pickupNamePlaceholder || 'Your name — we\u2019ll call it when your order is ready')
+            : (gu.yourName || 'Your name (optional — helps the kitchen)')}
+          className={`mt-3 min-h-[44px] w-full rounded-2xl border bg-white px-4 text-sm shadow-sm ${nameError ? 'border-red-400 ring-2 ring-red-200' : 'border-stone-200'}`}
         />
+        {nameError && (
+          <p className="mt-1 text-xs font-semibold text-red-600" role="alert">
+            Add your name so we can call your order.
+          </p>
+        )}
 
         {justSent && (
           <div className="mt-3 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white shadow" role="status">
@@ -448,7 +547,7 @@ export default function GuestScreen({ tableId }) {
 
         {tab === 'bill' && (
           <div className="mt-4 space-y-3">
-            <h2 className="text-sm font-bold uppercase tracking-widest text-stone-500">{gu.tableCheck || 'Table check'}</h2>
+            <h2 className="text-sm font-bold uppercase tracking-widest text-stone-500">{pickup ? (gu.yourOrder || 'Your order') : (gu.tableCheck || 'Table check')}</h2>
             {!order || bill.lines.length === 0 ? (
               <div className="rounded-3xl bg-white p-6 text-center text-sm text-stone-500 shadow-sm">
                 Nothing on the check yet.
@@ -533,7 +632,7 @@ export default function GuestScreen({ tableId }) {
         {cartOpen && (
           <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label="Your order" onClick={() => setCartOpen(false)}>
             <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-3xl bg-white p-6 shadow-2xl sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
-              <h2 className="text-xl font-extrabold">Your order · {table.name}</h2>
+              <h2 className="text-xl font-extrabold">Your order · {heading}</h2>
               {guestName.trim() && <p className="text-sm text-stone-500">Sending as {guestName.trim()}</p>}
               <ul className="mt-3 space-y-2">
                 {cart.map((c) => (
