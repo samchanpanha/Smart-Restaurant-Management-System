@@ -126,9 +126,18 @@ function cleanImageUrl(value, maxChars = MAX_IMAGE_CHARS) {
   return sanitizeImageRef(value, maxChars)
 }
 
+function cleanImageList(value, primaryUrl = '', maxChars = MAX_IMAGE_CHARS) {
+  const rawList = Array.isArray(value) ? value : []
+  const cleaned = [primaryUrl, ...rawList]
+    .map((entry) => cleanImageUrl(entry, maxChars))
+    .filter(Boolean)
+  return [...new Set(cleaned)].slice(0, 6)
+}
+
 function normalizeMenuItem(item, index = 0) {
   const numericPrice = Number(item?.price)
   const numericOrder = Number(item?.sortOrder)
+  const primaryImage = cleanImageUrl(item?.imageUrl)
   return {
     ...item,
     id: String(item?.id ?? '').trim(),
@@ -145,7 +154,8 @@ function normalizeMenuItem(item, index = 0) {
     sku: String(item?.sku ?? '').trim().slice(0, 40),
     dietaryTags: cleanLabelList(item?.dietaryTags),
     allergens: cleanLabelList(item?.allergens),
-    imageUrl: cleanImageUrl(item?.imageUrl),
+    imageUrl: primaryImage,
+    images: cleanImageList(item?.images, primaryImage),
     course: String(item?.course ?? '').trim().slice(0, 24),
     menuWindow: String(item?.menuWindow ?? '').trim().slice(0, 24),
     spiceLevel: String(item?.spiceLevel ?? '').trim().slice(0, 20),

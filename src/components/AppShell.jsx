@@ -5,9 +5,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import StatusPill from './StatusPill'
 import TabStrip from './TabStrip'
+import LanguageSwitcher from './LanguageSwitcher'
 import { Icon } from './Icon'
 import { NAV_SECTIONS, ROLES, ROLE_NAV, SCREEN_ICONS, screenForAlert } from '../lib/constants'
 import { useAuth } from '../lib/auth'
+import { translateScreenLabel, useDomTranslator, useI18n } from '../lib/i18n'
 import { getAlerts, LOCATIONS, useNow, useRestora } from '../lib/store'
 
 // One label per screen, everywhere: the sidebar, the tab strip and the
@@ -30,6 +32,8 @@ export default function AppShell({ children }) {
   } = useRestora()
   const now = useNow(30000)
   const { user, screens, logout } = useAuth()
+  const { lang, dict } = useI18n()
+  useDomTranslator(null, lang)
   const [search, setSearch] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
   const [noticeOpen, setNoticeOpen] = useState(false)
@@ -40,9 +44,10 @@ export default function AppShell({ children }) {
   const alerts = useMemo(() => getAlerts(state), [state])
   const location = LOCATIONS.find((item) => item.id === locId) || LOCATIONS[0]
   const displayName = user?.name || (role === 'owner' ? 'Maya Chen' : ROLES[role]?.name || 'Restaurant team')
-  const roleTitle = user?.role?.label || (role === 'owner' ? 'Restaurant Manager' : ROLES[role]?.label?.split('·')[1]?.trim() || 'Team member')
-  const dateLabel = new Date(now).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
-  const timeLabel = new Date(now).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  const roleTitle = user?.role?.label || dict.roles?.[role] || (role === 'owner' ? 'Restaurant Manager' : ROLES[role]?.label?.split('·')[1]?.trim() || 'Team member')
+  const localeTag = lang === 'km' ? 'km-KH' : lang === 'zh' ? 'zh-CN' : 'en-US'
+  const dateLabel = new Date(now).toLocaleDateString(localeTag, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
+  const timeLabel = new Date(now).toLocaleTimeString(localeTag, { hour: 'numeric', minute: '2-digit' })
 
   const searchResults = useMemo(() => {
     const query = search.trim().toLowerCase()
@@ -112,10 +117,10 @@ export default function AppShell({ children }) {
 
 
   const linkPill = link.status === 'live'
-    ? { tone: 'ok', label: 'Live · server' }
+    ? { tone: 'ok', label: dict.liveServer }
     : link.status === 'offline'
-      ? { tone: 'warn', label: 'Offline · this terminal' }
-      : { tone: 'muted', label: 'Local demo' }
+      ? { tone: 'warn', label: dict.offlineTerminal }
+      : { tone: 'muted', label: dict.localDemo }
 
   return (
     <div className="restora-theme flex h-screen min-h-screen overflow-hidden bg-[var(--color-ink-950)] text-zinc-100">
@@ -131,7 +136,7 @@ export default function AppShell({ children }) {
             </div>
             <div className="app-sidebar-copy min-w-0">
               <div className="text-[23px] font-bold leading-none tracking-tight">Restora</div>
-              <div className="mt-1 text-[10px] tracking-wide text-zinc-500">Manage · Serve · Grow</div>
+              <div className="mt-1 text-[10px] tracking-wide text-zinc-500">{dict.brandSubtitle}</div>
             </div>
           </div>
         </div>
@@ -140,6 +145,7 @@ export default function AppShell({ children }) {
           <div className="space-y-1">
             {NAV_ITEMS.filter((item) => allowed.includes(item.id)).map((item) => {
               const active = screen === item.id
+              const translatedLabel = translateScreenLabel(item.id, item.label, lang)
               // Chrome semantics on the rail: a plain click opens the screen in
               // its own tab (jumping to it if it is already open), and a
               // middle-click opens it in the background.
@@ -154,7 +160,7 @@ export default function AppShell({ children }) {
                       openScreenInTab(item.id, { activate: false })
                     }
                   }}
-                  title={`${item.label} · opens in its own tab`}
+                  title={`${translatedLabel} · ${dict.opensInOwnTab}`}
                   aria-current={active ? 'page' : undefined}
                   className={`group flex min-h-[46px] w-full items-center gap-3 rounded-xl px-3.5 text-left text-sm transition-colors ${
                     active
@@ -163,7 +169,10 @@ export default function AppShell({ children }) {
                   }`}
                 >
                   <Icon name={item.icon} size={19} className={active ? 'text-white' : 'text-zinc-400 group-hover:text-zinc-200'} />
-                  <span className="app-sidebar-label min-w-0 flex-1 truncate">{item.label}</span>
+                  <span className="app-sidebar-label min-w-0 flex-1 truncate">
+                    {translatedLabel}
+                    {translatedLabel !== item.label && <span className="sr-only"> {item.label}</span>}
+                  </span>
                   {item.id === 'tickets' && alerts.some((alert) => alert.type === 'bill_request') && (
                     <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-500 px-1.5 text-[10px] font-bold text-white">
                       {alerts.filter((alert) => alert.type === 'bill_request').length}
@@ -188,7 +197,7 @@ export default function AppShell({ children }) {
               </span>
               <span className="app-sidebar-branch min-w-0 flex-1">
                 <span className="block truncate text-xs font-semibold text-zinc-100">{state.settings.restaurantName || 'The Olive Restaurant'}</span>
-                <span className="mt-0.5 block text-[11px] text-zinc-500">{location.short} · Branch</span>
+                <span className="mt-0.5 block text-[11px] text-zinc-500">{location.short} · {dict.branch}</span>
               </span>
               <Icon name="chevron" size={16} className={`text-zinc-500 transition-transform ${locationOpen ? 'rotate-180' : ''}`} />
             </button>
@@ -212,7 +221,7 @@ export default function AppShell({ children }) {
             <StatusPill tone={linkPill.tone} size="sm">{linkPill.label}</StatusPill>
             {link.mode === 'server' && (
               <button type="button" onClick={() => resync()} className="text-[11px] text-zinc-500 hover:text-zinc-200" title="Reload authoritative snapshot">
-                Resync
+                {dict.resync}
               </button>
             )}
           </div>
@@ -225,7 +234,7 @@ export default function AppShell({ children }) {
             }}
             className="mt-2 w-full rounded-lg px-2.5 py-2 text-left text-[11px] text-zinc-500 transition-colors hover:bg-red-500/10 hover:text-red-300"
           >
-            Reset demo data
+            {dict.resetDemoData}
           </button>
         </div>
       </aside>
@@ -243,11 +252,11 @@ export default function AppShell({ children }) {
                   if (event.key === 'Escape') { setSearch(''); setSearchOpen(false) }
                   if (event.key === 'Enter' && searchResults[0]) selectSearchResult(searchResults[0])
                 }}
-                placeholder="Search orders, tables, menu..."
+                placeholder={dict.searchPlaceholder}
                 aria-label="Search orders, tables, and menu"
                 className="h-full min-w-0 flex-1 border-0 bg-transparent p-0 text-sm text-zinc-800 outline-none placeholder:text-zinc-400 focus:ring-0"
               />
-              {search && <button type="button" aria-label="Clear search" onClick={() => setSearch('')} className="text-zinc-400 hover:text-zinc-700">×</button>}
+              {search && <button type="button" aria-label={dict.clearSearch} onClick={() => setSearch('')} className="text-zinc-400 hover:text-zinc-700">×</button>}
             </div>
             {searchOpen && search.trim() && (
               <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-2xl border border-zinc-200 bg-white p-1.5 shadow-[0_18px_45px_rgba(22,30,40,.16)]">
@@ -255,14 +264,16 @@ export default function AppShell({ children }) {
                   <button key={result.id} type="button" onClick={() => selectSearchResult(result)} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-orange-50">
                     <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-100 text-orange-600"><Icon name={result.screen === 'floor' ? 'tables' : result.screen === 'menu' ? 'menu' : 'orders'} size={16} /></span>
                     <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-zinc-800">{result.title}</span><span className="block truncate text-xs text-zinc-500">{result.detail}</span></span>
-                    <span className="text-xs text-zinc-400">Open</span>
+                    <span className="text-xs text-zinc-400">{dict.openResult}</span>
                   </button>
-                )) : <div className="px-3 py-4 text-sm text-zinc-500">No matching orders, tables, or menu items.</div>}
+                )) : <div className="px-3 py-4 text-sm text-zinc-500">{dict.noSearchResults}</div>}
               </div>
             )}
           </div>
 
-          <div className="global-actions flex shrink-0 items-center gap-3 sm:gap-5">
+          <div className="global-actions flex shrink-0 items-center gap-3 sm:gap-4">
+            <LanguageSwitcher compact testIdPrefix="app-lang" />
+
             <div className="relative">
               <button type="button" onClick={() => { setNoticeOpen((open) => !open); setProfileOpen(false) }} aria-label={`Notifications, ${alerts.length} alerts`} aria-expanded={noticeOpen} className="relative flex h-10 w-10 items-center justify-center rounded-full text-zinc-600 hover:bg-zinc-100">
                 <Icon name="bell" size={20} />
@@ -270,10 +281,10 @@ export default function AppShell({ children }) {
               </button>
               {noticeOpen && (
                 <div className="absolute right-0 top-full z-50 mt-2 w-[min(360px,90vw)] rounded-2xl border border-zinc-200 bg-white p-3 shadow-[0_18px_45px_rgba(22,30,40,.16)]">
-                  <div className="flex items-center justify-between px-1 pb-2"><strong className="text-sm text-zinc-900">Notifications</strong><span className="text-xs text-zinc-500">{alerts.length} active</span></div>
+                  <div className="flex items-center justify-between px-1 pb-2"><strong className="text-sm text-zinc-900">{dict.notifications}</strong><span className="text-xs text-zinc-500">{dict.activeCount(alerts.length)}</span></div>
                   <div className="max-h-80 space-y-1 overflow-y-auto">
                     {alerts.slice(0, 6).map((alert) => <button key={alert.key} type="button" onClick={() => { setScreen(screenForAlert(alert)); setNoticeOpen(false) }} className="block w-full rounded-xl p-2.5 text-left hover:bg-orange-50"><span className="block text-sm font-semibold text-zinc-800">{alert.label}</span><span className="mt-0.5 block text-xs text-zinc-500">{alert.detail}</span></button>)}
-                    {!alerts.length && <div className="px-2 py-5 text-center text-sm text-zinc-500">All quiet — you are up to date.</div>}
+                    {!alerts.length && <div className="px-2 py-5 text-center text-sm text-zinc-500">{dict.allQuiet}</div>}
                   </div>
                 </div>
               )}
@@ -297,17 +308,17 @@ export default function AppShell({ children }) {
                     <>
                       {user.email && <div className="px-2 pt-3 text-xs text-zinc-500">{user.email}</div>}
                       {user.owner && <div className="px-2 pt-1 text-xs text-zinc-400">{user.owner.name}</div>}
-                      <button type="button" onClick={() => { setProfileOpen(false); logout() }} className="mt-3 w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-zinc-700 hover:bg-zinc-100">Sign out</button>
+                      <button type="button" onClick={() => { setProfileOpen(false); logout() }} className="mt-3 w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-zinc-700 hover:bg-zinc-100">{dict.signOut}</button>
                     </>
                   ) : (
                     <>
-                      <label className="mt-3 block px-2 text-[10px] font-bold uppercase tracking-wider text-zinc-500" htmlFor="role">Demo role</label>
+                      <label className="mt-3 block px-2 text-[10px] font-bold uppercase tracking-wider text-zinc-500" htmlFor="role">{dict.demoRole}</label>
                       <select id="role" value={role} onChange={(event) => changeRole(event.target.value)} className="mt-1.5 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800">
-                        {Object.entries(ROLES).map(([id, item]) => <option key={id} value={id}>{item.label}</option>)}
+                        {Object.entries(ROLES).map(([id, item]) => <option key={id} value={id}>{dict.roles?.[id] ? `${item.name} · ${dict.roles[id]}` : item.label}</option>)}
                       </select>
                     </>
                   )}
-                  <button type="button" onClick={() => { setProfileOpen(false); if (window.confirm(`Reset demo data to the Friday-night seed on ${link.mode === 'server' ? 'ALL terminals' : 'this terminal'}?`)) dispatch({ type: 'RESET_ALL' }) }} className="mt-2 w-full rounded-lg px-3 py-2 text-left text-xs text-red-600 hover:bg-red-50">Reset demo data</button>
+                  <button type="button" onClick={() => { setProfileOpen(false); if (window.confirm(`Reset demo data to the Friday-night seed on ${link.mode === 'server' ? 'ALL terminals' : 'this terminal'}?`)) dispatch({ type: 'RESET_ALL' }) }} className="mt-2 w-full rounded-lg px-3 py-2 text-left text-xs text-red-600 hover:bg-red-50">{dict.resetDemoData}</button>
                 </div>
               )}
             </div>

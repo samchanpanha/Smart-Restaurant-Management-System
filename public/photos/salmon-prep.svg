@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" role="img" aria-label="Grilled Salmon prep">
+  <defs><linearGradient id="bgp_salmon" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#bae6fd"/><stop offset="1" stop-color="#ecfeff"/></linearGradient></defs>
+  <rect width="320" height="200" fill="url(#bgp_salmon)"/>
+  <rect x="44" y="28" width="232" height="144" rx="22" fill="#18181b" opacity="0.12"/>
+  <circle cx="148" cy="104" r="64" fill="#ffffff" opacity="0.9"/>
+  <g transform="translate(-12, 0)"><path d="M104 116c14-26 42-42 76-42 20 0 36 6 44 14-16 22-46 38-82 38-16 0-29-3-38-10z" fill="#fb7185"/><path d="M112 122c16-10 38-16 62-16 16 0 30 2 42 7-16 14-40 22-68 22-15 0-28-4-36-13z" fill="#f43f5e" opacity="0.7"/></g>
+  <circle cx="242" cy="64" r="22" fill="#fb7185" opacity="0.85"/>
+  <circle cx="242" cy="126" r="18" fill="#22c55e" opacity="0.85"/>
+</svg>

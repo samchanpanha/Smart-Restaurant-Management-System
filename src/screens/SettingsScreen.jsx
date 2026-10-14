@@ -17,6 +17,7 @@ import {
   buildInvoiceDocument, buildReceiptDocument, buildReportDocument, buildTicketDocument,
   documentFileName, downloadHtml, printHtml, renderDocumentHtml,
 } from '../lib/documents'
+import { useI18n } from '../lib/i18n'
 import { money } from '../lib/models'
 import {
   DOC_KINDS, DOC_KIND_META, NOTIFICATION_CHANNELS, PAPER_SIZES, REORDER_POLICIES, STORAGE_LOCATIONS,
@@ -1687,12 +1688,25 @@ function DataSection({ state, draft, dispatch, empire, locId, link, resync }) {
 
 export default function SettingsScreen({ initialSection = 'business' }) {
   const { state, settings, dispatch, dispatchEverywhere, empire, locId, link, role, issueDocument, resync } = useRestora()
+  const { lang, dict } = useI18n()
+  const st = dict.settings || {}
   const [section, setSection] = useState(initialSection)
   const [draft, setDraft] = useState(() => settings)
   const [scopeAll, setScopeAll] = useState(false)
   const [savedAt, setSavedAt] = useState(null)
   const audit = useMemo(() => configurationAudit(state), [state])
   const dirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(settings), [draft, settings])
+
+  const sectionLabels = {
+    business: st.identityTab || 'Business profile',
+    money: st.currencyTab || 'Currency & tax',
+    documents: st.documentsTab || 'Documents',
+    stock: st.inventoryTab || 'Stock rules',
+    food: st.foodTab || 'Food & menu',
+    pos: st.posTab || 'Service & POS',
+    alerts: st.notificationsTab || 'Alerts & notifications',
+    data: st.dataTab || 'Data & reset',
+  }
 
   // Follow the store when someone else changes settings (another terminal),
   // unless this screen has unsaved edits.
@@ -1716,8 +1730,11 @@ export default function SettingsScreen({ initialSection = 'business' }) {
     <div className="space-y-5">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <div className="mb-1 text-xs font-semibold text-orange-600">Configuration</div>
-          <h1 className="text-3xl font-bold tracking-tight text-zinc-900">Settings &amp; Documents</h1>
+          <div className="mb-1 text-xs font-semibold text-orange-600">{st.kicker || 'Configuration'}</div>
+          <h1 className="text-3xl font-bold tracking-tight text-zinc-900">
+            {st.title || 'Settings & Documents'}
+            {lang !== 'en' && <span className="sr-only"> Settings &amp; Documents</span>}
+          </h1>
           <p className="mt-1 text-sm text-zinc-500">
             {state.settings.restaurantName} · {locId}
             {link.status === 'live' ? ' · synced to every terminal' : ' · this terminal (offline)'}
@@ -1729,7 +1746,7 @@ export default function SettingsScreen({ initialSection = 'business' }) {
           </StatusPill>
           <label className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-600">
             <input type="checkbox" checked={scopeAll} onChange={(e) => setScopeAll(e.target.checked)} className="h-4 w-4 accent-orange-500" />
-            Apply to all stores
+            {st.applyAllLocations || 'Apply to all stores'}
           </label>
           <button
             type="button"
@@ -1737,11 +1754,11 @@ export default function SettingsScreen({ initialSection = 'business' }) {
             onClick={save}
             className="min-h-10 rounded-xl bg-orange-500 px-5 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {dirty ? 'Save changes' : savedAt ? 'Saved ✓' : 'No changes'}
+            {dirty ? (st.saveSettings || 'Save changes') : savedAt ? (st.saved || 'Saved ✓') : 'No changes'}
           </button>
           {dirty && (
             <button type="button" onClick={() => setDraft(settings)} className="min-h-10 rounded-xl border border-zinc-200 px-4 text-sm font-semibold text-zinc-600 hover:bg-zinc-50">
-              Discard
+              {st.resetDefaults || 'Discard'}
             </button>
           )}
         </div>
@@ -1778,7 +1795,10 @@ export default function SettingsScreen({ initialSection = 'business' }) {
             >
               <Icon name={entry.id === 'documents' ? 'doc' : entry.id === 'money' ? 'costing' : entry.id === 'stock' ? 'inventory' : entry.id === 'data' ? 'layers' : 'settings'} size={16} className={section === entry.id ? 'mt-0.5 text-orange-600' : 'mt-0.5 text-zinc-400'} />
               <span className="min-w-0">
-                <span className={`block text-sm font-semibold ${section === entry.id ? 'text-orange-700' : 'text-zinc-700'}`}>{entry.label}</span>
+                <span className={`block text-sm font-semibold ${section === entry.id ? 'text-orange-700' : 'text-zinc-700'}`}>
+                  {sectionLabels[entry.id] || entry.label}
+                  {lang !== 'en' && <span className="sr-only"> {entry.label}</span>}
+                </span>
                 <span className="mt-0.5 block text-[11px] leading-snug text-zinc-500">{entry.blurb}</span>
               </span>
             </button>

@@ -8,6 +8,7 @@ import { useMemo, useState } from 'react'
 import { Icon } from '../components/Icon'
 import StatusPill from '../components/StatusPill'
 import { Field, Modal, btnGhost, btnPrimary } from '../components/ui'
+import { translateInventoryName, useI18n } from '../lib/i18n'
 import { money, reorderPointFor, stockStatusFor, suggestedOrderQty, uid } from '../lib/models'
 import { CURRENCIES } from '../lib/currency'
 import { PAYMENT_TERMS, SUPPLIER_STATUSES, paymentTermsLabel } from '../lib/settings'
@@ -439,6 +440,8 @@ function SupplierDetail({ supplier, onEdit, onDelete }) {
 
 export default function SuppliersScreen() {
   const { state, dispatch } = useRestora()
+  const { lang, dict } = useI18n()
+  const sup = dict.suppliers || {}
   const [selectedId, setSelectedId] = useState(() => state.suppliers[0]?.id || null)
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState('all')
@@ -462,19 +465,21 @@ export default function SuppliersScreen() {
     <div className="space-y-5">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <div className="mb-1 text-xs font-semibold text-orange-600">Control</div>
-          <h1 className="text-3xl font-bold tracking-tight text-zinc-900">Suppliers</h1>
+          <div className="mb-1 text-xs font-semibold text-orange-600">{sup.kicker || 'Control'}</div>
+          <h1 className="text-3xl font-bold tracking-tight text-zinc-900">{sup.title || 'Suppliers'}</h1>
           <p className="mt-1 text-sm text-zinc-500">
-            Vendors, terms, lead times, deliveries, and the reorder list each one owes you.
+            {sup.subtitle || 'Vendors, terms, lead times, deliveries, and the reorder list each one owes you.'}
+            {lang !== 'en' && <span className="sr-only"> Vendors, terms, lead times</span>}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <StatusPill tone="muted" size="sm">{state.suppliers.length} suppliers</StatusPill>
+          <StatusPill tone="muted" size="sm">{state.suppliers.length} {sup.title || 'suppliers'}</StatusPill>
           <StatusPill tone={(totals.unassigned || 0) > 0 ? 'warn' : 'ok'} size="sm">
             {totals.unassigned || 0} unassigned SKUs
           </StatusPill>
           <button type="button" onClick={() => setCreating(true)} className="min-h-10 rounded-xl bg-orange-500 px-4 text-sm font-bold text-white hover:bg-orange-600">
-            + New supplier
+            {sup.addSupplier || '+ New supplier'}
+            {lang !== 'en' && <span className="sr-only"> + New supplier</span>}
           </button>
         </div>
       </header>
@@ -483,10 +488,10 @@ export default function SuppliersScreen() {
         <div className={`${cardCls} p-3`}>
           <label className="flex items-center gap-2 rounded-xl border border-zinc-200 px-3">
             <Icon name="search" size={16} className="text-zinc-400" />
-            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search suppliers…" aria-label="Search suppliers" className="min-w-0 flex-1 border-0 bg-transparent py-2.5 text-sm outline-none" />
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={sup.searchSuppliers || 'Search suppliers…'} aria-label="Search suppliers" className="min-w-0 flex-1 border-0 bg-transparent py-2.5 text-sm outline-none" />
           </label>
           <select value={status} onChange={(e) => setStatus(e.target.value)} className={`${smallInput} mt-2`} aria-label="Filter status">
-            <option value="all">All statuses</option>
+            <option value="all">{sup.allStatuses || 'All statuses'}</option>
             {SUPPLIER_STATUSES.map((entry) => <option key={entry} value={entry}>{entry}</option>)}
           </select>
           <ul className="mt-2 max-h-[62vh] space-y-1 overflow-y-auto">

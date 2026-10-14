@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" role="img" aria-label="Soup of the Day prep">
+  <defs><linearGradient id="bgp_soup" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fde68a"/><stop offset="1" stop-color="#fefce8"/></linearGradient></defs>
+  <rect width="320" height="200" fill="url(#bgp_soup)"/>
+  <rect x="44" y="28" width="232" height="144" rx="22" fill="#18181b" opacity="0.12"/>
+  <circle cx="148" cy="104" r="64" fill="#ffffff" opacity="0.9"/>
+  <g transform="translate(-12, 0)"><circle cx="160" cy="104" r="56" fill="#f59e0b"/><circle cx="160" cy="104" r="46" fill="#fbbf24"/><path d="M135 98c12-10 38-10 50 0" stroke="#fef3c7" stroke-width="4" fill="none" stroke-linecap="round"/><circle cx="152" cy="102" r="5" fill="#15803d"/><circle cx="170" cy="110" r="5" fill="#15803d"/></g>
+  <circle cx="242" cy="64" r="22" fill="#d97706" opacity="0.85"/>
+  <circle cx="242" cy="126" r="18" fill="#15803d" opacity="0.85"/>
+</svg>

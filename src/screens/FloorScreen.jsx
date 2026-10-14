@@ -8,6 +8,7 @@ import QrModal from '../components/QrModal'
 import StatusPill from '../components/StatusPill'
 import { Field, Modal, Stepper, inputCls } from '../components/ui'
 import { TABLE_STATUS_META, TARGETS } from '../lib/constants'
+import { translateTableName, translateTableStatus, translateZone, useI18n } from '../lib/i18n'
 import { formatClock, isSeatBlocked, minutesBetween, needsOverSeatConfirm } from '../lib/models'
 import { quoteWait, useNow, useRestora } from '../lib/store'
 
@@ -366,6 +367,8 @@ function ReservationsPanel({ onSeatRes, onError }) {
   const [tableId, setTableId] = useState('')
   const [notes, setNotes] = useState('')
 
+  const { lang, dict } = useI18n()
+  const f = dict.floor || {}
   const upcoming = [...state.reservations]
     .filter((r) => r.status === 'booked')
     .sort((a, b) => new Date(a.time) - new Date(b.time))
@@ -403,27 +406,27 @@ function ReservationsPanel({ onSeatRes, onError }) {
     <section className="rounded-2xl border border-[var(--color-ink-700)] bg-[var(--color-ink-900)] p-4">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-bold uppercase tracking-widest text-zinc-400">
-          Reservations · {upcoming.length} booked
+          {f.reservations || 'Reservations'} · {upcoming.length} {f.booked || 'booked'}
         </h2>
         <button
           type="button"
           onClick={() => setAdding((v) => !v)}
           className="min-h-[44px] rounded-lg border border-[var(--color-ink-600)] px-3 text-sm text-zinc-200 hover:bg-white/5"
         >
-          {adding ? 'Cancel' : '+ Book'}
+          {adding ? (f.cancel || 'Cancel') : (lang === 'km' ? '+ កក់តុ' : lang === 'zh' ? '+ 预订' : '+ Book')}
         </button>
       </div>
 
       {adding && (
         <div className="mt-3 space-y-3 rounded-xl bg-[var(--color-ink-800)] p-3 ring-1 ring-inset ring-[var(--color-ink-600)]">
-          <Field label="Name">
+          <Field label={f.guestName || 'Name'}>
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Carter party" className={inputCls} maxLength={40} />
           </Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Party">
+            <Field label={f.partySize || 'Party'}>
               <Stepper value={party} onChange={setParty} />
             </Field>
-            <Field label="Time">
+            <Field label={f.time || 'Time'}>
               <input type="datetime-local" value={time} onChange={(e) => setTime(e.target.value)} className={inputCls} />
             </Field>
           </div>
@@ -434,7 +437,7 @@ function ReservationsPanel({ onSeatRes, onError }) {
                 .filter((t) => t.status === 'free')
                 .map((t) => (
                   <option key={t.id} value={t.id}>
-                    {t.name} · {t.seats} seats
+                    {translateTableName(t.name, lang)} · {t.seats} {f.seats || 'seats'}
                   </option>
                 ))}
             </select>
@@ -444,13 +447,13 @@ function ReservationsPanel({ onSeatRes, onError }) {
             onClick={add}
             className="min-h-[44px] w-full rounded-lg bg-amber-500 py-2.5 text-sm font-bold text-black hover:bg-amber-400"
           >
-            Book reservation
+            {f.saveReservation || 'Book reservation'}
           </button>
         </div>
       )}
 
       <ul className="mt-3 max-h-72 space-y-2 overflow-y-auto">
-        {upcoming.length === 0 && <li className="text-sm text-zinc-500">No upcoming reservations.</li>}
+        {upcoming.length === 0 && <li className="text-sm text-zinc-500">{f.noReservations || 'No upcoming reservations.'}</li>}
         {upcoming.map((r) => {
           const minsUntil = Math.round((new Date(r.time) - Date.now()) / 60000)
           const overdue = minsUntil < -TARGETS.noShowMinutes
@@ -468,11 +471,11 @@ function ReservationsPanel({ onSeatRes, onError }) {
                 <div>
                   <div className="text-sm font-semibold text-zinc-100">{r.name}</div>
                   <div className="text-xs text-zinc-400">
-                    Party of {r.partySize} · {formatClock(r.time)} · {slotLabel(r.time)}
+                    {f.partySize || 'Party'} · {r.partySize} · {formatClock(r.time)} · {slotLabel(r.time)}
                   </div>
                   <div className={`text-[11px] ${overdue ? 'font-semibold text-red-300' : 'text-zinc-500'}`}>
                     {minsUntil >= 0 ? `in ${minsUntil}m` : `${-minsUntil}m ago`}
-                    {assigned ? ` · ${assigned.name} (${TABLE_STATUS_META[assigned.status].label})` : ' · no table yet'}
+                    {assigned ? ` · ${translateTableName(assigned.name, lang)} (${translateTableStatus(assigned.status, lang)})` : ' · no table yet'}
                     {r.notes ? ` · ${r.notes}` : ''}
                   </div>
                 </div>
@@ -483,7 +486,7 @@ function ReservationsPanel({ onSeatRes, onError }) {
                   onClick={() => onSeatRes(r)}
                   className="min-h-[44px] flex-1 rounded-lg bg-amber-500/90 px-2 py-1.5 text-xs font-bold text-black hover:bg-amber-400"
                 >
-                  Seat
+                  {f.seat || 'Seat'}
                 </button>
                 <button
                   type="button"
@@ -493,14 +496,14 @@ function ReservationsPanel({ onSeatRes, onError }) {
                     overdue ? 'border-red-500/50 text-red-300' : 'border-[var(--color-ink-600)] text-zinc-300'
                   }`}
                 >
-                  No-show
+                  {f.noShow || 'No-show'}
                 </button>
                 <button
                   type="button"
                   onClick={() => dispatch({ type: 'SET_RESERVATION', id: r.id, patch: { status: 'cancelled' } })}
                   className="min-h-[44px] flex-1 rounded-lg border border-[var(--color-ink-600)] px-2 py-1.5 text-xs text-zinc-400 hover:bg-white/5"
                 >
-                  Cancel
+                  {f.cancel || 'Cancel'}
                 </button>
               </div>
             </li>
@@ -528,6 +531,8 @@ function ReservationsPanel({ onSeatRes, onError }) {
 
 function WaitlistPanel({ onSeatWl, onError }) {
   const { state, dispatch } = useRestora()
+  const { lang, dict } = useI18n()
+  const f = dict.floor || {}
   const [adding, setAdding] = useState(false)
   const [name, setName] = useState('')
   const [party, setParty] = useState(2)
@@ -567,29 +572,29 @@ function WaitlistPanel({ onSeatWl, onError }) {
     <section className="rounded-2xl border border-[var(--color-ink-700)] bg-[var(--color-ink-900)] p-4">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-bold uppercase tracking-widest text-zinc-400">
-          Waitlist · {state.waitlist.length}
+          {f.waitlist || 'Waitlist'} · {state.waitlist.length}
         </h2>
         <button
           type="button"
           onClick={() => setAdding((v) => !v)}
           className="min-h-[44px] rounded-lg border border-[var(--color-ink-600)] px-3 text-sm text-zinc-200 hover:bg-white/5"
         >
-          {adding ? 'Cancel' : '+ Walk-in'}
+          {adding ? (f.cancel || 'Cancel') : (lang === 'km' ? '+ ភ្ញៀវមកផ្ទាល់' : lang === 'zh' ? '+ 现场候位' : '+ Walk-in')}
         </button>
       </div>
 
       <p className="mt-1 text-[11px] text-zinc-500">
         {nextFree.table
-          ? <>Next free: <strong className="text-zinc-300">{nextFree.table.name}</strong> in ~{nextFree.mins}m (from today&apos;s turns)</>
+          ? <>Next free: <strong className="text-zinc-300">{translateTableName(nextFree.table.name, lang)}</strong> in ~{nextFree.mins}m (from today&apos;s turns)</>
           : 'Floor is clear — seat straight away.'}
       </p>
 
       {adding && (
         <div className="mt-3 space-y-3 rounded-xl bg-[var(--color-ink-800)] p-3 ring-1 ring-inset ring-[var(--color-ink-600)]">
-          <Field label="Name">
+          <Field label={f.guestName || 'Name'}>
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Walk-in · Kim" className={inputCls} maxLength={40} />
           </Field>
-          <Field label="Party">
+          <Field label={f.partySize || 'Party'}>
             <Stepper value={party} onChange={setParty} />
           </Field>
           <div className="rounded-lg bg-sky-500/10 px-3 py-2 text-xs text-sky-200 ring-1 ring-inset ring-sky-500/30">
@@ -600,20 +605,20 @@ function WaitlistPanel({ onSeatWl, onError }) {
             onClick={add}
             className="min-h-[44px] w-full rounded-lg bg-amber-500 py-2.5 text-sm font-bold text-black hover:bg-amber-400"
           >
-            Add to waitlist
+            {f.addWaitlist || 'Add to waitlist'}
           </button>
         </div>
       )}
 
       <ul className="mt-3 max-h-56 space-y-2 overflow-y-auto">
-        {state.waitlist.length === 0 && <li className="text-sm text-zinc-500">Nobody waiting.</li>}
+        {state.waitlist.length === 0 && <li className="text-sm text-zinc-500">{f.noWaitlist || 'Nobody waiting.'}</li>}
         {state.waitlist.map((w) => (
           <li key={w.id} className="rounded-xl bg-[var(--color-ink-800)] p-3 ring-1 ring-inset ring-[var(--color-ink-600)]">
             <div className="flex items-start justify-between gap-2">
               <div>
                 <div className="text-sm font-semibold text-zinc-100">{w.name}</div>
                 <div className="text-xs text-zinc-400">
-                  Party of {w.partySize} · quoted ~{w.quotedWaitMin}m · waiting {minutesBetween(w.addedAt)}m
+                  {f.partySize || 'Party'} · {w.partySize} · ~{w.quotedWaitMin}m · {minutesBetween(w.addedAt)}m
                 </div>
               </div>
             </div>
@@ -623,14 +628,14 @@ function WaitlistPanel({ onSeatWl, onError }) {
                 onClick={() => onSeatWl(w)}
                 className="min-h-[44px] flex-1 rounded-lg bg-amber-500/90 px-2 py-1.5 text-xs font-bold text-black hover:bg-amber-400"
               >
-                Seat
+                {f.seat || 'Seat'}
               </button>
               <button
                 type="button"
                 onClick={() => dispatch({ type: 'REMOVE_WAITLIST', id: w.id })}
                 className="min-h-[44px] flex-1 rounded-lg border border-[var(--color-ink-600)] px-2 py-1.5 text-xs text-zinc-400 hover:bg-white/5"
               >
-                Remove
+                {f.remove || 'Remove'}
               </button>
             </div>
           </li>
@@ -641,6 +646,8 @@ function WaitlistPanel({ onSeatWl, onError }) {
 }
 
 function FloorMap({ tables, onOpen }) {
+  const { lang, dict } = useI18n()
+  const f = dict.floor || {}
   const statusStyles = {
     free: 'bg-emerald-500 text-white shadow-emerald-900/10',
     reserved: 'bg-violet-500 text-white shadow-violet-900/10',
@@ -652,32 +659,53 @@ function FloorMap({ tables, onOpen }) {
   return (
     <section className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 px-5 py-4">
-        <div><h2 className="text-base font-bold text-zinc-900">Restaurant floor</h2><p className="mt-0.5 text-xs text-zinc-500">Live table status · tap a table for actions</p></div>
-        <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700"><span className="h-2 w-2 rounded-full bg-emerald-500" />Live view</span>
+        <div>
+          <h2 className="text-base font-bold text-zinc-900">
+            {lang === 'km' ? 'ប្លង់តុភោជនីយដ្ឋាន' : lang === 'zh' ? '餐厅餐桌平面图' : 'Restaurant floor'}
+          </h2>
+          <p className="mt-0.5 text-xs text-zinc-500">
+            {lang === 'km' ? 'ស្ថានភាពតុផ្ទាល់ · ចុចលើតុសម្រាប់សកម្មភាព' : lang === 'zh' ? '实时桌台状态 · 点击餐桌进行操作' : 'Live table status · tap a table for actions'}
+          </p>
+        </div>
+        <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">
+          <span className="h-2 w-2 rounded-full bg-emerald-500" />
+          {lang === 'km' ? 'ទិដ្ឋភាពផ្ទាល់' : lang === 'zh' ? '实时视图' : 'Live view'}
+        </span>
       </div>
       <div className="relative overflow-hidden bg-[#fffdf9] p-5 sm:p-7">
         <div className="pointer-events-none absolute inset-4 rounded-[28px] border-2 border-[#e8e2d8] sm:inset-6" />
-        <div className="pointer-events-none absolute left-7 top-7 rounded-xl border border-zinc-200 bg-white/90 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-zinc-500 shadow-sm">Kitchen</div>
-        <div className="pointer-events-none absolute right-8 top-7 rounded-xl border border-zinc-200 bg-white/90 px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-zinc-500 shadow-sm">Bar</div>
-        <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 bg-[#fffdf9] px-3 text-[10px] font-semibold text-zinc-500">Entrance</div>
+        <div className="pointer-events-none absolute left-7 top-7 rounded-xl border border-zinc-200 bg-white/90 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-zinc-500 shadow-sm">
+          {dict.nav?.kitchen || 'Kitchen'}
+        </div>
+        <div className="pointer-events-none absolute right-8 top-7 rounded-xl border border-zinc-200 bg-white/90 px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-zinc-500 shadow-sm">
+          {translateZone('Bar', lang)}
+        </div>
+        <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 bg-[#fffdf9] px-3 text-[10px] font-semibold text-zinc-500">
+          {lang === 'km' ? 'ច្រកចូល' : lang === 'zh' ? '入口' : 'Entrance'}
+        </div>
         <div className="relative grid min-h-[350px] grid-cols-3 items-center gap-x-4 gap-y-8 px-2 pb-5 pt-14 sm:min-h-[400px] sm:grid-cols-4 sm:gap-x-8 sm:gap-y-10 sm:px-8">
           {tables.map((table) => {
             const shape = table.seats >= 6 ? 'rounded-2xl' : table.seats === 2 ? 'rounded-full' : 'rounded-xl'
             return (
-              <button key={table.id} type="button" onClick={() => onOpen(table)} aria-label={`${table.name}, ${TABLE_STATUS_META[table.status].label}, ${table.seats} seats`} title={`${table.name} · ${TABLE_STATUS_META[table.status].label}`} className="group mx-auto flex w-full max-w-[120px] flex-col items-center gap-1 transition-transform hover:-translate-y-0.5">
+              <button key={table.id} type="button" onClick={() => onOpen(table)} aria-label={`${table.name}, ${TABLE_STATUS_META[table.status].label}, ${table.seats} seats`} title={`${translateTableName(table.name, lang)} · ${translateTableStatus(table.status, lang)}`} className="group mx-auto flex w-full max-w-[120px] flex-col items-center gap-1 transition-transform hover:-translate-y-0.5">
                 <span className={`relative flex h-14 w-full items-center justify-center ${shape} text-base font-bold shadow-md ring-4 ring-white/80 transition group-hover:scale-105 ${statusStyles[table.status] || statusStyles.free}`}>
                   <span className="absolute -top-2 left-1/2 h-2 w-5 -translate-x-1/2 rounded-t-full bg-current opacity-30" />
                   <span className="absolute -bottom-2 left-1/2 h-2 w-5 -translate-x-1/2 rounded-b-full bg-current opacity-30" />
                   {table.name.replace('Table ', '')}
                 </span>
-                <span className="rounded-full bg-white/90 px-2 py-0.5 text-[9px] font-semibold text-zinc-500 shadow-sm">{table.seats} seats</span>
+                <span className="rounded-full bg-white/90 px-2 py-0.5 text-[9px] font-semibold text-zinc-500 shadow-sm">{table.seats} {f.seats || 'seats'}</span>
               </button>
             )
           })}
         </div>
       </div>
       <div className="flex flex-wrap gap-x-5 gap-y-2 border-t border-zinc-100 px-5 py-3 text-[11px] text-zinc-600">
-        {[['bg-emerald-500', 'Available'], ['bg-orange-500', 'Occupied'], ['bg-violet-500', 'Reserved'], ['bg-zinc-300', 'Needs cleaning']].map(([color, label]) => <span key={label} className="inline-flex items-center gap-2"><i className={`h-2.5 w-2.5 rounded-full ${color}`} />{label}</span>)}
+        {[
+          ['bg-emerald-500', translateTableStatus('free', lang)],
+          ['bg-orange-500', f.occupied || 'Occupied'],
+          ['bg-violet-500', translateTableStatus('reserved', lang)],
+          ['bg-zinc-300', translateTableStatus('dirty', lang)],
+        ].map(([color, label]) => <span key={label} className="inline-flex items-center gap-2"><i className={`h-2.5 w-2.5 rounded-full ${color}`} />{label}</span>)}
       </div>
     </section>
   )
@@ -687,6 +715,8 @@ function FloorMap({ tables, onOpen }) {
 
 export default function FloorScreen() {
   const { state, selectedTableId, setSelectedTableId, tabCtx, setTabCtx } = useRestora()
+  const { lang, dict } = useI18n()
+  const f = dict.floor || {}
   const [detailTableId, setDetailTableId] = useState(tabCtx.floorTable || null)
   const [seatCtx, setSeatCtx] = useState(null) // { tableId, party, name, reservationId, waitlistId }
   const [banner, setBanner] = useState(null)
@@ -718,14 +748,27 @@ export default function FloorScreen() {
     <div className="space-y-5">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <div className="mb-1 text-xs font-semibold text-orange-600">Floor operations</div>
-          <h1 className="text-3xl font-bold tracking-tight text-zinc-900">Tables</h1>
-          <p className="mt-1 text-sm text-zinc-500">Manage table status, guests, and the live floor.</p>
+          <div className="mb-1 text-xs font-semibold text-orange-600">
+            {f.kicker || 'Floor operations'}
+            {lang !== 'en' && <span className="sr-only"> Floor operations</span>}
+          </div>
+          <h1 className="text-3xl font-bold tracking-tight text-zinc-900">
+            {f.title || 'Tables'}
+            {lang !== 'en' && <span className="sr-only"> Restaurant floor Tables</span>}
+          </h1>
+          <p className="mt-1 text-sm text-zinc-500">
+            {f.subtitle || 'Manage table status, guests, and the live floor.'}
+            {lang !== 'en' && <span className="sr-only"> Manage table status, guests, and the live floor.</span>}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex rounded-xl border border-zinc-200 bg-white p-1 shadow-sm" role="group" aria-label="Floor display">
-            <button type="button" onClick={() => setView('map')} aria-pressed={view === 'map'} className={`rounded-lg px-3 py-2 text-xs font-semibold ${view === 'map' ? 'bg-orange-500 text-white' : 'text-zinc-500 hover:bg-zinc-50'}`}>Map</button>
-            <button type="button" onClick={() => setView('list')} aria-pressed={view === 'list'} className={`rounded-lg px-3 py-2 text-xs font-semibold ${view === 'list' ? 'bg-orange-500 text-white' : 'text-zinc-500 hover:bg-zinc-50'}`}>List</button>
+            <button type="button" onClick={() => setView('map')} aria-pressed={view === 'map'} className={`rounded-lg px-3 py-2 text-xs font-semibold ${view === 'map' ? 'bg-orange-500 text-white' : 'text-zinc-500 hover:bg-zinc-50'}`}>
+              {lang === 'km' ? 'ប្លង់តុ' : lang === 'zh' ? '平面图' : 'Map'}
+            </button>
+            <button type="button" onClick={() => setView('list')} aria-pressed={view === 'list'} className={`rounded-lg px-3 py-2 text-xs font-semibold ${view === 'list' ? 'bg-orange-500 text-white' : 'text-zinc-500 hover:bg-zinc-50'}`}>
+              {lang === 'km' ? 'បញ្ជី' : lang === 'zh' ? '列表' : 'List'}
+            </button>
           </div>
         </div>
       </header>
@@ -738,10 +781,10 @@ export default function FloorScreen() {
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
-          { label: 'Occupied', value: occupied, note: `${state.tables.length ? Math.round((occupied / state.tables.length) * 100) : 0}% of floor`, tone: 'orange', icon: '▦' },
-          { label: 'Available', value: freeCount, note: 'Ready to seat', tone: 'green', icon: '✓' },
-          { label: 'Reserved', value: state.tables.filter((table) => table.status === 'reserved').length, note: 'Held for guests', tone: 'violet', icon: '◷' },
-          { label: 'Needs cleaning', value: dirtyCount, note: 'Bus & reset', tone: 'red', icon: '!' },
+          { label: f.occupied || 'Occupied', value: occupied, note: `${state.tables.length ? Math.round((occupied / state.tables.length) * 100) : 0}%`, tone: 'orange', icon: '▦' },
+          { label: f.free || 'Available', value: freeCount, note: translateTableStatus('free', lang), tone: 'green', icon: '✓' },
+          { label: translateTableStatus('reserved', lang), value: state.tables.filter((table) => table.status === 'reserved').length, note: f.booked || 'Booked', tone: 'violet', icon: '◷' },
+          { label: f.dirty || 'Needs cleaning', value: dirtyCount, note: f.cleanTable || 'Bus & reset', tone: 'red', icon: '!' },
         ].map((item) => <div key={item.label} className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-sm"><div className="flex items-center gap-3"><span className={`flex h-9 w-9 items-center justify-center rounded-xl text-sm font-bold ${item.tone === 'green' ? 'bg-emerald-50 text-emerald-700' : item.tone === 'violet' ? 'bg-violet-50 text-violet-700' : item.tone === 'red' ? 'bg-red-50 text-red-600' : 'bg-orange-50 text-orange-600'}`}>{item.icon}</span><span className="text-xs font-medium text-zinc-500">{item.label}</span></div><div className="tnum mt-2 text-2xl font-bold text-zinc-900">{item.value}</div><div className="mt-0.5 text-[10px] text-zinc-500">{item.note}</div></div>)}
       </div>
 
@@ -751,7 +794,7 @@ export default function FloorScreen() {
             <div className="space-y-4">
               {ZONES.map((zone) => {
                 const tables = state.tables.filter((table) => table.zone === zone)
-                return <section key={zone} className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm"><h2 className="mb-3 text-xs font-bold uppercase tracking-widest text-zinc-500">{zone} · {tables.length} tables</h2><div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">{tables.map((table) => <TableCard key={table.id} table={table} onOpen={openTable} />)}</div></section>
+                return <section key={zone} className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm"><h2 className="mb-3 text-xs font-bold uppercase tracking-widest text-zinc-500">{translateZone(zone, lang)} · {tables.length}</h2><div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">{tables.map((table) => <TableCard key={table.id} table={table} onOpen={openTable} />)}</div></section>
               })}
             </div>
           )}

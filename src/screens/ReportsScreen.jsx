@@ -8,6 +8,7 @@ import { useMemo, useState } from 'react'
 import { Icon } from '../components/Icon'
 import StatusPill from '../components/StatusPill'
 import { buildReportDocument, printHtml, renderDocumentHtml } from '../lib/documents'
+import { translateText, useI18n } from '../lib/i18n'
 import { money, orderSubtotal, plateCostFor, theoreticalDecrementFor } from '../lib/models'
 import { MOVEMENT_KINDS } from '../lib/reducer'
 import { buildReports } from '../lib/reports'
@@ -677,7 +678,7 @@ function SellBuyReport({ range }) {
       </div>
 
       <Card title="Stock in / out">
-        <div className="grid gap-3 sm:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-3 sm:grid-cols-4">
           {[
             { label: 'In', value: money(movements.inValue), sub: `${movements.inUnits} units · ${movements.inCount} rows`, tone: 'text-emerald-300' },
             { label: 'Out', value: money(movements.outValue), sub: `${movements.outUnits} units · ${movements.outCount} rows`, tone: 'text-red-300' },
@@ -850,6 +851,7 @@ function ProfitLossReport({ range }) {
 // ─── Top & bottom ───────────────────────────────────────────────
 
 function TopLowReport({ range }) {
+  const { lang } = useI18n()
   const { state, setScreen } = useRestora()
   const [side, setSide] = useState('sell')
   const reports = useMemo(() => buildReports(state, range), [state, range])
@@ -882,7 +884,7 @@ function TopLowReport({ range }) {
               onClick={() => setSide(entry.id)}
               className={`min-h-[40px] rounded-lg px-4 text-sm font-semibold ${side === entry.id ? 'bg-amber-500/15 text-amber-200 ring-1 ring-inset ring-amber-500/40' : 'text-zinc-400 hover:text-zinc-200'}`}
             >
-              {entry.label}
+              <span className="tab-i18n-label" data-i18n-tab={translateText(entry.label, lang)}>{entry.label}</span>
             </button>
           ))}
         </div>
@@ -941,6 +943,8 @@ function TopLowReport({ range }) {
 
 export default function ReportsScreen() {
   const { state } = useRestora()
+  const { lang, dict } = useI18n()
+  const rep = dict.reports || {}
   const [tab, setTab] = useState('sales')
   const [range, setRange] = useState('tonight')
 
@@ -952,13 +956,33 @@ export default function ReportsScreen() {
     printHtml(renderDocumentHtml(doc, settings, {}), { title: `${doc.title} ${range}` })
   }
 
+  const rangeLabels = {
+    tonight: lang === 'km' ? 'យប់នេះ' : lang === 'zh' ? '今晚' : 'Tonight',
+    '7d': lang === 'km' ? '៧ ថ្ងៃ' : lang === 'zh' ? '7 天' : '7 days',
+    '30d': lang === 'km' ? '៣០ ថ្ងៃ' : lang === 'zh' ? '30 天' : '30 days',
+  }
+
+  const reportTabLabels = {
+    sales: rep.salesTab || 'Sales',
+    sellbuy: lang === 'km' ? 'លក់ និងទិញ ចូល/ចេញ' : lang === 'zh' ? '销售与采购进出' : 'Sell & buy in/out',
+    pl: lang === 'km' ? 'ចំណេញ និងខាត' : lang === 'zh' ? '损益表' : 'Profit & loss',
+    toplow: lang === 'km' ? 'លក់ដាច់បំផុត និងតិចបំផុត' : lang === 'zh' ? '畅销与滞销' : 'Top & bottom',
+    service: rep.serviceTab || 'Service',
+    voids: rep.voidsTab || 'Voids & comps',
+    variance: rep.varianceTab || 'Variance',
+    pnl: rep.pnlTab || 'P&L-lite',
+  }
+
   return (
     <div className="space-y-4">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <div className="mb-1 text-xs font-semibold text-orange-600">Business overview</div>
-          <h1 className="text-3xl font-bold tracking-tight text-zinc-900">Reports &amp; Analytics</h1>
-          <p className="mt-1 text-sm text-zinc-500">Turn sales, service, and cost signals into the next best action.</p>
+          <div className="mb-1 text-xs font-semibold text-orange-600">{rep.kicker || 'Business overview'}</div>
+          <h1 className="text-3xl font-bold tracking-tight text-zinc-900">
+            {rep.title || 'Reports & Analytics'}
+            {lang !== 'en' && <span className="sr-only"> Reports &amp; Analytics</span>}
+          </h1>
+          <p className="mt-1 text-sm text-zinc-500">{rep.subtitle || 'Turn sales, service, and cost signals into the next best action.'}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
         <button
@@ -966,7 +990,9 @@ export default function ReportsScreen() {
           onClick={printReport}
           className="flex min-h-[44px] items-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 text-sm font-semibold text-zinc-700 shadow-sm hover:bg-zinc-50"
         >
-          <Icon name="printer" size={16} /> Print report
+          <Icon name="printer" size={16} />
+          {rep.printReport || 'Print report'}
+          {lang !== 'en' && <span className="sr-only"> Print report</span>}
         </button>
         <div className="flex gap-1 rounded-xl bg-[var(--color-ink-900)] p-1 ring-1 ring-inset ring-[var(--color-ink-700)]" role="tablist" aria-label="Date range">
           {RANGES.map((r) => (
@@ -978,7 +1004,8 @@ export default function ReportsScreen() {
               onClick={() => setRange(r.id)}
               className={`min-h-[44px] rounded-lg px-4 text-sm font-semibold ${range === r.id ? 'bg-amber-500/15 text-amber-200 ring-1 ring-inset ring-amber-500/40' : 'text-zinc-400 hover:text-zinc-200'}`}
             >
-              {r.label}
+              {rangeLabels[r.id] || r.label}
+              {lang !== 'en' && <span className="sr-only"> {r.label}</span>}
             </button>
           ))}
         </div>
@@ -1002,7 +1029,8 @@ export default function ReportsScreen() {
               tab === t.id ? 'bg-amber-500/15 text-amber-200 ring-1 ring-inset ring-amber-500/40' : 'text-zinc-400 hover:text-zinc-200'
             }`}
           >
-            {t.label}
+            {reportTabLabels[t.id] || t.label}
+            {lang !== 'en' && <span className="sr-only"> {t.label}</span>}
           </button>
         ))}
       </div>

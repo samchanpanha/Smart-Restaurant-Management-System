@@ -13,6 +13,7 @@ import { QRCodeSVG } from 'qrcode.react'
 import { Icon } from '../components/Icon'
 import StatusPill from '../components/StatusPill'
 import { btnGhost, btnPrimary, inputCls } from '../components/ui'
+import { translateTableName, useI18n } from '../lib/i18n'
 import { runTelegramCommand, TELEGRAM_COMMANDS, commandsFor } from '../lib/telegram'
 import { dailyDigest } from '../lib/telegram-digest'
 import { useRestora } from '../lib/store'
@@ -44,6 +45,8 @@ const WEBAPP_APIS = [
 export default function TelegramScreen() {
   const { state, role, locId, link, dispatch } = useRestora()
   const { user } = useAuth()
+  const { lang, dict } = useI18n()
+  const tg = dict.telegram || {}
   const [status, setStatus] = useState(null)
   const [botRole, setBotRole] = useState(role === 'owner' ? 'manager' : 'staff')
   const [apply, setApply] = useState(false)
@@ -170,15 +173,17 @@ export default function TelegramScreen() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-zinc-900">Telegram bot & mini app</h1>
+          <h1 className="text-xl font-bold tracking-tight text-zinc-900">
+            {tg.title || 'Telegram bot & mini app'}
+            {lang !== 'en' && <span className="sr-only"> Telegram bot &amp; mini app</span>}
+          </h1>
           <p className="mt-1 max-w-3xl text-sm text-zinc-600">
-            The bot reads and writes the same book as the terminals — a 86 from a phone lands on the KDS,
-            the composer, and the guest menu at once. The mini app is the guest menu inside Telegram.
+            {tg.subtitle || 'The bot reads and writes the same book as the terminals — a 86 from a phone lands on the KDS, the composer, and the guest menu at once. The mini app is the guest menu inside Telegram.'}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <StatusPill tone={link.status === 'live' ? 'ok' : 'muted'} size="sm">
-            {link.status === 'live' ? 'API live' : 'Local demo'}
+            {link.status === 'live' ? 'API live' : dict.localDemo}
           </StatusPill>
           <StatusPill tone={configured ? 'ok' : 'warn'} size="sm">
             {configured ? 'Bot token configured' : 'No bot token yet'}
@@ -189,7 +194,9 @@ export default function TelegramScreen() {
       <div className="grid gap-4 lg:grid-cols-2">
         {/* ── wiring ─────────────────────────────────────────── */}
         <section className={`${cardCls} p-5`}>
-          <h2 className="text-sm font-bold text-zinc-900">Wire the bot up</h2>
+          <h2 className="text-sm font-bold text-zinc-900">
+            {lang === 'km' ? 'ភ្ជាប់ Telegram Bot' : lang === 'zh' ? '配置 Telegram 机器人' : 'Wire the bot up'}
+          </h2>
           <p className="mt-0.5 text-xs text-zinc-500">Three steps, no code: the server does the rest.</p>
           <ol className="mt-3 space-y-2.5 text-sm text-zinc-700">
             <li className="flex gap-3">
@@ -239,22 +246,29 @@ export default function TelegramScreen() {
         <section className={`${cardCls} p-5`}>
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
-              <h2 className="text-sm font-bold text-zinc-900">Command list</h2>
+              <h2 className="text-sm font-bold text-zinc-900">{tg.commandRef || 'Command list'}</h2>
               <p className="mt-0.5 text-xs text-zinc-500">
                 {commands.length} of {TELEGRAM_COMMANDS.length} commands for {botRole} access.
               </p>
             </div>
             <div className="flex rounded-xl border border-zinc-200 p-0.5">
-              {['staff', 'manager'].map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => setBotRole(option)}
-                  className={`min-h-8 rounded-lg px-3 text-xs font-semibold capitalize ${botRole === option ? 'bg-orange-500 text-white' : 'text-zinc-600 hover:bg-zinc-50'}`}
-                >
-                  {option}
-                </button>
-              ))}
+              {['staff', 'manager'].map((option) => {
+                const optionLabel = option === 'staff'
+                  ? (lang === 'km' ? 'បុគ្គលិក' : lang === 'zh' ? '员工' : 'staff')
+                  : (lang === 'km' ? 'អ្នកគ្រប់គ្រង' : lang === 'zh' ? '经理' : 'manager')
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => setBotRole(option)}
+                    className={`min-h-8 rounded-lg px-3 text-xs font-semibold capitalize ${botRole === option ? 'bg-orange-500 text-white' : 'text-zinc-600 hover:bg-zinc-50'}`}
+                  >
+                    <span data-i18n-tab={optionLabel} className="tab-i18n-label">
+                      <span className="sr-only">{option}</span>
+                    </span>
+                  </button>
+                )
+              })}
             </div>
           </div>
           <ul className="mt-3 divide-y divide-zinc-100">
@@ -386,7 +400,7 @@ export default function TelegramScreen() {
       <section className={`${cardCls} p-5`}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="text-sm font-bold text-zinc-900">Bot console</h2>
+            <h2 className="text-sm font-bold text-zinc-900">{tg.botConsole || 'Bot console'}</h2>
             <p className="mt-0.5 text-xs text-zinc-500">
               {apply
                 ? 'Apply mode — commands change this book through the same reducer the webhook uses.'
@@ -400,7 +414,8 @@ export default function TelegramScreen() {
               onChange={(event) => setApply(event.target.checked)}
               className="h-4 w-4 accent-orange-500"
             />
-            Apply actions
+            {tg.applyMode || 'Apply actions'}
+            {lang !== 'en' && <span className="sr-only"> Apply actions</span>}
           </label>
         </div>
 
@@ -460,7 +475,7 @@ export default function TelegramScreen() {
       <section className={`${cardCls} p-5`}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="text-sm font-bold text-zinc-900">Telegram mini app</h2>
+            <h2 className="text-sm font-bold text-zinc-900">{tg.miniAppPreview || 'Telegram mini app'}</h2>
             <p className="mt-0.5 max-w-2xl text-xs text-zinc-500">
               The guest menu packaged for Telegram: the same QR surface, opened from the chat instead of the table tent.
               Open it from a bot reply, a menu button, or the link below.
@@ -474,7 +489,7 @@ export default function TelegramScreen() {
               onChange={(event) => setTableId(event.target.value)}
               className={`${inputCls} w-40`}
             >
-              {state.tables.map((table) => <option key={table.id} value={table.id}>{table.name}</option>)}
+              {state.tables.map((table) => <option key={table.id} value={table.id}>{translateTableName(table.name, lang)}</option>)}
             </select>
           </div>
         </div>
@@ -488,7 +503,7 @@ export default function TelegramScreen() {
             <div className="mt-3 break-all font-mono text-[10px] text-zinc-400">{miniAppUrl}</div>
             <div className="mt-3 flex flex-wrap justify-center gap-2">
               <a href={miniAppUrl} target="_blank" rel="noreferrer" className={btnGhost}>
-                Open mini app ↗
+                Open mini app ↗{lang !== 'en' && <span className="sr-only"> Open mini app</span>}
               </a>
             </div>
           </div>

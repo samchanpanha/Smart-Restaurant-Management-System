@@ -12,6 +12,15 @@ import {
   buildInvoiceDocument, buildReceiptDocument, buildTicketDocument, documentFileName, downloadHtml,
   printHtml, renderDocumentHtml,
 } from '../lib/documents'
+import {
+  translateCategory,
+  translateCourse,
+  translateDishName,
+  translateModifier,
+  translateTableName,
+  translateTicketStatus,
+  useI18n,
+} from '../lib/i18n'
 import { formatClock, minutesBetween, money, orderTotals } from '../lib/models'
 import { documentNumber, sanitizeSettings } from '../lib/settings'
 import { useNow, useRestora } from '../lib/store'
@@ -67,6 +76,8 @@ function UndoBanner({ orderId }) {
 
 function TicketList({ tab, setTab, tableFilter, setTableFilter, serverFilter, setServerFilter, selectedId, onSelect, onNew }) {
   const { state } = useRestora()
+  const { lang, dict } = useI18n()
+  const tk = dict.tickets || {}
   useNow(30000)
   const menuById = useMemo(() => Object.fromEntries(state.menu.map((m) => [m.id, m])), [state.menu])
   const tableById = useMemo(() => Object.fromEntries(state.tables.map((t) => [t.id, t])), [state.tables])
@@ -89,6 +100,12 @@ function TicketList({ tab, setTab, tableFilter, setTableFilter, serverFilter, se
     [state.orders],
   )
 
+  const tabLabels = {
+    active: tk.activeTab || 'Active',
+    ready: tk.readyTab || 'Ready',
+    paid: tk.paidTab || 'Paid',
+  }
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex gap-1.5 rounded-xl bg-[var(--color-ink-900)] p-1.5 ring-1 ring-inset ring-[var(--color-ink-700)]" role="tablist" aria-label="Ticket status">
@@ -103,28 +120,28 @@ function TicketList({ tab, setTab, tableFilter, setTableFilter, serverFilter, se
               tab === t.id ? 'bg-amber-500/15 text-amber-200 ring-1 ring-inset ring-amber-500/40' : 'text-zinc-400 hover:text-zinc-200'
             }`}
           >
-            {t.label} · {counts[t.id]}
+            {tabLabels[t.id] || t.label} · {counts[t.id]}
           </button>
         ))}
       </div>
 
       <div className="grid grid-cols-2 gap-2">
         <select value={tableFilter} onChange={(e) => setTableFilter(e.target.value)} className={inputCls} aria-label="Filter by table">
-          <option value="">All tables</option>
+          <option value="">{tk.allTables || 'All tables'}</option>
           {tablesWithTickets.map((tid) => (
             <option key={tid} value={tid}>
-              {tableById[tid]?.name || tid}
+              {translateTableName(tableById[tid]?.name || tid, lang)}
             </option>
           ))}
         </select>
         <select value={serverFilter} onChange={(e) => setServerFilter(e.target.value)} className={inputCls} aria-label="Filter by server">
-          <option value="">All servers</option>
+          <option value="">{tk.allServers || 'All servers'}</option>
           <option value="server">Jordan</option>
         </select>
       </div>
 
       <button type="button" onClick={onNew} className={btnGhost}>
-        + New check
+        + {tk.newOrder || 'New check'}
       </button>
 
       <ul className="max-h-[60vh] space-y-2 overflow-y-auto">
@@ -150,9 +167,9 @@ function TicketList({ tab, setTab, tableFilter, setTableFilter, serverFilter, se
                 }`}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-bold">{tableById[o.tableId]?.name || o.type}</span>
+                  <span className="font-bold">{translateTableName(tableById[o.tableId]?.name || o.type, lang)}</span>
                   <StatusPill tone={meta.tone} size="sm">
-                    {meta.label}
+                    {translateTicketStatus(o.status, lang)}
                   </StatusPill>
                 </div>
                 <div className="mt-1 flex items-center justify-between text-xs text-zinc-400">
@@ -247,8 +264,13 @@ function Composer({ order, onError }) {
   const categories = useMemo(() => [...new Set(activeMenu.map((m) => m.category))], [activeMenu])
   const menuById = useMemo(() => Object.fromEntries(state.menu.map((m) => [m.id, m])), [state.menu])
 
+  const { lang, dict } = useI18n()
+  const tk = dict.tickets || {}
   const items = activeMenu.filter((m) => {
-    if (query.trim()) return m.name.toLowerCase().includes(query.trim().toLowerCase())
+    if (query.trim()) {
+      const q = query.trim().toLowerCase()
+      return m.name.toLowerCase().includes(q) || translateDishName(m, lang).toLowerCase().includes(q)
+    }
     return m.category === category
   })
 
@@ -277,7 +299,7 @@ function Composer({ order, onError }) {
   return (
     <div className="rounded-2xl border border-[var(--color-ink-700)] bg-[var(--color-ink-900)] p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Add items</h3>
+        <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-400">{tk.addItems || 'Add items'}</h3>
         <div className="flex gap-1 rounded-lg bg-black/30 p-1" role="group" aria-label="Course for new items">
           {COURSES.map((c) => (
             <button
@@ -289,7 +311,7 @@ function Composer({ order, onError }) {
                 course === c.id ? 'bg-amber-500 text-black' : 'text-zinc-400 hover:text-zinc-100'
               }`}
             >
-              {c.label}
+              {translateCourse(c.id, lang)}
             </button>
           ))}
         </div>
@@ -298,7 +320,7 @@ function Composer({ order, onError }) {
       <input
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search menu…"
+        placeholder={tk.searchMenu || 'Search menu…'}
         aria-label="Search menu"
         className={`${inputCls} mt-3`}
       />
@@ -316,7 +338,7 @@ function Composer({ order, onError }) {
                 category === c ? 'bg-white/10 text-zinc-100 ring-1 ring-inset ring-white/20' : 'text-zinc-500 hover:text-zinc-200'
               }`}
             >
-              {c}
+              {translateCategory(c, lang)}
             </button>
           ))}
         </div>
@@ -325,6 +347,7 @@ function Composer({ order, onError }) {
       <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
         {items.map((m) => {
           const sub = m.substituteId ? menuById[m.substituteId] : null
+          const localName = translateDishName(m, lang)
           if (!m.available) {
             return (
               <div
@@ -333,7 +356,7 @@ function Composer({ order, onError }) {
                 aria-label={`${m.name}, 86'd, unavailable`}
               >
                 <div className="flex items-center justify-between gap-1">
-                  <span className="text-sm font-semibold text-zinc-400 line-through">{m.name}</span>
+                  <span className="text-sm font-semibold text-zinc-400 line-through">{localName}</span>
                   <StatusPill tone="bad" size="sm">
                     86
                   </StatusPill>
@@ -345,7 +368,7 @@ function Composer({ order, onError }) {
                     onClick={() => tap(sub)}
                     className="mt-2 min-h-[36px] w-full rounded-lg bg-white/5 px-2 text-xs font-semibold text-sky-300 ring-1 ring-inset ring-sky-500/30 hover:bg-white/10"
                   >
-                    Suggest {sub.name} →
+                    Suggest {translateDishName(sub, lang)} →
                   </button>
                 ) : (
                   <div className="mt-2 text-[11px] text-zinc-600">No substitute mapped</div>
@@ -360,7 +383,7 @@ function Composer({ order, onError }) {
               onClick={() => tap(m)}
               className="min-h-[72px] rounded-xl border border-[var(--color-ink-700)] bg-[var(--color-ink-800)] p-3 text-left transition-all hover:border-amber-500/50 active:scale-[0.98]"
             >
-              <div className="text-sm font-semibold leading-tight text-zinc-100">{m.name}</div>
+              <div className="text-sm font-semibold leading-tight text-zinc-100">{localName}</div>
               <div className="mt-1 flex items-center justify-between">
                 <span className="tnum text-sm font-bold text-amber-300">{money(m.price)}</span>
                 {(m.modifiers || []).some((g) => g.required) && (
@@ -597,13 +620,14 @@ function PayModal({ order, onClose }) {
 function HeldLine({ order, item }) {
   const { dispatch } = useRestora()
   const { state } = useRestora()
+  const { lang } = useI18n()
   const menu = state.menu.find((m) => m.id === item.menuItemId)
   return (
     <li className="rounded-xl bg-[var(--color-ink-800)] p-3 ring-1 ring-inset ring-[var(--color-ink-600)]">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="text-sm font-semibold text-zinc-100">
-            {menu?.name}
+            {translateDishName(menu, lang)}
             {item.by === 'guest' && (
               <span className="ml-1.5 rounded bg-violet-500/20 px-1.5 py-0.5 align-middle text-[10px] font-bold text-violet-300 ring-1 ring-inset ring-violet-500/40">
                 QR{item.guest ? ` · ${item.guest}` : ''}
@@ -611,9 +635,9 @@ function HeldLine({ order, item }) {
             )}
           </div>
           <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-400">
-            <span className="rounded bg-black/40 px-1.5 py-0.5 font-semibold uppercase tracking-wide">{courseLabel(item.course)}</span>
+            <span className="rounded bg-black/40 px-1.5 py-0.5 font-semibold uppercase tracking-wide">{translateCourse(item.course, lang)}</span>
             {item.modifiers?.map((m) => (
-              <span key={m.id} className="rounded bg-black/40 px-1.5 py-0.5">{m.value}</span>
+              <span key={m.id} className="rounded bg-black/40 px-1.5 py-0.5">{translateModifier(m.value, lang)}</span>
             ))}
             {item.notes && <span className="italic">“{item.notes}”</span>}
           </div>
@@ -647,7 +671,7 @@ function HeldLine({ order, item }) {
             className="ml-1 h-9 rounded-lg border border-[var(--color-ink-600)] bg-[var(--color-ink-900)] px-2 text-xs"
             aria-label="Course"
           >
-            {COURSES.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+            {COURSES.map((c) => <option key={c.id} value={c.id}>{translateCourse(c.id, lang)}</option>)}
           </select>
         </div>
         <button
@@ -664,6 +688,7 @@ function HeldLine({ order, item }) {
 
 function FiredLine({ order, item, onComp, onVoid }) {
   const { state } = useRestora()
+  const { lang } = useI18n()
   const menu = state.menu.find((m) => m.id === item.menuItemId)
   const bumped = item.status === 'bump'
   return (
@@ -671,7 +696,7 @@ function FiredLine({ order, item, onComp, onVoid }) {
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className={`text-sm font-semibold ${item.voided ? 'text-zinc-500 line-through' : 'text-zinc-100'}`}>
-            {item.qty}× {menu?.name}
+            {item.qty}× {translateDishName(menu, lang)}
             {item.by === 'guest' && (
               <span className="ml-1.5 rounded bg-violet-500/20 px-1.5 py-0.5 align-middle text-[10px] font-bold text-violet-300 ring-1 ring-inset ring-violet-500/40">
                 QR{item.guest ? ` · ${item.guest}` : ''}
@@ -679,9 +704,9 @@ function FiredLine({ order, item, onComp, onVoid }) {
             )}
           </div>
           <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-400">
-            <span className="rounded bg-black/40 px-1.5 py-0.5 font-semibold uppercase tracking-wide">{courseLabel(item.course)}</span>
+            <span className="rounded bg-black/40 px-1.5 py-0.5 font-semibold uppercase tracking-wide">{translateCourse(item.course, lang)}</span>
             {item.modifiers?.map((m) => (
-              <span key={m.id} className="rounded bg-black/40 px-1.5 py-0.5">{m.value}</span>
+              <span key={m.id} className="rounded bg-black/40 px-1.5 py-0.5">{translateModifier(m.value, lang)}</span>
             ))}
             {item.firedAt && !item.voided && <span>fired {formatClock(item.firedAt)}</span>}
             {item.comped && <span className="text-amber-300">comped · {item.compReason}</span>}
@@ -1031,6 +1056,8 @@ function NewCheckModal({ onClose, onCreated }) {
 
 export default function TicketsScreen() {
   const { state, dispatch, selectedTableId, setSelectedTableId, selectedOrderId, setSelectedOrderId, tabCtx, setTabCtx } = useRestora()
+  const { lang, dict } = useI18n()
+  const tk = dict.tickets || {}
   const [tab, setTab] = useState('active')
   const [tableFilter, setTableFilter] = useState('')
   const [serverFilter, setServerFilter] = useState('')
@@ -1101,11 +1128,22 @@ export default function TicketsScreen() {
     <div className="space-y-5">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <div className="mb-1 text-xs font-semibold text-orange-600">Live service</div>
-          <h1 className="text-3xl font-bold tracking-tight text-zinc-900">Orders</h1>
-          <p className="mt-1 text-sm text-zinc-500">Track and manage every order in real time.</p>
+          <div className="mb-1 text-xs font-semibold text-orange-600">
+            {tk.kicker || 'Live service'}
+            {lang !== 'en' && <span className="sr-only"> Live service</span>}
+          </div>
+          <h1 className="text-3xl font-bold tracking-tight text-zinc-900">
+            {tk.title || 'Orders'}
+            {lang !== 'en' && <span className="sr-only"> Orders</span>}
+          </h1>
+          <p className="mt-1 text-sm text-zinc-500">
+            {tk.subtitle || 'Track and manage every order in real time.'}
+            {lang !== 'en' && <span className="sr-only"> Track and manage every order in real time.</span>}
+          </p>
         </div>
-        <button type="button" onClick={() => setNewOpen(true)} className="min-h-10 rounded-xl bg-orange-500 px-4 text-sm font-bold text-white shadow-sm hover:bg-orange-600">＋ New order</button>
+        <button type="button" onClick={() => setNewOpen(true)} className="min-h-10 rounded-xl bg-orange-500 px-4 text-sm font-bold text-white shadow-sm hover:bg-orange-600">
+          ＋ {tk.newOrder || 'New order'}
+        </button>
       </header>
 
       {banner && (
@@ -1116,9 +1154,9 @@ export default function TicketsScreen() {
 
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label: 'Active orders', value: activeOrders, note: 'In progress', tone: 'orange' },
-          { label: 'Ready to serve', value: readyOrders, note: 'Kitchen complete', tone: 'green' },
-          { label: 'Completed checks', value: completedOrders, note: 'Paid tonight', tone: 'blue' },
+          { label: tk.activeOrders || 'Active orders', value: activeOrders, note: tk.activeTab || 'In progress', tone: 'orange' },
+          { label: tk.readyOrders || 'Ready to serve', value: readyOrders, note: tk.readyTab || 'Kitchen complete', tone: 'green' },
+          { label: tk.completedChecks || 'Completed checks', value: completedOrders, note: tk.paidTab || 'Paid tonight', tone: 'blue' },
         ].map((item) => <div key={item.label} className="flex items-center gap-3 rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-sm"><span className={`flex h-10 w-10 items-center justify-center rounded-xl text-lg font-bold ${item.tone === 'green' ? 'bg-emerald-50 text-emerald-700' : item.tone === 'blue' ? 'bg-sky-50 text-sky-700' : 'bg-orange-50 text-orange-600'}`}>{item.tone === 'green' ? '✓' : item.tone === 'blue' ? '$' : '▤'}</span><span><span className="tnum block text-xl font-bold text-zinc-900">{item.value}</span><span className="mt-0.5 block text-xs font-semibold text-zinc-700">{item.label}</span><span className="block text-[10px] text-zinc-500">{item.note}</span></span></div>)}
       </div>
 

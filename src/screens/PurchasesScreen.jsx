@@ -12,6 +12,7 @@ import { useMemo, useState } from 'react'
 import { Icon } from '../components/Icon'
 import StatusPill from '../components/StatusPill'
 import { Field, Modal, btnGhost, btnPrimary, inputCls } from '../components/ui'
+import { translateInventoryName, useI18n } from '../lib/i18n'
 import { money, reorderPointFor, stockStatusFor, suggestedOrderQty, uid } from '../lib/models'
 import { PURCHASE_STATUS_META, PURCHASE_STATUSES } from '../lib/reducer'
 import { documentNumber, sanitizeSettings } from '../lib/settings'
@@ -425,6 +426,8 @@ function ReceiveModal({ purchase, onClose, onReceive }) {
 
 export default function PurchasesScreen() {
   const { state, dispatch, issueDocument, role } = useRestora()
+  const { lang, dict } = useI18n()
+  const pur = dict.purchases || {}
   const [filter, setFilter] = useState('open')
   const [supplierFilter, setSupplierFilter] = useState('all')
   const [editing, setEditing] = useState(null)
@@ -500,18 +503,30 @@ export default function PurchasesScreen() {
     setFlash(`${doc.title} downloaded.`)
   }
 
+  const filterLabels = {
+    open: pur.ordered || 'Open',
+    received: pur.received || 'Received',
+    cancelled: lang === 'km' ? 'បានបោះបង់' : lang === 'zh' ? '已取消' : 'Cancelled',
+    all: pur.allOrders || 'All',
+  }
+
   return (
     <div className="space-y-4">
       <div className={`${cardCls} flex flex-wrap items-center justify-between gap-3 px-4 py-3`}>
         <div>
-          <h2 className="text-lg font-semibold text-zinc-900">Purchases</h2>
+          <h2 className="text-lg font-semibold text-zinc-900">
+            {pur.title || 'Purchases'}
+            {lang !== 'en' && <span className="sr-only"> Purchases</span>}
+          </h2>
           <p className="text-sm text-zinc-500">
-            Order from suppliers, receive into stock, and print the paperwork. Receipts are what move the ledger.
+            {pur.subtitle || 'Order from suppliers, receive into stock, and print the paperwork. Receipts are what move the ledger.'}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" className={btnPrimary} onClick={() => { setFlash(''); setEditing({ purchase: null, supplierId: '' }) }}>
-            <Icon name="cart" className="mr-1.5 h-4 w-4" /> New purchase order
+            <Icon name="cart" className="mr-1.5 h-4 w-4" />
+            {pur.newPurchaseOrder || 'New purchase order'}
+            {lang !== 'en' && <span className="sr-only"> New purchase order</span>}
           </button>
         </div>
       </div>
@@ -524,12 +539,12 @@ export default function PurchasesScreen() {
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div className={`${cardCls} px-4 py-3`}>
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">On order</div>
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{pur.ordered || 'On order'}{lang !== 'en' && <span className="sr-only"> On order</span>}</div>
           <div className="mt-1 text-2xl font-semibold text-zinc-900">{money(stats.openValue, settings.currency)}</div>
           <div className="text-xs text-zinc-500">{stats.openOrders.length} open order(s)</div>
         </div>
         <div className={`${cardCls} px-4 py-3`}>
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Bought · 30 days</div>
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{pur.received || 'Bought · 30 days'}{lang !== 'en' && <span className="sr-only"> Bought · 30 days</span>}</div>
           <div className="mt-1 text-2xl font-semibold text-zinc-900">{money(stats.spend, settings.currency)}</div>
           <div className="text-xs text-zinc-500">{stats.orders} receipt(s) · {stats.quickReceipts} quick receipt(s)</div>
         </div>
@@ -539,7 +554,7 @@ export default function PurchasesScreen() {
           <div className="text-xs text-zinc-500">{lowStock.length ? 'waiting to be ordered' : 'everything is stocked'}</div>
         </div>
         <div className={`${cardCls} px-4 py-3`}>
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Top supplier · 30 days</div>
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{pur.supplier || 'Top supplier · 30 days'}</div>
           <div className="mt-1 truncate text-lg font-semibold text-zinc-900">{stats.bySupplier[0]?.name || '—'}</div>
           <div className="text-xs text-zinc-500">{stats.bySupplier[0] ? money(stats.bySupplier[0].value, settings.currency) : 'no spend yet'}</div>
         </div>
@@ -560,7 +575,7 @@ export default function PurchasesScreen() {
                 <li key={item.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 text-sm font-medium text-zinc-800">
-                      {item.name}
+                      {translateInventoryName(item, lang)}
                       <StatusPill tone={status.tone} size="sm">{status.label}</StatusPill>
                     </div>
                     <div className="text-xs text-zinc-500">
@@ -593,7 +608,7 @@ export default function PurchasesScreen() {
                   onClick={() => setFilter(entry.id)}
                   className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${filter === entry.id ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'}`}
                 >
-                  {entry.label} · {count}
+                  {filterLabels[entry.id] || entry.label} · {count}
                 </button>
               )
             })}

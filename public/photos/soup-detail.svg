@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" role="img" aria-label="Soup of the Day close-up">
+  <defs><linearGradient id="bgd_soup" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#fefce8"/><stop offset="1" stop-color="#fde68a"/></linearGradient></defs>
+  <rect width="320" height="200" fill="url(#bgd_soup)"/>
+  <circle cx="160" cy="100" r="82" fill="#ffffff" opacity="0.92"/>
+  <g transform="translate(-32, -20) scale(1.2)"><circle cx="160" cy="104" r="56" fill="#f59e0b"/><circle cx="160" cy="104" r="46" fill="#fbbf24"/><path d="M135 98c12-10 38-10 50 0" stroke="#fef3c7" stroke-width="4" fill="none" stroke-linecap="round"/><circle cx="152" cy="102" r="5" fill="#15803d"/><circle cx="170" cy="110" r="5" fill="#15803d"/></g>
+</svg>

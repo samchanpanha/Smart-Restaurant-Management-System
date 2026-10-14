@@ -4,6 +4,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { Icon } from '../components/Icon'
+import { useI18n } from '../lib/i18n'
 
 const cardCls = 'rounded-2xl border border-zinc-200/80 bg-white shadow-sm'
 const input = 'min-h-10 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 outline-none transition focus:border-orange-300 focus:ring-2 focus:ring-orange-100'
@@ -26,6 +27,8 @@ async function send(method, route, body) {
 }
 
 export default function OwnersScreen() {
+  const { lang, dict } = useI18n()
+  const ow = dict.owners || {}
   const [owners, setOwners] = useState([])
   const [error, setError] = useState('')
   const [ready, setReady] = useState(false)
@@ -77,8 +80,14 @@ export default function OwnersScreen() {
   return (
     <div className="mx-auto max-w-5xl space-y-5">
       <header>
-        <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Host owners</h1>
-        <p className="mt-1 text-sm text-zinc-500">Every restaurant on the platform. Suspend, reactivate, or offboard a tenant.</p>
+        <h1 className="text-2xl font-bold tracking-tight text-zinc-900">
+          {ow.title || 'Host owners'}
+          {lang !== 'en' && <span className="sr-only"> Host owners</span>}
+        </h1>
+        <p className="mt-1 text-sm text-zinc-500">
+          {ow.subtitle || 'Every restaurant on the platform. Suspend, reactivate, or offboard a tenant.'}
+          {lang !== 'en' && <span className="sr-only"> Every restaurant on the platform. Suspend, reactivate, or offboard a tenant.</span>}
+        </p>
       </header>
 
       {error && <p role="alert" className="rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700 ring-1 ring-inset ring-red-200">{error}</p>}
@@ -101,7 +110,7 @@ export default function OwnersScreen() {
                     <span className="block truncate text-xs text-zinc-500">{owner.slug} · {owner.userCount} user{owner.userCount === 1 ? '' : 's'}</span>
                   </span>
                   <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${owner.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                    {owner.status}
+                    {owner.status === 'active' ? (ow.active || 'active') : (ow.suspended || owner.status)}
                   </span>
                   <button
                     type="button"
@@ -120,13 +129,13 @@ export default function OwnersScreen() {
         </section>
 
         <section className={`${cardCls} p-5`}>
-          <h2 className="text-sm font-bold text-zinc-800">Onboard a restaurant</h2>
+          <h2 className="text-sm font-bold text-zinc-800">{ow.addOwner || 'Onboard a restaurant'}</h2>
           <form className="mt-3 space-y-3" onSubmit={create}>
-            <input required placeholder="Restaurant name" value={draft.ownerName} onChange={(event) => setDraft({ ...draft, ownerName: event.target.value })} className={input} />
-            <input required placeholder="Owner name" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} className={input} />
-            <input required type="email" placeholder="Owner email" value={draft.email} onChange={(event) => setDraft({ ...draft, email: event.target.value })} className={input} />
+            <input required placeholder={ow.restaurantName || 'Restaurant name'} value={draft.ownerName} onChange={(event) => setDraft({ ...draft, ownerName: event.target.value })} className={input} />
+            <input required placeholder={ow.ownerName || 'Owner name'} value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} className={input} />
+            <input required type="email" placeholder={ow.ownerEmail || 'Owner email'} value={draft.email} onChange={(event) => setDraft({ ...draft, email: event.target.value })} className={input} />
             <input required type="password" minLength={8} placeholder="Temporary password" value={draft.password} onChange={(event) => setDraft({ ...draft, password: event.target.value })} className={input} />
-            <button type="submit" disabled={busy} className={btnPrimary}>Create restaurant</button>
+            <button type="submit" disabled={busy} className={btnPrimary}>{ow.createOwner || 'Create restaurant'}</button>
           </form>
         </section>
       </div>

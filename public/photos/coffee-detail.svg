@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" role="img" aria-label="Dinner Coffee close-up">
+  <defs><linearGradient id="bgd_coffee" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#fafaf9"/><stop offset="1" stop-color="#e7e5e4"/></linearGradient></defs>
+  <rect width="320" height="200" fill="url(#bgd_coffee)"/>
+  <circle cx="160" cy="100" r="82" fill="#ffffff" opacity="0.92"/>
+  <g transform="translate(-32, -20) scale(1.2)"><ellipse cx="160" cy="136" rx="54" ry="12" fill="#d6d3d1"/><rect x="126" y="78" width="64" height="52" rx="14" fill="#78350f"/><path d="M190 88h12a12 12 0 0 1 0 24h-12" stroke="#78350f" stroke-width="6" fill="none"/><ellipse cx="158" cy="82" rx="28" ry="8" fill="#451a03"/><path d="M146 66c0-8 6-8 6-16M166 66c0-8 6-8 6-16" stroke="#a8a29e" stroke-width="3" fill="none" stroke-linecap="round"/></g>
+</svg>

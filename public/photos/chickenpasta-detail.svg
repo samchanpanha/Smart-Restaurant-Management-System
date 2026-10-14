@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" role="img" aria-label="Chicken Pasta close-up">
+  <defs><linearGradient id="bgd_chickenpasta" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#fef9c3"/><stop offset="1" stop-color="#fde047"/></linearGradient></defs>
+  <rect width="320" height="200" fill="url(#bgd_chickenpasta)"/>
+  <circle cx="160" cy="100" r="82" fill="#ffffff" opacity="0.92"/>
+  <g transform="translate(-32, -20) scale(1.2)"><ellipse cx="160" cy="108" rx="58" ry="44" fill="#fef08a"/><path d="M120 98c20-16 60-16 80 0M118 112c24 14 60 14 84 0M126 124c18-10 50-10 68 0" stroke="#eab308" stroke-width="6" fill="none" stroke-linecap="round"/><rect x="134" y="84" width="52" height="16" rx="8" fill="#d97706"/><circle cx="160" cy="76" r="5" fill="#16a34a"/></g>
+</svg>

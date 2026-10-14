@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" role="img" aria-label="Ribeye Plate close-up">
+  <defs><linearGradient id="bgd_steak" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#fef2f2"/><stop offset="1" stop-color="#fecaca"/></linearGradient></defs>
+  <rect width="320" height="200" fill="url(#bgd_steak)"/>
+  <circle cx="160" cy="100" r="82" fill="#ffffff" opacity="0.92"/>
+  <g transform="translate(-32, -20) scale(1.2)"><ellipse cx="145" cy="106" rx="48" ry="34" fill="#7f1d1d"/><ellipse cx="145" cy="104" rx="40" ry="26" fill="#991b1b"/><path d="M122 92l26 26M140 88l26 26M158 92l18 18" stroke="#450a0a" stroke-width="3" stroke-linecap="round"/><rect x="194" y="84" width="8" height="42" rx="3" fill="#f59e0b"/><rect x="206" y="88" width="8" height="40" rx="3" fill="#fbbf24"/></g>
+</svg>

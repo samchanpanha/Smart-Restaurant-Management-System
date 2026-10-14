@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Icon } from '../components/Icon'
 import { ALL_SCREENS } from '../lib/auth'
 import { NAV_SECTIONS } from '../lib/constants'
+import { translateScreenLabel, useI18n } from '../lib/i18n'
 
 const cardCls = 'rounded-2xl border border-zinc-200/80 bg-white shadow-sm'
 const input = 'min-h-10 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 outline-none transition focus:border-orange-300 focus:ring-2 focus:ring-orange-100'
@@ -32,6 +33,8 @@ async function send(method, route, body) {
 }
 
 export default function RolesScreen() {
+  const { lang, dict } = useI18n()
+  const rl = dict.rolesScreen || {}
   const [roles, setRoles] = useState([])
   const [error, setError] = useState('')
   const [ready, setReady] = useState(false)
@@ -83,8 +86,14 @@ export default function RolesScreen() {
   return (
     <div className="mx-auto max-w-5xl space-y-5">
       <header>
-        <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Roles</h1>
-        <p className="mt-1 text-sm text-zinc-500">Each role is a set of screens. System roles are fixed; add your own for house jobs.</p>
+        <h1 className="text-2xl font-bold tracking-tight text-zinc-900">
+          {rl.title || 'Roles'}
+          {lang !== 'en' && <span className="sr-only"> Roles</span>}
+        </h1>
+        <p className="mt-1 text-sm text-zinc-500">
+          {rl.subtitle || 'Each role is a set of screens. System roles are fixed; add your own for house jobs.'}
+          {lang !== 'en' && <span className="sr-only"> Each role is a set of screens. System roles are fixed; add your own for house jobs.</span>}
+        </p>
       </header>
 
       {error && <p role="alert" className="rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700 ring-1 ring-inset ring-red-200">{error}</p>}
@@ -105,7 +114,7 @@ export default function RolesScreen() {
                       <span className="block truncate text-sm font-semibold text-zinc-800">{role.label}</span>
                       <span className="block truncate font-mono text-[11px] text-zinc-400">{role.key}</span>
                     </span>
-                    {role.isSystem && <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-semibold text-zinc-500">System</span>}
+                    {role.isSystem && <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-semibold text-zinc-500">{rl.systemRole || 'System'}</span>}
                     {!role.isSystem && (
                       <button type="button" onClick={() => remove(role.id)} className="rounded-lg p-1.5 text-zinc-400 hover:bg-red-50 hover:text-red-600" aria-label={`Delete ${role.label}`}>
                         <Icon name="trash" size={16} />
@@ -115,7 +124,7 @@ export default function RolesScreen() {
                   <div className="mt-2 flex flex-wrap gap-1.5 pl-12">
                     {(role.screens.includes('*') ? ALL_SCREENS : role.screens).map((id) => (
                       <span key={id} className="rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-medium text-orange-700 ring-1 ring-inset ring-orange-100">
-                        {SCREEN_LABELS[id] || id}
+                        {translateScreenLabel(id, SCREEN_LABELS[id] || id, lang)}
                       </span>
                     ))}
                   </div>
@@ -126,19 +135,19 @@ export default function RolesScreen() {
         </section>
 
         <section className={`${cardCls} p-5`}>
-          <h2 className="text-sm font-bold text-zinc-800">New role</h2>
+          <h2 className="text-sm font-bold text-zinc-800">{rl.addRole || 'New role'}</h2>
           <form className="mt-3 space-y-3" onSubmit={create}>
-            <input required placeholder="Name (Shift lead)" value={draft.label} onChange={(event) => setDraft({ ...draft, label: event.target.value })} className={input} />
+            <input required placeholder={rl.roleName || 'Name (Shift lead)'} value={draft.label} onChange={(event) => setDraft({ ...draft, label: event.target.value })} className={input} />
             <input required placeholder="Key (shift_lead)" value={draft.key} onChange={(event) => setDraft({ ...draft, key: event.target.value })} className={input} />
             <div className="max-h-56 space-y-1 overflow-y-auto rounded-xl border border-zinc-200 p-2">
               {ALL_SCREENS.map((id) => (
                 <label key={id} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50">
                   <input type="checkbox" checked={draft.screens.includes(id)} onChange={() => toggleScreen(id)} className="h-4 w-4 accent-orange-500" />
-                  {SCREEN_LABELS[id] || id}
+                  {translateScreenLabel(id, SCREEN_LABELS[id] || id, lang)}
                 </label>
               ))}
             </div>
-            <button type="submit" disabled={busy} className={btnPrimary}>Create role</button>
+            <button type="submit" disabled={busy} className={btnPrimary}>{rl.createRole || 'Create role'}</button>
           </form>
         </section>
       </div>

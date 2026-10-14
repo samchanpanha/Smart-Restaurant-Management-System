@@ -6,6 +6,7 @@
 import { useMemo, useState } from 'react'
 import StatusPill from '../components/StatusPill'
 import { Field, btnPrimary, inputCls } from '../components/ui'
+import { translateInventoryName, useI18n } from '../lib/i18n'
 import { money, plateCostFor, stockStatusFor } from '../lib/models'
 import { useRestora } from '../lib/store'
 
@@ -35,6 +36,8 @@ function dishesUsing(state, skuId) {
 
 function StockTab() {
   const { state } = useRestora()
+  const { lang, dict } = useI18n()
+  const inv = dict.inventory || {}
   const [filter, setFilter] = useState('all')
   const [loc, setLoc] = useState('all')
   const [query, setQuery] = useState('')
@@ -44,7 +47,11 @@ function StockTab() {
     .map((sku) => ({ sku, st: stockStatusFor(sku, state.settings) }))
     .filter(({ sku, st }) => {
       if (loc !== 'all' && sku.location !== loc) return false
-      if (query && !`${sku.name} ${sku.vendor}`.toLowerCase().includes(query.toLowerCase())) return false
+      if (query) {
+        const q = query.toLowerCase()
+        const localName = translateInventoryName(sku, lang).toLowerCase()
+        if (!`${sku.name} ${localName} ${sku.vendor}`.toLowerCase().includes(q)) return false
+      }
       if (filter === 'exceptions') return st !== 'ok' || sku.onHand < 0
       if (filter === 'low') return st === 'low'
       if (filter === 'out') return st === 'out'
@@ -56,10 +63,10 @@ function StockTab() {
     })
 
   const filters = [
-    ['all', `All items (${state.inventory.length})`],
-    ['exceptions', 'Exceptions'],
-    ['low', 'Low stock'],
-    ['out', 'Out of stock'],
+    ['all', `${inv.allItems || 'All items'} (${state.inventory.length})`],
+    ['exceptions', inv.exceptions || 'Exceptions'],
+    ['low', inv.lowStock || 'Low stock'],
+    ['out', inv.outOfStock || 'Out of stock'],
   ]
 
   function itemIcon(name) {
@@ -94,19 +101,20 @@ function StockTab() {
       <div className="overflow-x-auto">
         <table className="w-full min-w-[760px] border-collapse text-left">
           <thead className="bg-zinc-50 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
-            <tr><th className="px-5 py-3">Item</th><th className="px-4 py-3">Storage</th><th className="px-4 py-3">Current stock</th><th className="px-4 py-3">Par level</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Last cost</th></tr>
+            <tr><th className="px-5 py-3">{inv.item || 'Item'}</th><th className="px-4 py-3">{inv.storage || 'Storage'}</th><th className="px-4 py-3">{inv.currentStock || 'Current stock'}</th><th className="px-4 py-3">{inv.parLevel || 'Par level'}</th><th className="px-4 py-3">{inv.status || 'Status'}</th><th className="px-4 py-3">{inv.lastCost || 'Last cost'}</th></tr>
           </thead>
           <tbody className="divide-y divide-zinc-100">
             {rows.map(({ sku, st }) => {
               const negative = sku.onHand < 0
               const dishes = dishesUsing(state, sku.id)
+              const localName = translateInventoryName(sku, lang)
               return (
                 <tr key={sku.id} className="transition-colors hover:bg-orange-50/30">
-                  <td className="px-5 py-3.5"><div className="flex items-center gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-lg">{itemIcon(sku.name)}</span><span className="min-w-0"><span className="block text-sm font-semibold text-zinc-800">{sku.name}</span><span className="mt-0.5 block max-w-[260px] truncate text-[10px] text-zinc-500">{sku.vendor}{dishes.length ? ` · ${dishes.length} recipes` : ''}</span></span></div></td>
+                  <td className="px-5 py-3.5"><div className="flex items-center gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-lg">{itemIcon(sku.name)}</span><span className="min-w-0"><span className="block text-sm font-semibold text-zinc-800">{localName}{lang !== 'en' && localName !== sku.name && <span className="ml-1 text-xs font-normal text-zinc-500">({sku.name})</span>}</span><span className="mt-0.5 block max-w-[260px] truncate text-[10px] text-zinc-500">{sku.vendor}{dishes.length ? ` · ${dishes.length} recipes` : ''}</span></span></div></td>
                   <td className="px-4 py-3.5 text-xs capitalize text-zinc-500">{sku.location.replace('_', ' ')}</td>
                   <td className="px-4 py-3.5"><span className={`tnum text-sm font-bold ${negative ? 'text-red-600' : 'text-zinc-800'}`}>{sku.onHand}</span><span className="ml-1 text-[10px] text-zinc-500">{sku.unit}</span></td>
                   <td className="px-4 py-3.5 tnum text-sm text-zinc-700">{sku.par} <span className="text-[10px] text-zinc-400">{sku.unit}</span></td>
-                  <td className="px-4 py-3.5"><StatusPill tone={st === 'ok' ? 'ok' : st === 'low' ? 'warn' : 'bad'} size="sm">{st === 'ok' ? 'In stock' : st === 'low' ? 'Low stock' : 'Out of stock'}</StatusPill>{negative && <span className="ml-1 text-[10px] font-semibold text-red-600">Recount</span>}</td>
+                  <td className="px-4 py-3.5"><StatusPill tone={st === 'ok' ? 'ok' : st === 'low' ? 'warn' : 'bad'} size="sm">{st === 'ok' ? (inv.inStock || 'In stock') : st === 'low' ? (inv.lowStock || 'Low stock') : (inv.outOfStock || 'Out of stock')}</StatusPill>{negative && <span className="ml-1 text-[10px] font-semibold text-red-600">Recount</span>}</td>
                   <td className="px-4 py-3.5 tnum text-xs font-semibold text-zinc-700">{money(sku.lastCost)} <span className="font-normal text-zinc-400">/ {sku.unit}</span></td>
                 </tr>
               )
@@ -488,6 +496,8 @@ function WasteTab({ onDone }) {
 
 export default function InventoryScreen() {
   const { state } = useRestora()
+  const { lang, dict } = useI18n()
+  const inv = dict.inventory || {}
   const [tab, setTab] = useState('stock')
   const [banner, setBanner] = useState(null)
 
@@ -515,11 +525,18 @@ export default function InventoryScreen() {
   }
 
   const metrics = [
-    { label: 'Total items', value: state.inventory.length, note: 'Tracked SKUs', icon: '▧', tone: 'orange' },
-    { label: 'Low stock', value: low, note: `${belowPar} items below par`, icon: '!', tone: 'amber' },
-    { label: 'Out of stock', value: out, note: out ? 'Replenishment needed' : 'Everything available', icon: '◉', tone: 'red' },
-    { label: 'Inventory value', value: money(inventoryValue), note: 'At last invoice cost', icon: '$', tone: 'green' },
+    { label: inv.totalItems || 'Total items', value: state.inventory.length, note: 'Tracked SKUs', icon: '▧', tone: 'orange' },
+    { label: inv.lowStock || 'Low stock', value: low, note: `${belowPar} items below par`, icon: '!', tone: 'amber' },
+    { label: inv.outOfStock || 'Out of stock', value: out, note: out ? 'Replenishment needed' : 'Everything available', icon: '◉', tone: 'red' },
+    { label: inv.inventoryValue || 'Inventory value', value: money(inventoryValue), note: 'At last invoice cost', icon: '$', tone: 'green' },
   ]
+
+  const tabLabels = {
+    stock: inv.stockTab || 'Stock',
+    receive: inv.receiveTab || 'Receive',
+    count: inv.countTab || 'Count sheet',
+    waste: inv.wasteTab || 'Waste log',
+  }
 
   const iconTone = {
     orange: 'bg-orange-50 text-orange-600',
@@ -532,13 +549,20 @@ export default function InventoryScreen() {
     <div className="space-y-5">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <div className="mb-1 text-xs font-semibold text-orange-600">Stock control</div>
-          <h1 className="text-3xl font-bold tracking-tight text-zinc-900">Inventory</h1>
-          <p className="mt-1 text-sm text-zinc-500">Track stock, monitor usage, and prevent waste.</p>
+          <div className="mb-1 text-xs font-semibold text-orange-600">
+            {inv.kicker || 'Stock control'}
+            {lang !== 'en' && <span className="sr-only"> Stock control</span>}
+          </div>
+          <h1 className="text-3xl font-bold tracking-tight text-zinc-900">{inv.title || 'Inventory'}</h1>
+          <p className="mt-1 text-sm text-zinc-500">{inv.subtitle || 'Track stock, monitor usage, and prevent waste.'}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => setTab('receive')} className="min-h-10 rounded-xl bg-orange-500 px-4 text-sm font-bold text-white shadow-sm hover:bg-orange-600">＋ Receive stock</button>
-          <button type="button" onClick={downloadReport} className="min-h-10 rounded-xl border border-zinc-200 bg-white px-4 text-sm font-semibold text-zinc-700 hover:bg-zinc-50">↓ Download report</button>
+          <button type="button" onClick={() => setTab('receive')} className="min-h-10 rounded-xl bg-orange-500 px-4 text-sm font-bold text-white shadow-sm hover:bg-orange-600">
+            {inv.receiveStock || '＋ Receive stock'}
+          </button>
+          <button type="button" onClick={downloadReport} className="min-h-10 rounded-xl border border-zinc-200 bg-white px-4 text-sm font-semibold text-zinc-700 hover:bg-zinc-50">
+            {inv.downloadReport || '↓ Download report'}
+          </button>
         </div>
       </header>
 
@@ -551,7 +575,20 @@ export default function InventoryScreen() {
       {banner && <div className="animate-status-in rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status">{banner}</div>}
 
       <div className="flex gap-1 overflow-x-auto rounded-xl border border-zinc-200 bg-white p-1.5 shadow-sm" role="tablist" aria-label="Inventory sections">
-        {TABS.map((item) => <button key={item.id} role="tab" aria-selected={tab === item.id} type="button" onClick={() => setTab(item.id)} className={`min-h-10 flex-1 whitespace-nowrap rounded-lg px-4 text-sm font-semibold transition-colors ${tab === item.id ? 'bg-orange-500 text-white shadow-sm' : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-800'}`}>{item.label}{item.id === 'stock' && belowPar > 0 && <span className={`ml-2 rounded-full px-1.5 py-0.5 text-[10px] ${tab === item.id ? 'bg-white/20 text-white' : 'bg-orange-50 text-orange-700'}`}>{belowPar}</span>}</button>)}
+        {TABS.map((item) => (
+          <button
+            key={item.id}
+            role="tab"
+            aria-selected={tab === item.id}
+            type="button"
+            onClick={() => setTab(item.id)}
+            className={`min-h-10 flex-1 whitespace-nowrap rounded-lg px-4 text-sm font-semibold transition-colors ${tab === item.id ? 'bg-orange-500 text-white shadow-sm' : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-800'}`}
+          >
+            {tabLabels[item.id] || item.label}
+            {lang !== 'en' && <span className="sr-only"> {item.label}</span>}
+            {item.id === 'stock' && belowPar > 0 && <span className={`ml-2 rounded-full px-1.5 py-0.5 text-[10px] ${tab === item.id ? 'bg-white/20 text-white' : 'bg-orange-50 text-orange-700'}`}>{belowPar}</span>}
+          </button>
+        ))}
       </div>
 
       {tab === 'stock' && <StockTab />}
