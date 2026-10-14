@@ -583,13 +583,15 @@ function shopReducerBase(state, action) {
   switch (action.type) {
     // ── Floor ──────────────────────────────────────────────
     case 'SEAT_PARTY': {
-      const { tableId, partySize, reservationId } = action
+      const { tableId, partySize, reservationId, by } = action
       const table = state.tables.find((t) => t.id === tableId)
       if (!table) return state
-      assertTableTransition(table.status, 'seated')
+      if (table.status !== 'seated' && table.status !== 'occupied') {
+        assertTableTransition(table.status, 'seated')
+      }
       const tables = state.tables.map((t) =>
         t.id === tableId
-          ? { ...t, status: 'seated', seatedAt: new Date().toISOString(), partySize }
+          ? { ...t, status: 'seated', seatedAt: t.seatedAt || new Date().toISOString(), partySize: partySize || t.partySize || 2, seatedBy: by || t.seatedBy || 'host' }
           : t,
       )
       let { reservations, waitlist } = state
@@ -625,6 +627,193 @@ function shopReducerBase(state, action) {
       const table = state.tables.find((t) => t.id === tableId)
       if (!table || table.status !== 'billed') return state
       return shopReducerBase(state, { type: 'SET_TABLE_STATUS', tableId, to: 'dirty' })
+    }
+
+    case 'RELEASE_STALE_TABLES': {
+      // A table the mini app self-seated but where the guest never ordered is
+      // released back to the floor, so a dropped session can't squat a table.
+      const nowMs = Number(action.now) || Date.now()
+      const limitMin = Number(action.timeoutMinutes) || TARGETS.selfSeatReleaseMinutes
+      const occupied = new Set(
+        state.orders.filter((o) => !['paid', 'void'].includes(o.status)).map((o) => o.tableId),
+      )
+      let changed = false
+      const tables = state.tables.map((t) => {
+        if (t.status !== 'seated' || t.seatedBy !== 'guest' || !t.seatedAt) return t
+        if (occupied.has(t.id)) return t
+        const ageMin = (nowMs - new Date(t.seatedAt).getTime()) / 60000
+        if (ageMin < limitMin) return t
+        changed = true
+        return { ...t, status: 'free', currentCheckId: null, seatedAt: null, partySize: null, seatedBy: null }
+      })
+      return changed ? { ...state, tables } : state
+    }
+
+    case 'MINIAPP_CLAIM_TABLE': {
+      const payload = action.payload || action
+      const { tableId, guestName, partySize, guestPhone, sessionToken } = payload
+      const targetTable = (state.tables || []).find((t) => String(t.id) === String(tableId))
+
+      // Concurrency Guard: Only allow claiming if table is available/free
+      if (!targetTable || !['available', 'free', 'idle'].includes(targetTable.status)) {
+        return state
+      }
+
+      const seatedAt = new Date().toISOString()
+
+      return {
+        ...state,
+        tables: state.tables.map((t) =>
+          String(t.id) === String(tableId)
+            ? {
+                ...t,
+                status: 'occupied',
+                guestName: guestName?.trim() || 'Walk-in Guest',
+                partySize: Number(partySize) || 2,
+                guestPhone: guestPhone || '',
+                sessionToken,
+                seatedAt,
+                selfSeated: true,
+                lastActivityAt: seatedAt,
+              }
+            : t,
+        ),
+        movements: [
+          {
+            id: `mov-${Date.now()}`,
+            type: 'TABLE_SELF_SEATED',
+            tableId,
+            detail: `${guestName || 'Guest'} (${partySize || 2} pax) self-seated at ${targetTable.name || tableId}`,
+            timestamp: seatedAt,
+          },
+          ...(state.movements || []),
+        ],
+      }
+    }
+
+    case 'MINIAPP_RELEASE_TABLE': {
+      const payload = action.payload || action
+      const { tableId, sessionToken, forceByStaff = false } = payload
+      const targetTable = (state.tables || []).find((t) => String(t.id) === String(tableId))
+      if (!targetTable) return state
+
+      // Ownership Guard: Prevent another guest from releasing someone else's table
+      if (!forceByStaff && targetTable.sessionToken && targetTable.sessionToken !== sessionToken) {
+        return state
+      }
+
+      // Financial Guard: Check for open/unpaid tickets with ordered items
+      const ticketList = state.tickets || state.orders || []
+      const unpaidTickets = ticketList.filter(
+        (tk) =>
+          String(tk.tableId) === String(tableId) &&
+          !['paid', 'cancelled', 'closed', 'void'].includes(tk.status) &&
+          (tk.items?.length || 0) > 0,
+      )
+
+      const now = new Date().toISOString()
+
+      // Case 1: Guest has unpaid items -> Transition to 'billing' and alert staff
+      if (unpaidTickets.length > 0 && !forceByStaff) {
+        return {
+          ...state,
+          tables: state.tables.map((t) =>
+            String(t.id) === String(tableId)
+              ? { ...t, status: 'billing', releaseRequestedAt: now }
+              : t,
+          ),
+          movements: [
+            {
+              id: `mov-${Date.now()}`,
+              type: 'TABLE_BILL_REQUESTED',
+              tableId,
+              detail: `${targetTable.name || tableId} requested bill & table release`,
+              timestamp: now,
+            },
+            ...(state.movements || []),
+          ],
+        }
+      }
+
+      // Case 2: Guest already paid a ticket -> Mark table as 'cleaning' for bussing
+      // Case 3: Guest sat down, ordered nothing, and left -> Immediately 'available'
+      const hadPaidTicket = ticketList.some(
+        (tk) =>
+          String(tk.tableId) === String(tableId) &&
+          tk.status === 'paid' &&
+          (!targetTable.seatedAt || (tk.updatedAt || tk.paidAt || '') >= targetTable.seatedAt),
+      )
+
+      const nextStatus = hadPaidTicket && !forceByStaff ? 'cleaning' : 'available'
+
+      const nextTables = state.tables.map((t) =>
+        String(t.id) === String(tableId)
+          ? {
+              ...t,
+              status: nextStatus,
+              guestName: null,
+              partySize: null,
+              guestPhone: null,
+              sessionToken: null,
+              seatedAt: null,
+              selfSeated: false,
+              releaseRequestedAt: null,
+              currentCheckId: null,
+            }
+          : t,
+      )
+
+      const closeDraftTickets = (tk) =>
+        String(tk.tableId) === String(tableId) && (tk.items?.length || 0) === 0
+          ? { ...tk, status: 'closed' }
+          : tk
+
+      const nextState = {
+        ...state,
+        tables: nextTables,
+        movements: [
+          {
+            id: `mov-${Date.now()}`,
+            type: 'TABLE_RELEASED',
+            tableId,
+            detail: `${targetTable.name || tableId} released -> ${nextStatus}`,
+            timestamp: now,
+          },
+          ...(state.movements || []),
+        ],
+      }
+
+      if (state.tickets) {
+        nextState.tickets = state.tickets.map(closeDraftTickets)
+      }
+      if (state.orders) {
+        nextState.orders = state.orders.map(closeDraftTickets)
+      }
+
+      return nextState
+    }
+
+    case 'FLOOR_MARK_TABLE_AVAILABLE': {
+      const payload = action.payload || action
+      const { tableId } = payload
+      return {
+        ...state,
+        tables: state.tables.map((t) =>
+          String(t.id) === String(tableId)
+            ? {
+                ...t,
+                status: 'available',
+                guestName: null,
+                partySize: null,
+                sessionToken: null,
+                seatedAt: null,
+                selfSeated: false,
+                releaseRequestedAt: null,
+                currentCheckId: null,
+              }
+            : t,
+        ),
+      }
     }
 
     case 'ADD_TABLE': {
@@ -1039,7 +1228,7 @@ function shopReducerBase(state, action) {
     }
 
     case 'PAY_ORDER': {
-      const { orderId, method = 'card', split = null, tip = 0 } = action
+      const { orderId, method = 'card', split = null, tip = 0, freeTable = false } = action
       const order = state.orders.find((o) => o.id === orderId)
       if (!order || !['ready', 'served', 'in_prep', 'sent'].includes(order.status)) return state
       const menuById = Object.fromEntries(state.menu.map((m) => [m.id, m]))
@@ -1049,7 +1238,8 @@ function shopReducerBase(state, action) {
           ? { ...o, status: 'paid', paidAt: new Date().toISOString(), payMethod: method, split, tip: Number(tip) || 0, total, billRequested: null }
           : o,
       )
-      // Table ordered -> billed; record the turn for host wait quotes
+      // Table ordered -> billed; record the turn for host wait quotes.
+      // `freeTable` (guest paid in the mini app) skips busing and releases it.
       let tables = state.tables
       let turnHistory = state.turnHistory
       const table = state.tables.find((t) => t.id === order.tableId)
@@ -1058,6 +1248,9 @@ function shopReducerBase(state, action) {
         turnHistory = [...turnHistory.slice(-40), { partySize: table.partySize || 2, minutes: seatedMin }]
         tables = tables.map((t) => {
           if (t.id !== table.id) return t
+          if (freeTable) {
+            return { ...t, status: 'free', currentCheckId: null, seatedAt: null, partySize: null, seatedBy: null }
+          }
           if (t.status === 'ordered' || t.status === 'seated') return { ...t, status: 'billed' }
           return t
         })
@@ -1814,7 +2007,7 @@ const STOCK_ACTIONS = new Set([
   'ADD_INVENTORY_ITEM', 'UPDATE_INVENTORY_ITEM', 'DELETE_INVENTORY_ITEM',
 ])
 
-function shopReducer(state, action) {
+export function shopReducer(state, action) {
   const next = shopReducerBase(state, action)
   if (next === state) return state
   return STOCK_ACTIONS.has(action.type) ? applyAuto86(next) : next
@@ -1877,6 +2070,9 @@ export function reducer(state, action) {
     const next = shopReducer(shop, action.action)
     if (next === shop) return state
     return { ...state, locations: { ...state.locations, [action.locId]: next } }
+  }
+  if (Array.isArray(state.tables)) {
+    return shopReducer(state, action)
   }
   // Back-compat: a bare shop action applies to downtown (old clients/logs).
   const shop = state.locations?.downtown

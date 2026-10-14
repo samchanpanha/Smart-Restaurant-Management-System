@@ -2,26 +2,33 @@
 // Single source of truth for statuses, bands, and operational targets.
 // Mirrors docs/superpowers/specs/2026-10-12-restora-ux-design.md §7.
 
-export const TABLE_STATUSES = ['free', 'reserved', 'seated', 'ordered', 'billed', 'dirty']
+export const TABLE_STATUSES = ['free', 'reserved', 'seated', 'ordered', 'billed', 'dirty', 'available', 'occupied', 'billing', 'cleaning']
 
-// Strict machine: free -> seated -> ordered -> billed -> dirty -> free
-// `reserved` overlays `free` only.
+// Strict machine with 4-state self-seating support (available -> occupied -> billing -> cleaning -> available)
 export const TABLE_TRANSITIONS = {
-  free: ['seated', 'reserved'],
-  reserved: ['seated', 'free'], // seated = party arrived; free = release/no-show
-  seated: ['ordered', 'dirty'], // dirty = walkout edge case (manager)
-  ordered: ['billed'],
-  billed: ['dirty'],
-  dirty: ['free'],
+  free: ['seated', 'reserved', 'occupied'],
+  available: ['seated', 'reserved', 'occupied'],
+  reserved: ['seated', 'free', 'available', 'occupied'],
+  seated: ['ordered', 'dirty', 'billing', 'cleaning', 'available', 'free', 'occupied'],
+  occupied: ['ordered', 'dirty', 'billing', 'cleaning', 'available', 'free', 'seated'],
+  ordered: ['billed', 'billing', 'cleaning'],
+  billed: ['dirty', 'cleaning', 'available', 'free'],
+  billing: ['dirty', 'cleaning', 'available', 'free'],
+  dirty: ['free', 'available'],
+  cleaning: ['free', 'available'],
 }
 
 export const TABLE_STATUS_META = {
   free: { label: 'Free', tone: 'ok' },
+  available: { label: 'Available', tone: 'ok' },
   reserved: { label: 'Reserved', tone: 'info' },
   seated: { label: 'Seated', tone: 'info' },
+  occupied: { label: 'Occupied', tone: 'info' },
   ordered: { label: 'Ordered', tone: 'warn' },
   billed: { label: 'Billed', tone: 'warn' },
+  billing: { label: 'Billing', tone: 'warn' },
   dirty: { label: 'Dirty', tone: 'bad' },
+  cleaning: { label: 'Cleaning', tone: 'bad' },
 }
 
 export const TICKET_STATUSES = ['open', 'sent', 'in_prep', 'ready', 'served', 'paid', 'void']
@@ -99,6 +106,7 @@ export const TARGETS = {
   noShowMinutes: 15,
   parAlertHoursBeforeRush: 2,
   rushHour: 18, // 6pm dinner rush
+  selfSeatReleaseMinutes: 20, // mini-app self-seated table with no order is freed
 }
 
 export const ROLES = {

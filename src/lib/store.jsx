@@ -8,7 +8,7 @@
 // staff terminals stay pinned (?loc= kiosk param or downtown).
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react'
-import { ROLE_NAV } from './constants'
+import { ROLE_NAV, TARGETS } from './constants'
 import { baseCurrencyConfig, setActiveCurrency } from './currency'
 import { uid } from './models'
 import { buildEmpire, migrateToEmpire, reducer } from './reducer'
@@ -540,6 +540,22 @@ export function RestoraProvider({ children }) {
     return () => clearTimeout(t)
   }, [pendingUndo])
 
+  // Release tables the mini app self-seated where the guest never ordered, so
+  // an abandoned session can't squat a table. Any client can run the sweep;
+  // a repeat on the server collapses to a no-op.
+  const dispatchRef = useRef(dispatch)
+  dispatchRef.current = dispatch
+  useEffect(() => {
+    const t = setInterval(() => {
+      dispatchRef.current({
+        type: 'RELEASE_STALE_TABLES',
+        now: Date.now(),
+        timeoutMinutes: TARGETS.selfSeatReleaseMinutes,
+      })
+    }, 60000)
+    return () => clearInterval(t)
+  }, [])
+
   const value = useMemo(
     () => ({
       state, empire, dispatch, role, setRole, screen, setScreen,
@@ -573,6 +589,9 @@ export function useRestora() {
   if (!ctx) throw new Error('useRestora must be used inside RestoraProvider')
   return ctx
 }
+
+export const useStore = useRestora
+
 
 export function useNow(intervalMs = 1000) {
   const [now, setNow] = useState(Date.now())

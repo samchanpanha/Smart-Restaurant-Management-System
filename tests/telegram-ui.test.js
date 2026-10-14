@@ -201,6 +201,22 @@ test('the mini app route is the guest menu with Telegram chrome', async () => {
   assert.match(document.body.textContent, /isn’t seated yet|isn't seated yet/)
 })
 
+test('the call-server button confirms the request back to the guest', async () => {
+  await fresh()
+  dom.reconfigure({ url: 'http://localhost:5173/?tg=1&guest=t14' })
+  mountMiniApp()
+  await settle(80)
+
+  const call = byText('button', 'Call server')
+  assert.ok(call, 'a seated table can call the server')
+  click(call)
+  await settle(60)
+
+  // Not a dead end any more: the button becomes a confirmation.
+  assert.match(document.body.textContent, /Server notified/)
+  assert.ok(!byText('button', 'Call server'), 'the button does not stay tappable forever')
+})
+
 test('a table that is not seated can still order for pickup from the mini app', async () => {
   await fresh()
   dom.reconfigure({ url: 'http://localhost:5173/?tg=1&guest=t12' })
@@ -220,7 +236,7 @@ test('a table that is not seated can still order for pickup from the mini app', 
   assert.match(text, /Restora Burger/, 'and the menu unlocks')
 })
 
-test('opened from the chat the mini app starts on a table in service and lets the guest switch', async () => {
+test('opened from the chat the mini app starts in service and lets the guest self-seat a free table', async () => {
   await fresh()
   dom.reconfigure({ url: 'http://localhost:5173/?tg=1' })
   mountMiniApp()
@@ -232,17 +248,25 @@ test('opened from the chat the mini app starts on a table in service and lets th
   assert.match(text, /Table 8|Table 14|Table 3/, 'lands on a table that is in service')
   assert.match(text, /Restora Burger/, 'and the menu is right there')
 
-  const picker = document.querySelector('header select')
-  assert.ok(picker, 'the guest can choose another table')
-  const options = [...picker.querySelectorAll('option')].map((option) => option.textContent)
-  assert.ok(options.length >= 8)
-  act(() => {
-    const descriptor = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(picker), 'value')
-    descriptor.set.call(picker, 't14')
-    picker.dispatchEvent(new dom.window.Event('change', { bubbles: true }))
-  })
+  // The header opens the table picker (grid, not select)
+  const openPicker = byText('button', 'Table') || byText('button', 'Choose')
+  assert.ok(openPicker, 'the header offers a table picker')
+  click(openPicker)
   await settle(40)
-  assert.match(document.body.textContent, /Table 14/)
+  assert.ok(document.querySelector('[data-testid="table-picker"]'), 'the picker opens')
+  assert.match(document.body.textContent, /tables free/)
+
+  // Self-seat a free table.
+  const sit = $$('button').find((button) => (button.getAttribute('aria-label') || '').startsWith('Sit at'))
+  assert.ok(sit, 'free tables are tappable to sit')
+  const sitLabel = sit.getAttribute('aria-label')
+  click(sit)
+  await settle(60)
+
+  const after = document.body.textContent
+  assert.match(after, new RegExp(sitLabel.replace('Sit at ', '')))
+  assert.match(after, /Seated/) // the live status chip
+  assert.match(after, /Restora Burger/) // menu still there
 })
 
 test('an order sent from the mini app fires the platform hook', async () => {

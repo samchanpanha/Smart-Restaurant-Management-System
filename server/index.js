@@ -33,12 +33,12 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { attachAuth, createAuthRouter, getOwnerById, getOwnerBySlug, listOwners, seedAuth } from './auth.js'
 import { createTelegramRouter, sendTelegramMessage } from './telegram.js'
-import { createNotifier } from './notify.js'
+import { createNotifier, sendTelegramEvent } from './notify.js'
 import { replyKeyboard } from '../src/lib/telegram.js'
 import { STATE_VERSION, buildEmpire, migrateToEmpire, reducer } from '../src/lib/reducer.js'
 import { DOC_KINDS } from '../src/lib/settings.js'
 import {
-  DEFAULT_OWNER, actionsSince, commitAction, getCategories, getDocumentTotals, getDocuments, getInventory,
+  db, DEFAULT_OWNER, actionsSince, commitAction, getCategories, getDocumentTotals, getDocuments, getInventory,
   getMenuCatalog, getSettings, getSuppliers, loadSnapshot, logStats, saveSnapshot, syncMenuCatalog,
 } from './db.js'
 
@@ -273,6 +273,168 @@ app.post('/api/actions', resolveTenant, (req, res) => {
   if (runtime.ownerId === DEFAULT_TENANT) notifier?.handleAction(previous, next, action)
   res.json({ seq: nextSeq })
 })
+
+app.post('/api/miniapp/tables/:tableId/claim', async (req, res) => {
+  try {
+    const { tableId } = req.params
+    const { tenantId = DEFAULT_TENANT, guestName, partySize = 2, sessionToken } = req.body || {}
+
+    const state = await db.getState(tenantId)
+    if (!state) return res.status(404).json({ error: 'Tenant state not found' })
+    const table = (state.tables || []).find((t) => String(t.id) === String(tableId))
+
+    if (!table) return res.status(404).json({ error: 'Table not found' })
+    if (!['available', 'free', 'idle'].includes(table.status)) {
+      return res.status(409).json({ error: 'Table is already occupied' })
+    }
+
+    if (partySize > (table.capacity || table.seats || 12) + 2) {
+      return res.status(400).json({ error: 'Party size exceeds table capacity' });
+    }
+
+    table.status = 'occupied'
+    table.guestName = guestName?.trim() || 'Walk-in Guest'
+    table.partySize = Number(partySize)
+    table.sessionToken = sessionToken
+    table.seatedAt = new Date().toISOString()
+    table.selfSeated = true
+
+    await db.saveState(tenantId, state)
+
+    const runtime = runtimes.get(tenantId)
+    if (runtime) {
+      const action = {
+        type: 'MINIAPP_CLAIM_TABLE',
+        payload: { tableId, guestName, partySize, sessionToken },
+      }
+      const locId = req.body?.locId || 'downtown'
+      const wrapped = { type: 'LOC', locId, action }
+      try {
+        const next = reducer(runtime.state, wrapped)
+        const nextSeq = commitAction(runtime.ownerId, 'miniapp', wrapped, next)
+        runtime.state = next
+        runtime.seq = nextSeq
+        broadcast(runtime, { seq: nextSeq, action: wrapped, clientId: 'miniapp' })
+      } catch {
+        /* best-effort sync */
+      }
+    }
+
+    // Trigger Telegram notification to restaurant floor group
+    await (notifier?.sendTelegramEvent || sendTelegramEvent)(tenantId, {
+      type: 'SELF_SEATED',
+      text: `🪑 *New Self-Seated Table*\n• Table: *${table.name || table.id}*\n• Guest: ${table.guestName} (${table.partySize} pax)\n• Status: Ready to order`,
+    }).catch(() => {})
+
+    res.json({ ok: true, table })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/miniapp/tables/:tableId/release', async (req, res) => {
+  try {
+    const { tableId } = req.params
+    const { tenantId = DEFAULT_TENANT, sessionToken } = req.body || {}
+
+    const state = await db.getState(tenantId)
+    if (!state) return res.status(404).json({ error: 'Tenant state not found' })
+    const table = (state.tables || []).find((t) => String(t.id) === String(tableId))
+    if (!table) return res.status(404).json({ error: 'Table not found' })
+
+    if (table.sessionToken && table.sessionToken !== sessionToken) {
+      return res.status(403).json({ error: 'Unauthorized table session' })
+    }
+
+    const ticketList = state.tickets || state.orders || []
+    const unpaidTickets = ticketList.filter(
+      (tk) =>
+        String(tk.tableId) === String(tableId) &&
+        !['paid', 'cancelled', 'closed', 'void'].includes(tk.status) &&
+        (tk.items?.length || 0) > 0,
+    )
+
+    if (unpaidTickets.length > 0) {
+      table.status = 'billing'
+      table.releaseRequestedAt = new Date().toISOString()
+      await db.saveState(tenantId, state)
+
+      const runtime = runtimes.get(tenantId)
+      if (runtime) {
+        const action = {
+          type: 'MINIAPP_RELEASE_TABLE',
+          payload: { tableId, sessionToken },
+        }
+        const locId = req.body?.locId || 'downtown'
+        const wrapped = { type: 'LOC', locId, action }
+        try {
+          const next = reducer(runtime.state, wrapped)
+          const nextSeq = commitAction(runtime.ownerId, 'miniapp', wrapped, next)
+          runtime.state = next
+          runtime.seq = nextSeq
+          broadcast(runtime, { seq: nextSeq, action: wrapped, clientId: 'miniapp' })
+        } catch {
+          /* best-effort sync */
+        }
+      }
+
+      await (notifier?.sendTelegramEvent || sendTelegramEvent)(tenantId, {
+        type: 'BILL_REQUESTED',
+        text: `💳 *Bill & Table Release Requested*\n• Table: *${table.name || table.id}*\n• Unpaid Tickets: ${unpaidTickets.length}\n• Action: Bring check / verify payment`,
+      }).catch(() => {})
+
+      return res.json({
+        ok: true,
+        mode: 'BILLING_REQUIRED',
+        message: 'Your server has been notified to settle your bill.',
+        table,
+      })
+    }
+
+    const hadPaidOrders = ticketList.some(
+      (tk) => String(tk.tableId) === String(tableId) && tk.status === 'paid',
+    )
+
+    table.status = hadPaidOrders ? 'cleaning' : 'available'
+    table.guestName = null
+    table.partySize = null
+    table.sessionToken = null
+    table.seatedAt = null
+    table.selfSeated = false
+    table.releaseRequestedAt = null
+
+    await db.saveState(tenantId, state)
+
+    const runtime = runtimes.get(tenantId)
+    if (runtime) {
+      const action = {
+        type: 'MINIAPP_RELEASE_TABLE',
+        payload: { tableId, sessionToken },
+      }
+      const locId = req.body?.locId || 'downtown'
+      const wrapped = { type: 'LOC', locId, action }
+      try {
+        const next = reducer(runtime.state, wrapped)
+        const nextSeq = commitAction(runtime.ownerId, 'miniapp', wrapped, next)
+        runtime.state = next
+        runtime.seq = nextSeq
+        broadcast(runtime, { seq: nextSeq, action: wrapped, clientId: 'miniapp' })
+      } catch {
+        /* best-effort sync */
+      }
+    }
+
+    await (notifier?.sendTelegramEvent || sendTelegramEvent)(tenantId, {
+      type: 'TABLE_RELEASED',
+      text: `✨ *Table Released by Guest*\n• Table: *${table.name || table.id}*\n• Next State: *${table.status.toUpperCase()}*`,
+    }).catch(() => {})
+
+    res.json({ ok: true, mode: 'RELEASED', table })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 
 // ─── Telegram bot ───────────────────────────────────────────────
 // The bot runs the SAME reducer as the terminals: a /86 from a phone is

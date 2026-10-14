@@ -415,3 +415,69 @@ test('a pickup order from the mini app creates and fires a takeout ticket', () =
   assert.equal(takeouts[0].status, 'in_prep')
 })
 
+test('the mini app self-seats a free table, orders, and paying frees it again', () => {
+  let empire = buildEmpire()
+  const table = shopOf(empire).tables.find((t) => t.status === 'free')
+  assert.ok(table, 'there is a free table to claim')
+
+  // Tap a free table in the mini app → it seats the guest party.
+  empire = act(empire, 'downtown', { type: 'SEAT_PARTY', tableId: table.id, partySize: 2, by: 'guest' })
+  const seated = shopOf(empire).tables.find((t) => t.id === table.id)
+  assert.equal(seated.status, 'seated')
+  assert.equal(seated.seatedBy, 'guest')
+
+  // Order + fire through the guest path.
+  const dish = shopOf(empire).menu.find((m) => m.active !== false)
+  const orderId = 'o_selfseat'
+  empire = act(empire, 'downtown', { type: 'CREATE_ORDER', id: orderId, tableId: table.id })
+  empire = act(empire, 'downtown', { type: 'ADD_ITEM', orderId, menuItemId: dish.id, qty: 1, by: 'guest' })
+  empire = act(empire, 'downtown', { type: 'SEND_ORDER', orderId })
+  assert.equal(shopOf(empire).tables.find((t) => t.id === table.id).status, 'ordered')
+
+  // Guest pays in the mini app → table clears straight back to free.
+  empire = act(empire, 'downtown', { type: 'PAY_ORDER', orderId, method: 'card', freeTable: true })
+  const freed = shopOf(empire).tables.find((t) => t.id === table.id)
+  assert.equal(freed.status, 'free')
+  assert.equal(freed.currentCheckId, null)
+  assert.equal(freed.seatedAt, null)
+  assert.equal(freed.seatedBy, null)
+  assert.equal(shopOf(empire).orders.find((o) => o.id === orderId).status, 'paid')
+})
+
+test('paying without freeTable still bills the table (staff flow unchanged)', () => {
+  let empire = buildEmpire()
+  const table = shopOf(empire).tables.find((t) => t.status === 'ordered')
+  const order = shopOf(empire).orders.find((o) => o.tableId === table.id && !['paid', 'void'].includes(o.status))
+  assert.ok(order, 'the ordered table has an open check')
+
+  empire = act(empire, 'downtown', { type: 'PAY_ORDER', orderId: order.id, method: 'card' })
+  assert.equal(shopOf(empire).tables.find((t) => t.id === table.id).status, 'billed')
+})
+
+test('a stale self-seated table is released, but ordered or staff-seated ones are not', () => {
+  let empire = buildEmpire()
+  const [lost, ordered, staff] = shopOf(empire).tables.filter((t) => t.status === 'free').slice(0, 3)
+  const dish = shopOf(empire).menu.find((m) => m.active !== false)
+
+  // Abandoned: guest sat down but never ordered.
+  empire = act(empire, 'downtown', { type: 'SEAT_PARTY', tableId: lost.id, partySize: 2, by: 'guest' })
+  // Guest sat down AND ordered — the ticket protects the table.
+  empire = act(empire, 'downtown', { type: 'SEAT_PARTY', tableId: ordered.id, partySize: 2, by: 'guest' })
+  empire = act(empire, 'downtown', { type: 'CREATE_ORDER', id: 'o_keep', tableId: ordered.id })
+  empire = act(empire, 'downtown', { type: 'ADD_ITEM', orderId: 'o_keep', menuItemId: dish.id, qty: 1, by: 'guest' })
+  empire = act(empire, 'downtown', { type: 'SEND_ORDER', orderId: 'o_keep' })
+  // A host seated this one — only self-seated tables expire.
+  empire = act(empire, 'downtown', { type: 'SEAT_PARTY', tableId: staff.id, partySize: 4, by: 'host' })
+
+  // A sweep right after seating releases nothing.
+  const immediately = act(empire, 'downtown', { type: 'RELEASE_STALE_TABLES', now: Date.now(), timeoutMinutes: 20 })
+  assert.equal(immediately, empire, 'nothing is stale yet')
+
+  // Past the window, only the abandoned self-seat goes back to the floor.
+  const later = Date.now() + 21 * 60000
+  empire = act(empire, 'downtown', { type: 'RELEASE_STALE_TABLES', now: later, timeoutMinutes: 20 })
+  assert.equal(shopOf(empire).tables.find((t) => t.id === lost.id).status, 'free', 'abandoned self-seat released')
+  assert.equal(shopOf(empire).tables.find((t) => t.id === ordered.id).status, 'ordered', 'table with a ticket kept')
+  assert.equal(shopOf(empire).tables.find((t) => t.id === staff.id).status, 'seated', 'staff-seated table kept')
+})
+

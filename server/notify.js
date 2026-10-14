@@ -241,5 +241,20 @@ export function createNotifier({
     return { ...digest, sent: result.sent, targets: result.targets || [] }
   }
 
-  return { registerChat, handleAction, tick, preview, stats, targets, deliver, get lastDigestKey() { return lastDigestKey } }
+  async function sendTelegramEvent(tenantId, event) {
+    const text = event?.text || ''
+    if (!text) return { sent: 0 }
+    const empire = getState?.()
+    const shop = empire?.locations?.['downtown'] || Object.values(empire?.locations || {})[0]
+    return deliver(text, shop?.settings)
+  }
+
+  return { registerChat, handleAction, tick, preview, stats, targets, deliver, sendTelegramEvent, get lastDigestKey() { return lastDigestKey } }
 }
+
+export async function sendTelegramEvent(tenantId, event) {
+  const text = event?.text || ''
+  if (!text) return { sent: 0 }
+  return sendTelegramMessage(process.env.TELEGRAM_NOTIFICATION_CHAT || '', text, { parseMode: 'Markdown' })
+}
+

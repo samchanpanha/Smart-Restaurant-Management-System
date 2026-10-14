@@ -736,6 +736,30 @@ export function saveSnapshot(ownerId, state, seq) {
   saveSnapshotTx(ownerId, JSON.stringify(state), seq, state)
 }
 
+export async function getState(ownerId = DEFAULT_OWNER) {
+  const snap = loadSnapshot(ownerId)
+  if (snap?.state) {
+    const locId = 'downtown'
+    return snap.state.locations?.[locId] || snap.state
+  }
+  return null
+}
+
+export async function saveState(ownerId = DEFAULT_OWNER, state) {
+  const persisted = loadSnapshot(ownerId)
+  let fullState = persisted?.state || {}
+  if (fullState.locations) {
+    fullState = { ...fullState, locations: { ...fullState.locations, downtown: state } }
+  } else {
+    fullState = state
+  }
+  saveSnapshot(ownerId, fullState, persisted?.seq || 0)
+}
+
+db.getState = getState
+db.saveState = saveState
+
+
 export function syncMenuCatalog(ownerId, state) {
   syncMenuCatalogStandalone(ownerId, state)
 }

@@ -36,6 +36,19 @@ const DESC = {
 const courseFor = (menu) =>
   menu.category === 'Starters' ? 'appetizer' : menu.category === 'Desserts' ? 'dessert' : 'main'
 
+// Friendly, guest-facing ticket states for the live status chip.
+const TICKET_LABELS = {
+  open: 'Seated',
+  seated: 'Seated',
+  occupied: 'Seated',
+  sent: 'Order received',
+  in_prep: 'Cooking',
+  ready: 'Ready',
+  served: 'Served',
+  paid: 'Paid',
+  void: 'Cancelled',
+}
+
 function openOrderFor(state, tableId) {
   return state.orders.find((o) => o.tableId === tableId && !['paid', 'void'].includes(o.status))
 }
@@ -186,7 +199,7 @@ function PaySheet({ order, onClose, onPaid }) {
         <button
           type="button"
           onClick={() => {
-            dispatch({ type: 'PAY_ORDER', orderId: order.id, method: 'card', tip: Math.round(tip * 100) / 100, split: { kind: 'full', by: 'guest' } })
+            dispatch({ type: 'PAY_ORDER', orderId: order.id, method: 'card', tip: Math.round(tip * 100) / 100, split: { kind: 'full', by: 'guest' }, freeTable: true })
             onPaid()
           }}
           className="tnum mt-4 min-h-[52px] w-full rounded-2xl bg-amber-500 text-base font-extrabold text-stone-950 hover:bg-amber-400"
@@ -201,13 +214,13 @@ function PaySheet({ order, onClose, onPaid }) {
 
 // ─── Guest app ────────────────────────────────────────────────────
 
-export default function GuestScreen({ tableId, allowPickup = false }) {
+export default function GuestScreen({ tableId, allowPickup = false, onSelfSeat = null }) {
   const { state, dispatch, locId, link } = useRestora()
   const { lang, dict } = useI18n()
   useDomTranslator(null, lang)
   const gu = dict.guest || {}
   const { items: catalogMenu } = useMenuCatalog(state.menu, locId, link.status)
-  useNow(5000)
+  const now = useNow(5000)
   const [tab, setTab] = useState('menu')
   const [cat, setCat] = useState('Mains')
   const [cart, setCart] = useState([])
@@ -349,20 +362,33 @@ export default function GuestScreen({ tableId, allowPickup = false }) {
         <div className="text-4xl">🪑</div>
         <h1 className="mt-3 text-xl font-extrabold">{translateTableName(table.name, lang)}{lang === 'km' ? ' មិនទាន់បានដាក់ភ្ញៀវអង្គុយទេ។' : lang === 'zh' ? ' 尚未入座。' : " isn't seated yet."}{lang !== 'en' && <span className="sr-only"> {table.name} isn&apos;t seated yet.</span>}</h1>
         <p className="mt-1 text-sm text-stone-500">{lang === 'km' ? 'បុគ្គលិកទទួលភ្ញៀវនឹងដាក់លោកអ្នកអង្គុយ បន្ទាប់មកមុខម្ហូបនេះនឹងបើក។ ការរង់ចាំគឺមានតម្លៃ។' : lang === 'zh' ? '接待员安排入座后，菜单即会解锁。等待是值得的。' : 'Your host will seat you, then this menu unlocks. The wait is worth it.'}</p>
-        {allowPickup && (
+        {(allowPickup || onSelfSeat) && (
           <div className="mt-5 space-y-3">
-            <button
-              type="button"
-              onClick={() => setPickup(true)}
-              className="min-h-[48px] w-full rounded-2xl bg-stone-900 text-sm font-extrabold text-white"
-            >
-              {gu.orderForPickup || '🍽 Order for pickup instead'}
-            </button>
-            <p className="text-[11px] leading-relaxed text-stone-400">
-              {openTables.length
-                ? 'Or scan the QR tent once your host has seated you.'
-                : 'No tables are open yet — order now and we\u2019ll have it ready.'}
-            </p>
+            {onSelfSeat && (
+              <button
+                type="button"
+                onClick={onSelfSeat}
+                className="min-h-[48px] w-full rounded-2xl bg-amber-500 text-sm font-extrabold text-stone-950 hover:bg-amber-400"
+              >
+                🪑 Sit at {translateTableName(table.name, lang)}
+              </button>
+            )}
+            {allowPickup && (
+              <button
+                type="button"
+                onClick={() => setPickup(true)}
+                className="min-h-[48px] w-full rounded-2xl bg-stone-900 text-sm font-extrabold text-white"
+              >
+                {gu.orderForPickup || '🍽 Order for pickup instead'}
+              </button>
+            )}
+            {allowPickup && (
+              <p className="text-[11px] leading-relaxed text-stone-400">
+                {openTables.length
+                  ? 'Or tap a free table above to sit down.'
+                  : 'No tables are free right now — you can still order for pickup.'}
+              </p>
+            )}
           </div>
         )}
       </div>,
@@ -394,6 +420,20 @@ export default function GuestScreen({ tableId, allowPickup = false }) {
   const payable = order && ['sent', 'in_prep', 'ready', 'served'].includes(order.status) && !heldAny
   const bill = order ? orderTotals(order, menuById, state.settings.taxPct) : null
   const heading = pickup ? (gu.pickupOrder || 'Pickup order') : translateTableName(table.name, lang)
+  // "Call server" needs feedback: without it the tap looks dead. Treat a call
+  // as live for 4 minutes so the guest sees "Server notified" and can re-call
+  // if nobody comes. Staff clear it via ACK_REQUESTS (ACK clears serverCalledAt).
+  const serverCalled = !pickup && table?.serverCalledAt
+    ? now - new Date(table.serverCalledAt).getTime() < 4 * 60 * 1000
+    : false
+  // Live, guest-facing status: Seated → Order received → Cooking → Ready → Paid.
+  const liveStatus = (() => {
+    if (pickup) return pickupPaid ? 'Paid' : pickupOrder ? (TICKET_LABELS[pickupOrder.status] || 'Order placed') : null
+    if (order) return TICKET_LABELS[order.status] || 'Seated'
+    if (paid) return 'Paid'
+    if (table && (table.status === 'seated' || table.status === 'ordered')) return TICKET_LABELS[table.status]
+    return null
+  })()
 
   return (
     <div className="min-h-screen bg-[#faf6ef] text-stone-900">
@@ -411,17 +451,34 @@ export default function GuestScreen({ tableId, allowPickup = false }) {
               {heading}
               {!pickup && lang !== 'en' && <span className="sr-only"> {table.name}</span>}
             </h1>
+            {liveStatus && (
+              <span
+                className="mt-1 inline-block rounded-full bg-amber-500/15 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-amber-800"
+                role="status"
+              >
+                {liveStatus}
+                {lang !== 'en' && <span className="sr-only"> {liveStatus}</span>}
+              </span>
+            )}
           </div>
-          {!pickup && (
+          {!pickup && (serverCalled ? (
+            <span
+              className="flex min-h-[44px] items-center rounded-full border border-emerald-200 bg-emerald-50 px-4 text-sm font-bold text-emerald-700"
+              role="status"
+            >
+              ✓ {gu.serverCalled || 'Server notified'}
+              {lang !== 'en' && <span className="sr-only"> Server notified</span>}
+            </span>
+          ) : (
             <button
               type="button"
               onClick={() => dispatch({ type: 'CALL_SERVER', tableId })}
-              className="min-h-[44px] rounded-full border border-stone-200 bg-white px-4 text-sm font-bold text-stone-700 shadow-sm"
+              className="min-h-[44px] rounded-full border border-stone-200 bg-white px-4 text-sm font-bold text-stone-700 shadow-sm active:bg-stone-100"
             >
               🙋 {gu.callServer || 'Call server'}
               {lang !== 'en' && <span className="sr-only"> Call server</span>}
             </button>
-          )}
+          ))}
         </header>
 
         <input

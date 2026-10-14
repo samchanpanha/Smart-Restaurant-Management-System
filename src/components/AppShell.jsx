@@ -178,6 +178,11 @@ export default function AppShell({ children }) {
                       {alerts.filter((alert) => alert.type === 'bill_request').length}
                     </span>
                   )}
+                  {item.id === 'floor' && alerts.some((alert) => alert.type === 'call_server') && (
+                    <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 text-[10px] font-bold text-white">
+                      {alerts.filter((alert) => alert.type === 'call_server').length}
+                    </span>
+                  )}
                 </button>
               )
             })}
