@@ -3,9 +3,12 @@
 
 import { QRCodeSVG } from 'qrcode.react'
 import { Modal } from './ui'
+import { useAuth } from '../lib/auth'
 
 export default function QrModal({ table, onClose }) {
-  const url = `${window.location.origin}/?guest=${table.id}`
+  const { user } = useAuth()
+  const slug = user?.owner?.slug
+  const url = `${window.location.origin}/?guest=${table.id}${slug ? `&owner=${encodeURIComponent(slug)}` : ''}`
   return (
     <Modal title={`QR · ${table.name}`} sub="Print this for the table tent" onClose={onClose}>
       <div className="mt-3 rounded-2xl bg-white p-6 text-center">

@@ -1,7 +1,8 @@
 // ─── Restora API server ───────────────────────────────────────────
-// One process, one truth: every terminal (floor tablet, KDS, office)
-// posts actions here; the SHARED reducer applies them; SSE carries
-// each action back out to all terminals in order.
+// One process, many tenants: each host owner gets an isolated runtime
+// (state snapshot + action log + live SSE subscribers). A terminal posts
+// an action, the SHARED reducer applies it, and SSE fans it back out to
+// every terminal of that same tenant.
 //
 //   GET  /api/health        → { ok, seq, terminals }
 //   GET  /api/state         → { state, seq }  (boot snapshot)
@@ -17,19 +18,27 @@
 //   POST /api/telegram/simulate → run a bot command without changing state
 //   GET  /api/telegram/status   → token/chat wiring and command list
 //
+// Tenant resolution: a signed-in user is pinned to their own owner; a super
+// admin may name any owner via ?ownerId=; guests (QR + Telegram mini app)
+// pick a tenant via ?owner=<slug>. A named tenant that does not exist is a
+// 404. The bot is bound to RESTORA_TENANT (or the first owner, or the legacy
+// DEFAULT_OWNER tenant).
+//
 // Serves ../dist when built, so `npm run build && npm run server`
 // runs the whole restaurant on one port.
 
 import express from 'express'
 import fs from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { attachAuth, createAuthRouter, getOwnerById, getOwnerBySlug, listOwners, seedAuth } from './auth.js'
 import { createTelegramRouter, sendTelegramMessage } from './telegram.js'
 import { createNotifier } from './notify.js'
 import { replyKeyboard } from '../src/lib/telegram.js'
 import { STATE_VERSION, buildEmpire, migrateToEmpire, reducer } from '../src/lib/reducer.js'
 import { DOC_KINDS } from '../src/lib/settings.js'
 import {
-  actionsSince, commitAction, getCategories, getDocumentTotals, getDocuments, getInventory,
+  DEFAULT_OWNER, actionsSince, commitAction, getCategories, getDocumentTotals, getDocuments, getInventory,
   getMenuCatalog, getSettings, getSuppliers, loadSnapshot, logStats, saveSnapshot, syncMenuCatalog,
 } from './db.js'
 
@@ -39,43 +48,111 @@ const HOST = process.env.HOST || '0.0.0.0'
 // HYDRATE is a local-only bootstrap action — never applied server-side.
 const REJECTED = new Set(['HYDRATE'])
 
-// ─── Boot ───────────────────────────────────────────────────────
+// ─── Tenant runtimes ────────────────────────────────────────────
+// Lazily materialized per owner: the persisted snapshot is migrated on
+// first touch, and each tenant keeps its own action sequence + SSE fans.
 
-let persisted = loadSnapshot()
-let migrated = migrateToEmpire(persisted?.state)
-let state = migrated || buildEmpire()
-let seq = persisted?.seq || 0
-if (!migrated) {
-  saveSnapshot(state, seq)
-  console.log('[restora] seeded fresh two-store empire')
-} else {
-  if (persisted.state.version !== STATE_VERSION) {
-    saveSnapshot(state, seq)
-    console.log(`[restora] migrated snapshot v${persisted.state.version} → v${STATE_VERSION}`)
-  } else {
-    console.log(`[restora] restored empire snapshot at seq=${seq}`)
+const runtimes = new Map()
+
+function configuredTenantId() {
+  const raw = String(process.env.RESTORA_TENANT || '').trim()
+  if (raw) {
+    const byId = getOwnerById(raw)
+    if (byId) return byId.id
+    const bySlug = getOwnerBySlug(raw)
+    if (bySlug) return bySlug.id
   }
-  // Also backfill the relational menu tables when booting an older SQLite file.
-  syncMenuCatalog(state)
+  const first = listOwners()[0]
+  return first?.id || DEFAULT_OWNER
+}
+
+// The tenant the Telegram bot and its notifications belong to.
+const DEFAULT_TENANT = configuredTenantId()
+
+function runtimeFor(ownerId) {
+  const id = ownerId || DEFAULT_TENANT
+  const existing = runtimes.get(id)
+  if (existing) return existing
+  const persisted = loadSnapshot(id)
+  const migrated = migrateToEmpire(persisted?.state)
+  let state = migrated || buildEmpire()
+  let seq = persisted?.seq || 0
+  if (!migrated) {
+    saveSnapshot(id, state, seq)
+    console.log(`[restora] seeded fresh two-store empire for tenant ${id}`)
+  } else if (persisted.state.version !== STATE_VERSION) {
+    saveSnapshot(id, state, seq)
+    console.log(`[restora] migrated tenant ${id} snapshot v${persisted.state.version} → v${STATE_VERSION}`)
+  } else {
+    // Also backfill the relational menu tables when booting an older SQLite file.
+    syncMenuCatalog(id, state)
+    console.log(`[restora] restored tenant ${id} at seq=${seq}`)
+  }
+  const runtime = { ownerId: id, state, seq, subscribers: new Set() }
+  runtimes.set(id, runtime)
+  return runtime
+}
+
+// Attach auth + the resolved tenant to every API request. A named tenant
+// that does not exist is a 404 (never a fresh empty tenant); suspended
+// tenants are locked out for everyone except a super admin.
+function resolveTenant(req, res, next) {
+  const isSuper = Boolean(req.auth && req.auth.user.is_super_admin)
+  let ownerId = DEFAULT_TENANT
+  let named = false
+  if (req.auth) {
+    if (isSuper) {
+      const wanted = typeof req.query.ownerId === 'string' ? req.query.ownerId.trim() : ''
+      if (wanted) {
+        ownerId = wanted
+        named = true
+      }
+    } else {
+      ownerId = req.auth.user.owner_id || DEFAULT_TENANT
+    }
+  } else {
+    const slug = typeof req.query.owner === 'string' ? req.query.owner.trim() : ''
+    if (slug) {
+      const owner = getOwnerBySlug(slug)
+      if (!owner) return res.status(404).json({ error: 'unknown restaurant' })
+      ownerId = owner.id
+    }
+  }
+  const owner = getOwnerById(ownerId)
+  if (named && !owner) return res.status(404).json({ error: 'unknown restaurant' })
+  if (owner && owner.status !== 'active' && !isSuper) {
+    return res.status(403).json({ error: 'this restaurant is unavailable' })
+  }
+  req.tenantId = ownerId
+  req.tenant = owner
+  return next()
 }
 
 // ─── App ────────────────────────────────────────────────────────
 
 const app = express()
 app.use(express.json({ limit: '1mb' }))
+app.use(attachAuth)
 
-app.get('/api/health', (req, res) => {
-  res.json({ ok: true, seq, terminals: subscribers.size, log: logStats() })
+// Accounts, roles, sessions, and the super-admin tenant console.
+seedAuth()
+app.use(createAuthRouter())
+
+app.get('/api/health', resolveTenant, (req, res) => {
+  const runtime = runtimeFor(req.tenantId)
+  res.json({ ok: true, seq: runtime.seq, terminals: runtime.subscribers.size, log: logStats(runtime.ownerId) })
 })
 
-app.get('/api/state', (req, res) => {
-  res.json({ state, seq })
+app.get('/api/state', resolveTenant, (req, res) => {
+  const runtime = runtimeFor(req.tenantId)
+  res.json({ state: runtime.state, seq: runtime.seq })
 })
 
 // Relational read model for owner catalog and guest-menu displays.
-// Example: GET /api/menu?loc=downtown&q=burger&availableOnly=true
-app.get('/api/menu', (req, res) => {
+// Example: GET /api/menu?loc=downtown&q=burger&availableOnly=true&owner=joes-diner
+app.get('/api/menu', resolveTenant, (req, res) => {
   const locationId = typeof req.query.loc === 'string' ? req.query.loc : 'downtown'
+  const state = runtimeFor(req.tenantId).state
   if (!Object.hasOwn(state.locations || {}, locationId)) {
     return res.status(400).json({ error: 'loc must name a configured restaurant location' })
   }
@@ -85,7 +162,7 @@ app.get('/api/menu', (req, res) => {
     return res.status(400).json({ error: 'search and category values are too long' })
   }
   res.setHeader('Cache-Control', 'no-store')
-  res.json(getMenuCatalog(locationId, {
+  res.json(getMenuCatalog(req.tenantId, locationId, {
     query,
     category,
     availableOnly: req.query.availableOnly === 'true',
@@ -98,6 +175,7 @@ app.get('/api/menu', (req, res) => {
 
 function resolveLocation(req, res) {
   const locationId = typeof req.query.loc === 'string' ? req.query.loc : 'downtown'
+  const state = runtimeFor(req.tenantId).state
   if (!Object.hasOwn(state.locations || {}, locationId)) {
     res.status(400).json({ error: 'loc must name a configured restaurant location' })
     return null
@@ -109,14 +187,14 @@ function shortQuery(value, max) {
   return typeof value === 'string' ? value.trim().slice(0, max) : ''
 }
 
-app.get('/api/suppliers', (req, res) => {
+app.get('/api/suppliers', resolveTenant, (req, res) => {
   const locationId = resolveLocation(req, res)
   if (!locationId) return
   res.setHeader('Cache-Control', 'no-store')
-  res.json({ locationId, suppliers: getSuppliers(locationId) })
+  res.json({ locationId, suppliers: getSuppliers(req.tenantId, locationId) })
 })
 
-app.get('/api/inventory', (req, res) => {
+app.get('/api/inventory', resolveTenant, (req, res) => {
   const locationId = resolveLocation(req, res)
   if (!locationId) return
   const supplierId = shortQuery(req.query.supplierId, 60)
@@ -124,7 +202,7 @@ app.get('/api/inventory', (req, res) => {
   res.setHeader('Cache-Control', 'no-store')
   res.json({
     locationId,
-    items: getInventory(locationId, {
+    items: getInventory(req.tenantId, locationId, {
       supplierId,
       query,
       exceptionsOnly: req.query.exceptionsOnly === 'true',
@@ -132,11 +210,11 @@ app.get('/api/inventory', (req, res) => {
   })
 })
 
-app.get('/api/categories', (req, res) => {
+app.get('/api/categories', resolveTenant, (req, res) => {
   const locationId = resolveLocation(req, res)
   if (!locationId) return
   res.setHeader('Cache-Control', 'no-store')
-  const tree = getCategories(locationId)
+  const tree = getCategories(req.tenantId, locationId)
   res.json({
     locationId,
     categories: req.query.flat === 'true'
@@ -145,14 +223,14 @@ app.get('/api/categories', (req, res) => {
   })
 })
 
-app.get('/api/settings', (req, res) => {
+app.get('/api/settings', resolveTenant, (req, res) => {
   const locationId = resolveLocation(req, res)
   if (!locationId) return
   res.setHeader('Cache-Control', 'no-store')
-  res.json({ locationId, settings: getSettings(locationId) })
+  res.json({ locationId, settings: getSettings(req.tenantId, locationId) })
 })
 
-app.get('/api/documents', (req, res) => {
+app.get('/api/documents', resolveTenant, (req, res) => {
   const locationId = resolveLocation(req, res)
   if (!locationId) return
   const kind = shortQuery(req.query.kind, 16)
@@ -162,12 +240,12 @@ app.get('/api/documents', (req, res) => {
   res.setHeader('Cache-Control', 'no-store')
   res.json({
     locationId,
-    summary: getDocumentTotals(locationId),
-    documents: getDocuments(locationId, { kind, limit: Number(req.query.limit) || 50 }),
+    summary: getDocumentTotals(req.tenantId, locationId),
+    documents: getDocuments(req.tenantId, locationId, { kind, limit: Number(req.query.limit) || 50 }),
   })
 })
 
-app.post('/api/actions', (req, res) => {
+app.post('/api/actions', resolveTenant, (req, res) => {
   const { action, clientId } = req.body || {}
   if (!action || typeof action.type !== 'string') {
     return res.status(400).json({ error: 'body.action.type is required' })
@@ -175,40 +253,43 @@ app.post('/api/actions', (req, res) => {
   if (REJECTED.has(action.type)) {
     return res.status(400).json({ error: `${action.type} is local-only` })
   }
+  const runtime = runtimeFor(req.tenantId)
   let next
   try {
-    next = reducer(state, action)
+    next = reducer(runtime.state, action)
   } catch (err) {
     // Illegal transition (e.g. two hosts seating the same table):
     // the loser resyncs from the server snapshot.
     return res.status(409).json({ error: err.message || 'illegal transition' })
   }
-  if (next === state) return res.json({ seq, noop: true }) // no-op action
+  if (next === runtime.state) return res.json({ seq: runtime.seq, noop: true }) // no-op action
   // Keep action log, JSON snapshot, and normalized catalog in one SQLite commit.
-  const previous = state
-  const nextSeq = commitAction(clientId, action, next)
-  state = next
-  seq = nextSeq
-  broadcast({ seq, action, clientId: clientId || 'anon' })
+  const previous = runtime.state
+  const nextSeq = commitAction(runtime.ownerId, clientId, action, next)
+  runtime.state = next
+  runtime.seq = nextSeq
+  broadcast(runtime, { seq: nextSeq, action, clientId: clientId || 'anon' })
   // The chat hears about what the floor just did (fire-and-forget).
-  notifier?.handleAction(previous, next, action)
-  res.json({ seq })
+  if (runtime.ownerId === DEFAULT_TENANT) notifier?.handleAction(previous, next, action)
+  res.json({ seq: nextSeq })
 })
 
 // ─── Telegram bot ───────────────────────────────────────────────
 // The bot runs the SAME reducer as the terminals: a /86 from a phone is
-// committed, logged, and broadcast exactly like a tap on the KDS.
+// committed, logged, and broadcast exactly like a tap on the KDS. The bot
+// is bound to one tenant (RESTORA_TENANT → first owner → legacy default).
 
 function applyActionServer(action, locId = 'downtown') {
+  const runtime = runtimeFor(DEFAULT_TENANT)
   if (!action || typeof action.type !== 'string' || REJECTED.has(action.type)) return false
   const wrapped = action.type === 'LOC' ? action : { type: 'LOC', locId, action }
-  const next = reducer(state, wrapped)
-  if (next === state) return false
-  const previous = state
-  const nextSeq = commitAction('telegram', wrapped, next)
-  state = next
-  seq = nextSeq
-  broadcast({ seq, action: wrapped, clientId: 'telegram' })
+  const next = reducer(runtime.state, wrapped)
+  if (next === runtime.state) return false
+  const previous = runtime.state
+  const nextSeq = commitAction(runtime.ownerId, 'telegram', wrapped, next)
+  runtime.state = next
+  runtime.seq = nextSeq
+  broadcast(runtime, { seq: nextSeq, action: wrapped, clientId: 'telegram' })
   // A command from a phone can move stock or 86 a dish — the other chats
   // should hear about it exactly like they hear about a terminal action.
   notifier?.handleAction(previous, next, wrapped)
@@ -218,9 +299,10 @@ function applyActionServer(action, locId = 'downtown') {
 let notifier = null
 
 const telegram = createTelegramRouter({
-  getState: () => state,
+  getState: () => runtimeFor(DEFAULT_TENANT).state,
   applyAction: applyActionServer,
   publicUrl: process.env.RESTORA_PUBLIC_URL || '',
+  ownerSlug: getOwnerById(DEFAULT_TENANT)?.slug || '',
   onChat: (chatId) => notifier?.registerChat(chatId),
   notifier: () => notifier,
 })
@@ -232,7 +314,7 @@ app.use(telegram.router)
 const roleForChat = (chatId) => telegram.chatRoles?.[chatId] || telegram.chatRoles?.['*'] || 'staff'
 
 notifier = createNotifier({
-  getState: () => state,
+  getState: () => runtimeFor(DEFAULT_TENANT).state,
   chatRoles: telegram.chatRoles,
   // Pushes arrive with the same reply keyboard the bot answers with, so the
   // buttons in the chat match the role the chat actually has.
@@ -249,23 +331,22 @@ digestTimer.unref?.()
 
 // ─── SSE fan-out ────────────────────────────────────────────────
 
-const subscribers = new Set()
-
 function sendEvent(res, payload) {
   res.write(`data: ${JSON.stringify(payload)}\n\n`)
 }
 
-function broadcast(msg) {
-  for (const res of subscribers) {
+function broadcast(runtime, msg) {
+  for (const res of runtime.subscribers) {
     try {
       sendEvent(res, msg)
     } catch {
-      subscribers.delete(res)
+      runtime.subscribers.delete(res)
     }
   }
 }
 
-app.get('/api/events', (req, res) => {
+app.get('/api/events', resolveTenant, (req, res) => {
+  const runtime = runtimeFor(req.tenantId)
   const since = Number(req.query.since || 0)
   res.setHeader('Content-Type', 'text/event-stream')
   res.setHeader('Cache-Control', 'no-cache')
@@ -273,33 +354,33 @@ app.get('/api/events', (req, res) => {
   res.flushHeaders?.()
 
   // Replay what the terminal missed; force a snapshot resync if the gap is huge.
-  const gap = seq - since
+  const gap = runtime.seq - since
   if (gap > 500) {
-    sendEvent(res, { resync: true, seq })
+    sendEvent(res, { resync: true, seq: runtime.seq })
   } else if (gap > 0) {
-    for (const row of actionsSince(since)) sendEvent(res, row)
+    for (const row of actionsSince(runtime.ownerId, since, 500)) sendEvent(res, row)
   }
-  sendEvent(res, { hello: true, seq })
-  subscribers.add(res)
+  sendEvent(res, { hello: true, seq: runtime.seq })
+  runtime.subscribers.add(res)
 
   const beat = setInterval(() => {
     try {
       res.write(': ping\n\n')
     } catch {
       clearInterval(beat)
-      subscribers.delete(res)
+      runtime.subscribers.delete(res)
     }
-  }, 25000)
+  }, 25_000)
 
   req.on('close', () => {
     clearInterval(beat)
-    subscribers.delete(res)
+    runtime.subscribers.delete(res)
   })
 })
 
 // ─── Static frontend (production single-port mode) ──────────────
 
-const rootDir = path.dirname(path.dirname(new URL(import.meta.url).pathname))
+const rootDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const distDir = path.join(rootDir, 'dist')
 if (fs.existsSync(distDir)) {
   app.use(express.static(distDir))
@@ -311,6 +392,11 @@ if (fs.existsSync(distDir)) {
   console.log('[restora] dist/ not found — API only (run `npm run build` or use vite dev proxy)')
 }
 
-app.listen(PORT, HOST, () => {
-  console.log(`[restora] api on http://${HOST}:${PORT} (seq=${seq})`)
+// ─── Listen ─────────────────────────────────────────────────────
+
+const bootRuntime = runtimeFor(DEFAULT_TENANT)
+const server = app.listen(PORT, HOST, () => {
+  const addr = server.address()
+  const port = addr && typeof addr === 'object' ? addr.port : PORT
+  console.log(`[restora] api on http://${HOST}:${port} (tenant=${DEFAULT_TENANT} seq=${bootRuntime.seq})`)
 })

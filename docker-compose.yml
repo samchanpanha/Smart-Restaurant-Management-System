@@ -1,0 +1,21 @@
+services:
+  restora:
+    build: .
+    image: restora:latest
+    container_name: restora
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3001}:3001"
+    environment:
+      PORT: 3001
+      HOST: 0.0.0.0
+      RESTORA_DATA: /data
+      RESTORA_PUBLIC_URL: ${RESTORA_PUBLIC_URL:-}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ROLES: ${TELEGRAM_CHAT_ROLES:-}
+      TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}
+    volumes:
+      - restora-data:/data
+
+volumes:
+  restora-data:

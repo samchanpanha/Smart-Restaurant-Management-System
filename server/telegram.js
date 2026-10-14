@@ -62,6 +62,7 @@ export function createTelegramRouter({
   getState,
   applyAction,
   publicUrl = process.env.RESTORA_PUBLIC_URL || '',
+  ownerSlug = '',
   onChat = null,
   notifier = null,
 }) {
@@ -83,6 +84,7 @@ export function createTelegramRouter({
       role,
       now: Date.now(),
       miniAppUrl: miniAppUrl(),
+      ownerSlug,
     })
     let applied = 0
     if (!dryRun) {

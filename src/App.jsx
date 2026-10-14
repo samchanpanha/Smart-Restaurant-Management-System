@@ -21,6 +21,11 @@ import SettingsScreen from './screens/SettingsScreen'
 import SuppliersScreen from './screens/SuppliersScreen'
 import SystemScreen from './screens/SystemScreen'
 import TicketsScreen from './screens/TicketsScreen'
+import UsersScreen from './screens/UsersScreen'
+import RolesScreen from './screens/RolesScreen'
+import OwnersScreen from './screens/OwnersScreen'
+import AuthScreen from './screens/AuthScreen'
+import { AuthProvider, useAuth } from './lib/auth'
 
 function guestTableId() {
   try {
@@ -83,27 +88,49 @@ function RestrictedScreen({ screen, role }) {
 
 // Exported so tests can mount the real router inside the real shell.
 export function Router() {
-  const { screen, role } = useRestora()
-  const allowed = ROLE_NAV[role] || ROLE_NAV.owner
+  const { screen, role, activeTabId } = useRestora()
+  const { screens } = useAuth()
+  const allowed = screens?.length ? screens : ROLE_NAV[role] || ROLE_NAV.owner
+  const key = activeTabId || 'none'
   // A tab that has not picked a screen yet shows the picker.
-  if (!screen) return <NewTabPicker />
-  if (!allowed.includes(screen)) return <RestrictedScreen screen={screen} role={role} />
-  if (screen === 'system') return <SystemScreen />
-  if (screen === 'dashboard') return <DashboardScreen />
-  if (screen === 'floor') return <FloorScreen />
-  if (screen === 'tickets') return <TicketsScreen />
-  if (screen === 'kitchen') return <KitchenScreen />
-  if (screen === 'inventory') return <InventoryScreen />
-  if (screen === 'menu') return <MenuScreen />
-  if (screen === 'catalog') return <CatalogScreen />
-  if (screen === 'suppliers') return <SuppliersScreen />
-  if (screen === 'purchases') return <PurchasesScreen />
-  if (screen === 'movements') return <MovementsScreen />
-  if (screen === 'settings') return <SettingsScreen />
-  if (screen === 'costing') return <CostingScreen />
-  if (screen === 'reports') return <ReportsScreen />
-  if (screen === 'telegram') return <TelegramScreen />
-  return <ComingSoon screen={screen} />
+  if (!screen) return <NewTabPicker key={key} />
+  if (!allowed.includes(screen)) return <RestrictedScreen key={key} screen={screen} role={role} />
+  if (screen === 'system') return <SystemScreen key={key} />
+  if (screen === 'dashboard') return <DashboardScreen key={key} />
+  if (screen === 'floor') return <FloorScreen key={key} />
+  if (screen === 'tickets') return <TicketsScreen key={key} />
+  if (screen === 'kitchen') return <KitchenScreen key={key} />
+  if (screen === 'inventory') return <InventoryScreen key={key} />
+  if (screen === 'menu') return <MenuScreen key={key} />
+  if (screen === 'catalog') return <CatalogScreen key={key} />
+  if (screen === 'suppliers') return <SuppliersScreen key={key} />
+  if (screen === 'purchases') return <PurchasesScreen key={key} />
+  if (screen === 'movements') return <MovementsScreen key={key} />
+  if (screen === 'settings') return <SettingsScreen key={key} />
+  if (screen === 'costing') return <CostingScreen key={key} />
+  if (screen === 'reports') return <ReportsScreen key={key} />
+  if (screen === 'telegram') return <TelegramScreen key={key} />
+  if (screen === 'users') return <UsersScreen key={key} />
+  if (screen === 'roles') return <RolesScreen key={key} />
+  if (screen === 'owners') return <OwnersScreen key={key} />
+  return <ComingSoon key={key} screen={screen} />
+}
+
+/** A quiet hold while the session cookie is being checked. */
+function AuthSplash() {
+  return (
+    <div className="restora-theme flex min-h-screen items-center justify-center bg-[var(--color-ink-950)] text-zinc-400">
+      <span className="text-sm">Opening your workspace…</span>
+    </div>
+  )
+}
+
+/** The terminal workspace is behind a session; guests and the mini app are not. */
+function AuthGate({ children }) {
+  const { user, loading } = useAuth()
+  if (loading) return <AuthSplash />
+  if (!user) return <AuthScreen />
+  return children
 }
 
 export default function App() {
@@ -126,10 +153,16 @@ export default function App() {
     )
   }
   return (
-    <RestoraProvider>
-      <AppShell>
-        <Router />
-      </AppShell>
-    </RestoraProvider>
+    <AuthProvider>
+      <AuthGate>
+        <RestoraProvider>
+          <AppShell>
+            <Router />
+          </AppShell>
+        </RestoraProvider>
+      </AuthGate>
+    </AuthProvider>
   )
 }
+
+

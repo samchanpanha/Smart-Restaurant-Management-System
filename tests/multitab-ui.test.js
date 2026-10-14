@@ -58,12 +58,20 @@ const activeLabel = () => labelOf(tabs().find((tab) => tab.getAttribute('aria-se
 const optionTo = (text) => $$('[data-testid="new-tab-picker"] button').find((entry) => (entry.textContent || '').includes(text))
 const navButton = (label) => $$('nav[aria-label="Main navigation"] button').find((entry) => (entry.textContent || '').includes(label))
 const plusButton = () => $$('button').find((entry) => entry.getAttribute('aria-label') === 'Open a new tab')
+const dishButton = (name) => $$('#workspace-panel button[aria-current]').find((entry) => (entry.textContent || '').includes(name))
+const currentDish = () => {
+  const active = $$('#workspace-panel button[aria-current="true"]')[0]
+  return (active?.textContent || '').trim()
+}
 
 const click = (el, options = {}) => act(() => {
   el.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true, ...options }))
 })
 const middle = (el) => act(() => {
   el.dispatchEvent(new dom.window.MouseEvent('auxclick', { bubbles: true, cancelable: true, button: 1 }))
+})
+const context = (el) => act(() => {
+  el.dispatchEvent(new dom.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2 }))
 })
 const pointer = (type, target, options = {}) => act(() => {
   target.dispatchEvent(new dom.window.MouseEvent(type, { bubbles: true, cancelable: true, button: 0, ...options }))
@@ -169,9 +177,11 @@ test('dragging a tab reorders it, focuses it, and never activates its neighbour'
   await freshApp()
   click(navButton('Inventory'))
   await settle()
-  click(plusButton())
+  // Close the initial tab so the drag pair is exactly Inventory · Reports.
+  click(tabs()[0].parentElement.querySelector('button[aria-label^="Close"]'))
   await settle()
-  click(optionTo('Reports'))
+  assert.equal(tabs().length, 1)
+  click(navButton('Reports'))
   await settle()
   const order = tabLabels()
   assert.equal(order.length, 2)
@@ -207,13 +217,40 @@ test('closing tabs keeps one alive and hands focus to a neighbour', async () => 
   assert.equal(tabs().length, 1, 'closing the last tab opens a fresh one')
 })
 
+test('two tabs holding the same screen keep their own drawer', async () => {
+  await freshApp()
+  click(navButton('Menu'))
+  await settle()
+  // Drop the initial tab so the workspace holds a single Menu tab.
+  click(tabs()[0].parentElement.querySelector('button[aria-label^="Close"]'))
+  await settle()
+  assert.equal(tabs().length, 1)
+  // That tab opens a dish (its own per-tab drawer).
+  click(dishButton('Ribeye Plate'))
+  await settle()
+  assert.match(currentDish(), /Ribeye Plate/)
+
+  // Duplicate the tab, then open a different dish in the copy.
+  context(tabs()[0])
+  await settle()
+  click($$('[role="menuitem"]').find((entry) => (entry.textContent || '').includes('Duplicate')))
+  await settle()
+  assert.equal(tabs().length, 2, 'the tab was duplicated')
+  click(dishButton('House Salad'))
+  await settle()
+  assert.match(currentDish(), /House Salad/)
+
+  // Switching back must restore the first tab's own drawer, not the copy's.
+  click(tabs()[0])
+  await settle()
+  assert.match(currentDish(), /Ribeye Plate/, 'the first tab still shows the dish it had open')
+})
+
 test('the workspace survives a reload on the same terminal', async () => {
   await freshApp()
   click(plusButton())
   await settle()
-  click(optionTo('Purchases'))
-  await settle()
-  click(navButton('Settings'))
+  click(optionTo('Settings'))
   await settle()
   const before = tabLabels()
   assert.equal(before.length, 2)

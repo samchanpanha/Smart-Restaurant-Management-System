@@ -126,10 +126,13 @@ export const SCREEN_ICONS = {
   system: 'layers',
   movements: 'swap',
   telegram: 'send',
+  users: 'users',
+  roles: 'shield',
+  owners: 'building',
 }
 
 export const ROLE_NAV = {
-  owner: ['dashboard', 'floor', 'tickets', 'kitchen', 'menu', 'catalog', 'inventory', 'movements', 'suppliers', 'purchases', 'reports', 'costing', 'settings', 'system', 'telegram'],
+  owner: ['dashboard', 'floor', 'tickets', 'kitchen', 'menu', 'catalog', 'inventory', 'movements', 'suppliers', 'purchases', 'reports', 'costing', 'users', 'roles', 'settings', 'system', 'telegram'],
   server: ['floor', 'tickets'],
   kitchen: ['kitchen'],
   host: ['floor', 'dashboard'],
@@ -164,6 +167,15 @@ export const NAV_SECTIONS = [
     items: [
       { id: 'reports', label: 'Reports', step: 8 },
       { id: 'costing', label: 'Food Cost & Profit', step: 7 },
+    ],
+  },
+  {
+    id: 'access',
+    label: 'Team & Access',
+    items: [
+      { id: 'users', label: 'Users', step: 10 },
+      { id: 'roles', label: 'Roles', step: 10 },
+      { id: 'owners', label: 'Host owners', step: 10 },
     ],
   },
   {

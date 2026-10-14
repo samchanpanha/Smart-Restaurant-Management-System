@@ -110,12 +110,31 @@ function loadWorkspace(kiosk) {
 }
 
 async function fetchState(signal) {
-  const res = await fetch('/api/state', { signal })
+  const res = await fetch(withOwner('/api/state'), { signal })
   if (!res.ok) throw new Error(`state ${res.status}`)
   const json = await res.json()
   const empire = migrateToEmpire(json?.state)
   if (!empire) throw new Error('bad snapshot')
   return { empire, seq: json.seq || 0 }
+}
+
+// Guest QR + Telegram mini app URLs carry ?owner=<slug> so a public client
+// reads the right tenant's state. Signed-in terminals rely on their session
+// cookie instead and omit the param.
+function tenantOwner() {
+  try {
+    return new URLSearchParams(window.location.search).get('owner') || ''
+  } catch {
+    return ''
+  }
+}
+
+function withOwner(path, params = {}) {
+  const search = new URLSearchParams(params)
+  const owner = tenantOwner()
+  if (owner) search.set('owner', owner)
+  const qs = search.toString()
+  return qs ? `${path}?${qs}` : path
 }
 
 export function RestoraProvider({ children }) {
@@ -288,7 +307,7 @@ export function RestoraProvider({ children }) {
     window.clearTimeout(retryRef.current)
     let es
     try {
-      es = new EventSource(`/api/events?since=${seqRef.current}`)
+      es = new EventSource(withOwner('/api/events', { since: seqRef.current }))
     } catch {
       setLink((l) => ({ ...l, status: 'offline' }))
       retryRef.current = window.setTimeout(() => connectStream(), 3000)
@@ -385,7 +404,7 @@ export function RestoraProvider({ children }) {
       const tagged = { type: 'LOC', locId, action: { ...action, _lid: lid } }
       lidAt.current.set(lid, Date.now())
       rawDispatch(tagged)
-      fetch('/api/actions', {
+      fetch(withOwner('/api/actions'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: tagged, clientId }),
@@ -423,7 +442,7 @@ export function RestoraProvider({ children }) {
         if (!linked) return
         const lid = uid('l')
         lidAt.current.set(lid, Date.now())
-        fetch('/api/actions', {
+        fetch(withOwner('/api/actions'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: { ...action, _lid: lid }, clientId }),

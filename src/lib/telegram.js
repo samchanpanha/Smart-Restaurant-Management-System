@@ -278,11 +278,13 @@ function digestText(shop, now = Date.now()) {
   return dailyDigest(shop, now).text
 }
 
-function qrText(shop, arg, miniAppUrl) {
+function qrText(shop, arg, baseUrl, ownerSlug = '') {
   const table = matchByName(arg, shop.tables, 'name') || (shop.tables || []).find((entry) => String(entry.id).endsWith(String(arg)))
   if (!table) return 'Which table? Try /qr 12.'
-  const base = miniAppUrl || 'https://restora.example'
-  const guestLink = `${base}?guest=${encodeURIComponent(table.id)}`
+  const base = baseUrl || 'https://restora.example'
+  const sep = base.includes('?') ? '&' : '?'
+  const owner = ownerSlug ? `${sep}owner=${encodeURIComponent(ownerSlug)}` : ''
+  const guestLink = `${base}${sep}guest=${encodeURIComponent(table.id)}${owner}`
   const miniApp = `${guestLink}&tg=1`
   return [
     heading(`Guest link · ${table.name}`),
@@ -353,7 +355,7 @@ function unknownText(name, role) {
  * (the webhook applies them; the simulator only shows them).
  */
 export function runTelegramCommand(input, context = {}) {
-  const { shop, now = Date.now(), role = 'staff', miniAppUrl = '' } = context
+  const { shop, now = Date.now(), role = 'staff', miniAppUrl = '', ownerSlug = '' } = context
   const parsed = parseCommand(input)
   if (!shop) return { ok: false, command: null, reply: 'No restaurant data yet.', actions: [] }
   if (!parsed) return { ok: false, command: null, reply: 'Say something like /today or /help.', actions: [] }
@@ -386,7 +388,7 @@ export function runTelegramCommand(input, context = {}) {
     case 'tickets':
       return done(ordersText(shop, now))
     case 'qr':
-      return done(qrText(shop, parsed.arg, miniAppUrl))
+      return done(qrText(shop, parsed.arg, miniAppUrl, ownerSlug))
     case 'table':
       return done(tableText(shop, parsed.arg, now))
     case 'pnl':

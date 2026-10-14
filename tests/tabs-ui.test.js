@@ -141,62 +141,63 @@ test('the app boots with one tab showing the role home screen', () => {
   assert.match(container.textContent, /Manage table status/)
 })
 
-test('clicking a sidebar entry edits the active tab instead of piling up tabs', async () => {
+test('clicking a sidebar entry opens it in its own tab', async () => {
   await freshApp()
   const inventoryNav = navButton('Inventory')
   assert.ok(inventoryNav, 'inventory nav item exists')
   click(inventoryNav)
   await flush()
-  assert.equal(tabButtons().length, 1)
-  assert.match(tabButtons()[0].textContent, /Inventory/)
+  assert.equal(tabButtons().length, 2)
+  assert.equal(selectedIndex(), 1)
+  assert.match(tabButtons()[1].textContent, /Inventory/)
   assert.match(container.textContent, /Stock control/)
+  // Clicking a screen that already has a tab jumps to it — no twins.
+  click(navButton('Floor'))
+  await flush()
+  assert.equal(tabButtons().length, 2)
+  assert.equal(selectedIndex(), 0)
+  assert.match(container.textContent, /Manage table status/)
 })
 
 test('a new tab can hold another screen while the first keeps its own', async () => {
   await freshApp()
   click(navButton('Inventory'))
   await flush()
-  const newTab = $$('button').find((b) => b.getAttribute('aria-label') === 'Open a new tab')
-  assert.ok(newTab, 'the + button exists')
-  click(newTab)
-  await flush()
-  assert.equal(tabButtons().length, 2)
-
   click(navButton('Reports'))
   await flush()
+  assert.equal(tabButtons().length, 3)
+  assert.equal(selectedIndex(), 2)
   assert.match(container.textContent, /Reports & Analytics/)
 
-  click(tabButtons()[0])
+  click(tabButtons()[1])
   await flush()
+  assert.equal(selectedIndex(), 1)
   assert.match(container.textContent, /Stock control/)
 })
 
 test('Alt+1…9 and Ctrl+PageUp/PageDown move between tabs and wrap around', async () => {
   await freshApp()
+  // Second tab: Inventory · third tab: Reports.
   click(navButton('Inventory'))
   await flush()
-  // Second tab: Reports · third tab: the role home screen.
-  click($$('button').find((b) => b.getAttribute('aria-label') === 'Open a new tab'))
-  await flush()
   click(navButton('Reports'))
-  await flush()
-  click($$('button').find((b) => b.getAttribute('aria-label') === 'Open a new tab'))
   await flush()
   assert.equal(tabButtons().length, 3)
 
   keydown('1', { alt: true })
   await flush()
   assert.equal(selectedIndex(), 0)
-  assert.match(container.textContent, /Stock control/)
+  assert.match(container.textContent, /Manage table status/)
 
   keydown('3', { alt: true })
   await flush()
   assert.equal(selectedIndex(), 2)
+  assert.match(container.textContent, /Reports & Analytics/)
 
   keydown('PageUp', { ctrl: true })
   await flush()
   assert.equal(selectedIndex(), 1)
-  assert.match(container.textContent, /Reports & Analytics/)
+  assert.match(container.textContent, /Stock control/)
 
   keydown('PageDown', { ctrl: true })
   await flush()
@@ -206,7 +207,7 @@ test('Alt+1…9 and Ctrl+PageUp/PageDown move between tabs and wrap around', asy
   keydown('PageDown', { ctrl: true })
   await flush()
   assert.equal(selectedIndex(), 0)
-  assert.match(container.textContent, /Stock control/)
+  assert.match(container.textContent, /Manage table status/)
 
   // Out-of-range digits are ignored, never crash.
   keydown('9', { alt: true })
@@ -229,33 +230,34 @@ test('a tab draws the icon of the screen it holds', async () => {
   const dashboardIcon = tabButtons()[0].querySelector('svg')?.innerHTML
   click(navButton('Catalog'))
   await flush()
-  assert.match(tabButtons()[0].textContent, /Catalog/)
-  const catalogIcon = tabButtons()[0].querySelector('svg')?.innerHTML
+  assert.equal(tabButtons().length, 2)
+  const catalogTab = tabButtons()[1]
+  assert.equal(selectedIndex(), 1)
+  assert.match(catalogTab.textContent, /Catalog/)
+  const catalogIcon = catalogTab.querySelector('svg')?.innerHTML
   assert.notEqual(catalogIcon, dashboardIcon)
-  click(navButton('Dashboard'))
-  await flush()
 })
 
 test('Ctrl+W closes the active tab and focuses its neighbour', async () => {
   await freshApp()
   click(navButton('Inventory'))
   await flush()
-  click($$('button').find((b) => b.getAttribute('aria-label') === 'Open a new tab'))
+  click(navButton('Reports'))
   await flush()
-  click(navButton('Kitchen'))
-  await flush()
+  assert.equal(tabButtons().length, 3)
+
   keydown('1', { alt: true })
   await flush()
   assert.equal(selectedIndex(), 0)
-  assert.match(container.textContent, /Stock control/)
+  assert.match(container.textContent, /Manage table status/)
 
   keydown('w', { ctrl: true })
   await flush()
-  assert.equal(tabButtons().length, 1)
+  assert.equal(tabButtons().length, 2)
   assert.equal(selectedIndex(), 0)
-  assert.doesNotMatch(container.textContent, /Stock control/)
-  assert.equal(tabButtons().some((tab) => tab.textContent.includes('Inventory')), false)
-  assert.match(container.textContent, /Kitchen/)
+  assert.doesNotMatch(container.textContent, /Manage table status/)
+  assert.equal(tabButtons().some((tab) => tab.textContent.includes('Floor')), false)
+  assert.match(container.textContent, /Stock control/)
 })
 
 test('closing every tab leaves one fresh tab on a screen the role can use', async () => {
@@ -277,12 +279,10 @@ test('switching role keeps the workspace, locks what the role cannot open', asyn
   await freshApp()
   click(navButton('Inventory'))
   await flush()
-  click($$('button').find((b) => b.getAttribute('aria-label') === 'Open a new tab'))
-  await flush()
   click(navButton('Kitchen'))
   await flush()
   const labelsBefore = tabButtons().map((tab) => tab.textContent)
-  assert.equal(labelsBefore.length, 2)
+  assert.equal(labelsBefore.length, 3)
 
   await setRole('server')
 
@@ -305,17 +305,13 @@ test('a second tab the role can open stays live while another is restricted', as
   await freshApp()
   click(navButton('Inventory'))
   await flush()
-  click($$('button').find((b) => b.getAttribute('aria-label') === 'Open a new tab'))
-  await flush()
-  click(navButton('Kitchen'))
-  await flush()
   await setRole('server')
-  // Jump to the Inventory tab — the server role owns Tickets/Floor, so the
-  // Inventory tab is restricted too; the Tickets tab renders fine.
+  // Server owns Tickets/Floor, so the Inventory tab is restricted but its
+  // tab stays live; opening Tickets gives the role a screen it may use.
   click(navButton('Tickets'))
   await flush()
   assert.match(container.textContent, /Track and manage every order/)
-  keydown('1', { alt: true })
+  keydown('2', { alt: true })
   await flush()
   assert.match(container.textContent, /not part of the server workspace/)
 })
@@ -323,10 +319,6 @@ test('a second tab the role can open stays live while another is restricted', as
 test('the workspace survives a reload on the same terminal', async () => {
   await freshApp()
   click(navButton('Inventory'))
-  await flush()
-  click($$('button').find((b) => b.getAttribute('aria-label') === 'Open a new tab'))
-  await flush()
-  click(navButton('Kitchen'))
   await flush()
   const before = tabButtons().map((tab) => tab.textContent)
   assert.equal(before.length, 2)

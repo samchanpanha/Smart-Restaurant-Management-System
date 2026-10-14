@@ -43,7 +43,7 @@ const server = await createServer({ server: { middlewareMode: true }, appType: '
 const { RestoraProvider } = await server.ssrLoadModule('/src/lib/store.jsx')
 const { default: AppShell } = await server.ssrLoadModule('/src/components/AppShell.jsx')
 const { Router } = await server.ssrLoadModule('/src/App.jsx')
-const { NAV_SECTIONS } = await server.ssrLoadModule('/src/lib/constants.js')
+const { NAV_SECTIONS, ROLE_NAV } = await server.ssrLoadModule('/src/lib/constants.js')
 
 // One marker per screen: something that only that screen prints.
 const MARKERS = {
@@ -61,7 +61,12 @@ const MARKERS = {
   costing: 'Food Cost & Profit',
   settings: 'Settings & Documents',
   telegram: 'Telegram',
+  settings: 'Settings',
+  telegram: 'Telegram & Mini App',
   system: 'System & Model',
+  users: 'Who can sign in to this restaurant',
+  roles: 'Each role is a set of screens',
+  owners: 'Every restaurant on the platform',
 }
 
 const settle = async (ms = 40) => {
@@ -84,6 +89,17 @@ function mount() {
         React.createElement(AppShell, null, React.createElement(Router))),
     )
   })
+}
+
+// Nav clicks open a tab per screen now, so each test starts from a clean
+// single-tab workspace instead of piling tabs up to the limit.
+async function freshApp() {
+  act(() => { root?.unmount() })
+  container?.remove()
+  dom.window.localStorage.clear()
+  dom.window.sessionStorage.clear()
+  mount()
+  await settle(60)
 }
 
 function clickNav(label) {
@@ -111,7 +127,10 @@ test('boots into a screen instead of the connecting splash', () => {
 
 for (const section of NAV_SECTIONS) {
   for (const item of section.items) {
+    // The super-admin console is not part of the demo owner workspace.
+    if (!ROLE_NAV.owner.includes(item.id)) continue
     test(`${item.label} screen renders`, async () => {
+      await freshApp()
       clickNav(item.label)
       await settle()
       const marker = MARKERS[item.id]
@@ -127,6 +146,7 @@ for (const section of NAV_SECTIONS) {
 }
 
 test('the purchases screen shows supplier totals and the seeded orders', async () => {
+  await freshApp()
   clickNav('Purchases')
   await settle()
   const copy = panel().textContent
@@ -137,6 +157,7 @@ test('the purchases screen shows supplier totals and the seeded orders', async (
 })
 
 test('the movements screen reconciles opening + in − out', async () => {
+  await freshApp()
   clickNav('Stock movements')
   await settle()
   const copy = panel().textContent
@@ -153,6 +174,7 @@ test('the movements screen reconciles opening + in − out', async () => {
 })
 
 test('the report tabs read the ledger: sell/buy, P&L, top & bottom', async () => {
+  await freshApp()
   clickNav('Reports')
   await settle()
   const reportTab = (label) => $$('[aria-label="Reports"] [role="tab"]').find((tab) => (tab.textContent || '').includes(label))
@@ -197,6 +219,7 @@ test('the report tabs read the ledger: sell/buy, P&L, top & bottom', async () =>
 })
 
 test('the movements screen can open the count sheet', async () => {
+  await freshApp()
   clickNav('Stock movements')
   await settle(60)
   const count = $$('button').find((entry) => entry.textContent.trim() === 'Count stock')

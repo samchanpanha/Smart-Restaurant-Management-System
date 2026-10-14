@@ -167,15 +167,24 @@ test('the close-of-day digest goes out once per day, after its hour', async () =
 })
 
 test('the digest reads like a close-of-day note: sales, buying, what to order', () => {
-  const shop = shopOf(buildEmpire())
+  // The seed builds its orders relative to "now", so pin the clock to the
+  // evening the digest describes — otherwise the numbers drift with the
+  // day the suite happens to run on.
   const at = new Date('2026-10-13T22:00:00').getTime()
-  const digest = dailyDigest(shop, at)
-  assert.equal(digest.key, '2026-10-13')
-  assert.match(digest.text, /Close of day · Restora/)
-  assert.match(digest.text, /Checks 8 · Net sales \$425\.00 · Avg check \$66\.50/)
-  assert.match(digest.text, /Food cost 22\.4% \(\$95\.11\)/)
-  assert.match(digest.text, /Top sellers: Restora Burger 6× \(\$96\.00\)/)
-  assert.match(digest.text, /Needs ordering: OUT Salmon fillet — 0 ea left \(par 12 ea\)/)
+  const realNow = Date.now
+  Date.now = () => at
+  try {
+    const shop = shopOf(buildEmpire())
+    const digest = dailyDigest(shop, at)
+    assert.equal(digest.key, dateKey(at))
+    assert.match(digest.text, /Close of day · Restora/)
+    assert.match(digest.text, /Checks 8 · Net sales \$425\.00 · Avg check \$66\.50/)
+    assert.match(digest.text, /Food cost 22\.4% \(\$95\.11\)/)
+    assert.match(digest.text, /Top sellers: Restora Burger 6× \(\$96\.00\)/)
+    assert.match(digest.text, /Needs ordering: OUT Salmon fillet — 0 ea left \(par 12 ea\)/)
+  } finally {
+    Date.now = realNow
+  }
 })
 
 test('digestDue honours the switch, the hour, and the day already sent', () => {

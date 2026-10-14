@@ -7,7 +7,7 @@ import { buildEmpire, buildSeed, migrateToEmpire, reducer } from '../src/lib/red
 
 const dataDir = mkdtempSync(path.join(os.tmpdir(), 'restora-menu-test-'))
 process.env.RESTORA_DATA = dataDir
-const { closeDatabase, getMenuCatalog, saveSnapshot } = await import('../server/db.js')
+const { DEFAULT_OWNER, closeDatabase, getMenuCatalog, saveSnapshot } = await import('../server/db.js')
 
 after(() => {
   closeDatabase()
@@ -16,10 +16,10 @@ after(() => {
 
 test('catalog is normalized in SQLite and independent per location', () => {
   const empire = buildEmpire()
-  saveSnapshot(empire, 0)
+  saveSnapshot(DEFAULT_OWNER, empire, 0)
 
-  const downtown = getMenuCatalog('downtown')
-  const riverside = getMenuCatalog('riverside')
+  const downtown = getMenuCatalog(DEFAULT_OWNER, 'downtown')
+  const riverside = getMenuCatalog(DEFAULT_OWNER, 'riverside')
   const salmonDowntown = downtown.items.find((item) => item.id === 'm_salmon')
   const salmonRiverside = riverside.items.find((item) => item.id === 'm_salmon')
   const salad = downtown.items.find((item) => item.id === 'm_salad')
@@ -34,7 +34,7 @@ test('catalog is normalized in SQLite and independent per location', () => {
   assert.equal(downtown.items.find((item) => item.id === 'm_burger').subCategory, 'Grill')
   assert.deepEqual(salad.modifiers[0].options, ['Ranch', 'Vinaigrette', 'Blue cheese'])
   assert.deepEqual(salad.dietaryTags, ['Vegetarian', 'Gluten-free'])
-  assert.equal(getMenuCatalog('downtown', { availableOnly: true }).items.some((item) => item.id === 'm_salmon'), false)
+  assert.equal(getMenuCatalog(DEFAULT_OWNER, 'downtown', { availableOnly: true }).items.some((item) => item.id === 'm_salmon'), false)
 })
 
 test('menu add and edit actions persist cents, labels, display details, and active state', () => {
@@ -60,13 +60,13 @@ test('menu add and edit actions persist cents, labels, display details, and acti
     locId: 'downtown',
     action: { type: 'ADD_MENU_ITEM', item: newItem },
   })
-  saveSnapshot(empire, 1)
+  saveSnapshot(DEFAULT_OWNER, empire, 1)
 
-  let catalogItem = getMenuCatalog('downtown').items.find((item) => item.id === newItem.id)
+  let catalogItem = getMenuCatalog(DEFAULT_OWNER, 'downtown').items.find((item) => item.id === newItem.id)
   assert.equal(catalogItem.price, 7.5)
   assert.equal(catalogItem.priceCents, 750)
   assert.deepEqual(catalogItem.dietaryTags, ['Vegan'])
-  assert.equal(getMenuCatalog('riverside').items.some((item) => item.id === newItem.id), false)
+  assert.equal(getMenuCatalog(DEFAULT_OWNER, 'riverside').items.some((item) => item.id === newItem.id), false)
 
   empire = reducer(empire, {
     type: 'LOC',
@@ -77,13 +77,13 @@ test('menu add and edit actions persist cents, labels, display details, and acti
       patch: { description: 'Roasted with lemon and garden herbs.', active: false, price: 8.25 },
     },
   })
-  saveSnapshot(empire, 2)
+  saveSnapshot(DEFAULT_OWNER, empire, 2)
 
-  catalogItem = getMenuCatalog('downtown').items.find((item) => item.id === newItem.id)
+  catalogItem = getMenuCatalog(DEFAULT_OWNER, 'downtown').items.find((item) => item.id === newItem.id)
   assert.equal(catalogItem.description, 'Roasted with lemon and garden herbs.')
   assert.equal(catalogItem.priceCents, 825)
   assert.equal(catalogItem.active, false)
-  assert.equal(getMenuCatalog('downtown', { availableOnly: true }).items.some((item) => item.id === newItem.id), false)
+  assert.equal(getMenuCatalog(DEFAULT_OWNER, 'downtown', { availableOnly: true }).items.some((item) => item.id === newItem.id), false)
 })
 
 test('older single-store snapshots gain safe catalog defaults', () => {

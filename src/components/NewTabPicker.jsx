@@ -77,7 +77,8 @@ export default function NewTabPicker() {
           sidebar item to open it in a new tab, middle-click for a background tab, and
           <kbd className="ml-1 rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-[10px] font-semibold">Alt</kbd>+
           <kbd className="rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-[10px] font-semibold">T</kbd> for
-          another new tab. Chrome keeps Ctrl+T for its own tabs, so the workspace uses Alt+T.
+          another new tab. Clicking a sidebar item opens it in its own tab (or jumps to it if
+          it is already open). Chrome keeps Ctrl+T for its own tabs, so the workspace uses Alt+T.
         </p>
       </div>
     </div>

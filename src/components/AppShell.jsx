@@ -7,6 +7,7 @@ import StatusPill from './StatusPill'
 import TabStrip from './TabStrip'
 import { Icon } from './Icon'
 import { NAV_SECTIONS, ROLES, ROLE_NAV, SCREEN_ICONS, screenForAlert } from '../lib/constants'
+import { useAuth } from '../lib/auth'
 import { getAlerts, LOCATIONS, useNow, useRestora } from '../lib/store'
 
 // One label per screen, everywhere: the sidebar, the tab strip and the
@@ -28,17 +29,18 @@ export default function AppShell({ children }) {
     tabs, activeTabId, saveTabScroll, setSelectedTableId, setSelectedDishId, setSelectedOrderId,
   } = useRestora()
   const now = useNow(30000)
+  const { user, screens, logout } = useAuth()
   const [search, setSearch] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
   const [noticeOpen, setNoticeOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const [locationOpen, setLocationOpen] = useState(false)
-  const allowed = ROLE_NAV[role] || ROLE_NAV.owner
+  const allowed = screens?.length ? screens : ROLE_NAV[role] || ROLE_NAV.owner
   const fallbackScreen = allowed.includes('floor') ? 'floor' : allowed[0]
   const alerts = useMemo(() => getAlerts(state), [state])
   const location = LOCATIONS.find((item) => item.id === locId) || LOCATIONS[0]
-  const displayName = role === 'owner' ? 'Maya Chen' : ROLES[role]?.name || 'Restaurant team'
-  const roleTitle = role === 'owner' ? 'Restaurant Manager' : ROLES[role]?.label?.split('·')[1]?.trim() || 'Team member'
+  const displayName = user?.name || (role === 'owner' ? 'Maya Chen' : ROLES[role]?.name || 'Restaurant team')
+  const roleTitle = user?.role?.label || (role === 'owner' ? 'Restaurant Manager' : ROLES[role]?.label?.split('·')[1]?.trim() || 'Team member')
   const dateLabel = new Date(now).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
   const timeLabel = new Date(now).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
 
@@ -138,24 +140,21 @@ export default function AppShell({ children }) {
           <div className="space-y-1">
             {NAV_ITEMS.filter((item) => allowed.includes(item.id)).map((item) => {
               const active = screen === item.id
-              // Chrome semantics on the rail: a plain click edits the tab you
-              // are on, Ctrl/⌘-click opens (or jumps to) its own tab, and a
+              // Chrome semantics on the rail: a plain click opens the screen in
+              // its own tab (jumping to it if it is already open), and a
               // middle-click opens it in the background.
               return (
                 <button
                   key={item.id}
                   type="button"
-                  onClick={(event) => {
-                    if (event.ctrlKey || event.metaKey) openScreenInTab(item.id)
-                    else setScreen(item.id)
-                  }}
+                  onClick={() => openScreenInTab(item.id)}
                   onAuxClick={(event) => {
                     if (event.button === 1) {
                       event.preventDefault()
                       openScreenInTab(item.id, { activate: false })
                     }
                   }}
-                  title={`${item.label} · Ctrl/⌘+click for a new tab`}
+                  title={`${item.label} · opens in its own tab`}
                   aria-current={active ? 'page' : undefined}
                   className={`group flex min-h-[46px] w-full items-center gap-3 rounded-xl px-3.5 text-left text-sm transition-colors ${
                     active
@@ -294,10 +293,20 @@ export default function AppShell({ children }) {
               {profileOpen && (
                 <div className="absolute right-0 top-full z-50 mt-2 w-64 rounded-2xl border border-zinc-200 bg-white p-3 shadow-[0_18px_45px_rgba(22,30,40,.16)]">
                   <div className="border-b border-zinc-100 px-2 pb-3"><div className="text-sm font-bold text-zinc-800">{displayName}</div><div className="mt-0.5 text-xs text-zinc-500">{roleTitle} · {location.short}</div></div>
-                  <label className="mt-3 block px-2 text-[10px] font-bold uppercase tracking-wider text-zinc-500" htmlFor="role">Demo role</label>
-                  <select id="role" value={role} onChange={(event) => changeRole(event.target.value)} className="mt-1.5 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800">
-                    {Object.entries(ROLES).map(([id, item]) => <option key={id} value={id}>{item.label}</option>)}
-                  </select>
+                  {user ? (
+                    <>
+                      {user.email && <div className="px-2 pt-3 text-xs text-zinc-500">{user.email}</div>}
+                      {user.owner && <div className="px-2 pt-1 text-xs text-zinc-400">{user.owner.name}</div>}
+                      <button type="button" onClick={() => { setProfileOpen(false); logout() }} className="mt-3 w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-zinc-700 hover:bg-zinc-100">Sign out</button>
+                    </>
+                  ) : (
+                    <>
+                      <label className="mt-3 block px-2 text-[10px] font-bold uppercase tracking-wider text-zinc-500" htmlFor="role">Demo role</label>
+                      <select id="role" value={role} onChange={(event) => changeRole(event.target.value)} className="mt-1.5 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800">
+                        {Object.entries(ROLES).map(([id, item]) => <option key={id} value={id}>{item.label}</option>)}
+                      </select>
+                    </>
+                  )}
                   <button type="button" onClick={() => { setProfileOpen(false); if (window.confirm(`Reset demo data to the Friday-night seed on ${link.mode === 'server' ? 'ALL terminals' : 'this terminal'}?`)) dispatch({ type: 'RESET_ALL' }) }} className="mt-2 w-full rounded-lg px-3 py-2 text-left text-xs text-red-600 hover:bg-red-50">Reset demo data</button>
                 </div>
               )}

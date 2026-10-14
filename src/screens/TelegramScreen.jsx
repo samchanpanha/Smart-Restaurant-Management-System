@@ -16,6 +16,7 @@ import { btnGhost, btnPrimary, inputCls } from '../components/ui'
 import { runTelegramCommand, TELEGRAM_COMMANDS, commandsFor } from '../lib/telegram'
 import { dailyDigest } from '../lib/telegram-digest'
 import { useRestora } from '../lib/store'
+import { useAuth } from '../lib/auth'
 
 const cardCls = 'rounded-2xl border border-zinc-200/80 bg-white shadow-sm'
 
@@ -42,6 +43,7 @@ const WEBAPP_APIS = [
 
 export default function TelegramScreen() {
   const { state, role, locId, link, dispatch } = useRestora()
+  const { user } = useAuth()
   const [status, setStatus] = useState(null)
   const [botRole, setBotRole] = useState(role === 'owner' ? 'manager' : 'staff')
   const [apply, setApply] = useState(false)
@@ -60,7 +62,9 @@ export default function TelegramScreen() {
 
   const origin = typeof window === 'undefined' ? '' : window.location.origin
   const webhookUrl = `${origin}/api/telegram/webhook`
-  const miniAppUrl = `${origin}/?tg=1&guest=${encodeURIComponent(tableId || state.tables[0]?.id || '')}`
+  const ownerSlug = user?.owner?.slug
+  const ownerParam = ownerSlug ? `&owner=${encodeURIComponent(ownerSlug)}` : ''
+  const miniAppUrl = `${origin}/?tg=1&guest=${encodeURIComponent(tableId || state.tables[0]?.id || '')}${ownerParam}`
   const commands = useMemo(() => commandsFor(botRole), [botRole])
 
   useEffect(() => {
