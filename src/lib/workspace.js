@@ -2,7 +2,7 @@
 // private view context (selected table/order/dish + scroll offset), while
 // restaurant data remains shared through the existing provider.
 
-export const MAX_TABS = 12
+export const MAX_TABS = 20
 export const MAX_CLOSED = 10
 
 function makeTab(id, screen, locId, extra = {}) {

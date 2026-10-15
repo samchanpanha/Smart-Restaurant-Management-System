@@ -56,7 +56,7 @@ Telegram bot is bound to `RESTORA_TENANT` (first owner, else legacy `default`).
 A Chrome-style tab strip sits above the active screen. Each tab keeps its own
 screen, store location, open drawer (table / check / dish), and scroll
 position — restaurant data stays shared. The last remaining tab closes back to
-the current role's default screen (Floor when available). Up to 12 tabs; the
+the current role's default screen (Floor when available). Up to 20 tabs; the
 10 most recently closed can be brought back.
 
 - **+** or **Ctrl/⌘+T** — new tab, opened next to the active one
