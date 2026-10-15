@@ -23,6 +23,10 @@
   --text-4xs--line-height: 1.25;
   --text-kpi: 1.6875rem; /* 27px — the headline numeral on a KPI tile */
   --text-kpi--line-height: 1;
+  --text-brand: 1.4375rem; /* 23px — the product wordmark */
+  --text-brand--line-height: 1;
+  --text-hero: 2.375rem; /* 38px — the greeting on the dashboard hero */
+  --text-hero--line-height: 1.1;
 
   /* Restora operational surfaces */
   --color-ink-950: #0b0d12; /* app bg (Live) */

@@ -157,7 +157,7 @@ export default function AppShell({ children }) {
               </svg>
             </div>
             <div className="app-sidebar-copy min-w-0">
-              <div className="text-[23px] font-bold leading-none tracking-tight">Restora</div>
+              <div className="text-brand font-bold tracking-tight">Restora</div>
               <div className="mt-1 text-3xs tracking-wide text-zinc-500">{dict.brandSubtitle}</div>
             </div>
           </div>

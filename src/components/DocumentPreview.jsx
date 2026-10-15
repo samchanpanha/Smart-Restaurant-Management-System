@@ -12,6 +12,7 @@ import {
   documentFileName, downloadHtml, printHtml, renderDocumentHtml,
 } from '../lib/documents'
 import { DOC_KIND_META, PAPER_SIZES } from '../lib/settings'
+import { LANG_TAG, useI18n } from '../lib/i18n'
 
 export default function DocumentPreview({
   document: doc,
@@ -45,9 +46,10 @@ export default function DocumentPreview({
     return () => window.clearTimeout(id)
   }, [wantsQr, qrValue, template?.showQr])
 
+  const { lang } = useI18n()
   const html = useMemo(() => (
-    doc ? renderDocumentHtml(doc, settings, { qrDataUrl, qrCaption: qrValue, notes }) : ''
-  ), [doc, settings, qrDataUrl, qrValue, notes])
+    doc ? renderDocumentHtml(doc, settings, { qrDataUrl, qrCaption: qrValue, notes, lang: LANG_TAG[lang] || lang }) : ''
+  ), [doc, settings, qrDataUrl, qrValue, notes, lang])
 
   if (!doc || !template) {
     return (

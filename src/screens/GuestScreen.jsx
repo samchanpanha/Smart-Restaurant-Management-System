@@ -673,7 +673,7 @@ export default function GuestScreen({ tableId, allowPickup = false, onSelfSeat =
                           {translateDishName(m, lang)}
                           {lang !== 'en' && <span className="sr-only"> {m.name}</span>}
                         </div>
-                        <div className="mt-0.5 line-clamp-2 text-[13px] leading-snug text-stone-500">{m.description || DESC[m.id] || 'Prepared fresh to order.'}</div>
+                        <div className="mt-0.5 line-clamp-2 text-sm leading-snug text-stone-500">{m.description || DESC[m.id] || 'Prepared fresh to order.'}</div>
                       </div>
                       <div className="tnum shrink-0 font-extrabold text-amber-700">{money(m.price)}</div>
                     </div>

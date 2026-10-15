@@ -56,7 +56,7 @@ export function getAppLang() {
 // language on a Khmer-by-default UI, and (b) the script-aware typography in
 // src/styles/typography.css (`html[lang='km']` / `html[lang='zh']`) could never
 // match. One writer, called on boot and on every change.
-const LANG_TAG = { km: 'km-KH', en: 'en-US', zh: 'zh-CN' }
+export const LANG_TAG = { km: 'km-KH', en: 'en-US', zh: 'zh-CN' }
 
 export function applyDocumentLang(lang) {
   const normalized = normalizeKitchenLang(lang)

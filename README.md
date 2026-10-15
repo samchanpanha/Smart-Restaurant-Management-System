@@ -489,10 +489,16 @@ and the layout are pinned down mechanically rather than by eye.
   Latin-extended) and **Noto Sans Khmer Variable** (Khmer script). No CDN
   request at runtime, `font-display: swap`, `woff2` only (~190 KB for all three
   subsets; browsers fetch only the subsets a screen uses).
-- **Micro type is tokenised**: `text-2xs` (11px), `text-3xs` (10px),
-  `text-4xs` (8px, chip counters), `text-kpi` (27px numerals). Arbitrary
-  `text-[11px]` classes are gone, so sizes stay consistent and can be rescaled
-  in one place.
+- **Every size is a named step**: `text-2xs` (11px), `text-3xs` (10px),
+  `text-4xs` (8px, chip counters), `text-kpi` (27px numerals), `text-brand`
+  (23px wordmark), `text-hero` (38px greeting). Arbitrary `text-[11px]`-style
+  classes are gone from every component, so sizes stay consistent and can be
+  rescaled in one place — `tests/typography-css.test.js` fails on a new one.
+- **Printed documents share the same type** (`src/lib/typography.js` is the one
+  source of truth for the stack and the face list): an invoice printed from the
+  app loads the vendored fonts from our own origin, while a sheet *downloaded*
+  to disk carries no `@font-face` at all and falls back to the OS faces instead
+  of pointing at a host that will never answer.
 - **Script-aware scale** (`src/styles/typography.css`): `src/lib/i18n.js` writes
   `<html lang>` on every language change (and `index.html` sets it before first
   paint, from the saved language), and `html[lang='km']` / `html[lang='zh']`

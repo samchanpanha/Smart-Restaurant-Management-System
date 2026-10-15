@@ -65,8 +65,6 @@ const MARKERS = {
   costing: 'Food Cost & Profit',
   assistant: 'Ops Copilot',
   settings: 'Settings & Documents',
-  telegram: 'Telegram',
-  settings: 'Settings',
   telegram: 'Telegram & Mini App',
   system: 'System & Model',
   users: 'Who can sign in to this restaurant',

@@ -7,6 +7,7 @@
 // registry. Rendering is dependency-free HTML + CSS so printing (or
 // "Save as PDF") works in every browser without a print CSS framework.
 
+import { MONO_STACK, SANS_STACK, fontBase, fontFaceCss } from './typography.js'
 import { convertAmount, currencyConfig, formatMoney, roundMoney } from './currency.js'
 import { DOC_KIND_META, PAPER_SIZES, templateFor } from './settings.js'
 import { itemRankings, movementSummary, purchaseSummary, rangeBounds, stockFlow } from './reports.js'
@@ -617,6 +618,10 @@ export function renderDocumentHtml(doc, settings, options = {}) {
   const fontPx = (paper.roll ? 11 : 12.5) * template.fontScale
   const issued = new Date(doc.issuedAt)
   const dateLabel = issued.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
+  // The document is a standalone string: it can be printed inside the app's
+  // iframe (same origin, so the vendored fonts are reachable) or downloaded and
+  // opened elsewhere (no origin, so the stack falls back to the OS faces).
+  const faces = fontFaceCss(options.fontBase === undefined ? fontBase() : options.fontBase)
   const currencyNote = doc.currency?.fx && doc.currency.fx !== 1
     ? `Converted to ${doc.currency.code} at 1 ${doc.currency.baseCode} = ${doc.currency.fx} ${doc.currency.code}`
     : ''
@@ -671,13 +676,14 @@ export function renderDocumentHtml(doc, settings, options = {}) {
   const reportBody = doc.kind === 'report' ? renderReportBody(doc, template, options) : ''
 
   return `<!doctype html>
-<html lang="en"><head><meta charset="utf-8" />
+<html lang="${options.lang || 'en'}"><head><meta charset="utf-8" />
 <title>${escapeHtml(`${doc.title || template.title} ${doc.number || ''}`.trim())}</title>
 <style>
+${faces}
   @page { size: ${paper.roll ? `${paper.pageWidthMm}mm auto` : `A4 ${options.orientation === 'landscape' ? 'landscape' : 'portrait'}`}; margin: ${paper.roll ? '3mm' : '14mm'}; }
   * { box-sizing: border-box; }
   body { margin: 0; padding: ${paper.roll ? '4mm' : '10mm'}; background: ${theme === 'dark' ? '#0b0d12' : '#f4f5f7'};
-         font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, Arial, sans-serif; color: #1f2328; font-size: ${fontPx}px; }
+         font-family: ${SANS_STACK}; color: #1f2328; font-size: ${fontPx}px; }
   .sheet { width: ${paper.widthMm}mm; margin: 0 auto; background: #fff; padding: ${paper.roll ? '4mm 3mm' : '12mm'};
            border-radius: ${paper.roll ? '2mm' : '3mm'}; box-shadow: 0 6px 24px rgba(15,20,30,.10); position: relative; }
   .doc-head { display: flex; align-items: flex-start; gap: 10px; border-bottom: 2px solid ${accent}; padding-bottom: 8px; }
@@ -691,7 +697,7 @@ export function renderDocumentHtml(doc, settings, options = {}) {
   .header-note { margin-top: 4px; font-size: .8em; font-style: italic; color: #444b55; }
   .doc-badge { text-align: right; }
   .doc-title { font-weight: 800; letter-spacing: .14em; font-size: .95em; color: ${accent}; }
-  .doc-number { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .85em; }
+  .doc-number { font-family: ${MONO_STACK}; font-size: .85em; }
   .doc-date { font-size: .75em; color: #6b7280; }
   .po-strip { display: flex; gap: 10px; margin: 10px 0 4px; }
   .po-strip > div { flex: 1; border: 1px solid #e6e8eb; border-radius: 6px; padding: 5px 8px; background: #fafbfc; }
@@ -706,7 +712,7 @@ export function renderDocumentHtml(doc, settings, options = {}) {
   .lines td { padding: 5px 4px; border-bottom: 1px dashed #eceef1; vertical-align: top; }
   td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .item .qty { font-weight: 700; }
-  .item .sku { margin-left: 6px; font-family: ui-monospace, monospace; font-size: .75em; color: #78808b; }
+  .item .sku { margin-left: 6px; font-family: ${MONO_STACK}; font-size: .75em; color: #78808b; }
   .mod { font-size: .78em; color: #4b5159; }
   .note { font-size: .78em; font-style: italic; color: #8a5a2b; }
   .totals { margin-top: 10px; width: 58%; margin-left: auto; }

@@ -53,7 +53,7 @@ function ProductsTab() {
   return (
     <div className="space-y-4">
       <div className={`${cardCls} flex flex-wrap items-center gap-3`}>
-        <label className="flex min-w-[220px] flex-1 items-center gap-2 rounded-xl border border-zinc-200 px-3">
+        <label className="flex min-w-[min(220px,100%)] flex-1 items-center gap-2 rounded-xl border border-zinc-200 px-3">
           <Icon name="search" size={16} className="text-zinc-400" />
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search products, SKU, category…" aria-label="Search products" className="min-w-0 flex-1 border-0 bg-transparent py-2.5 text-sm outline-none" />
         </label>

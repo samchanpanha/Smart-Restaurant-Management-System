@@ -40,7 +40,7 @@ export function PhotoField({ value, onChange, maxKb = 180, hint }) {
             <span className="px-2 text-center text-3xs uppercase tracking-wide text-zinc-400">No photo</span>
           )}
         </div>
-        <div className="min-w-[220px] flex-1 space-y-2">
+        <div className="min-w-[min(220px,100%)] flex-1 space-y-2">
           <div className="flex flex-wrap gap-2">
             <label
               htmlFor={inputId}

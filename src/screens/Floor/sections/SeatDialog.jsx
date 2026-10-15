@@ -71,7 +71,7 @@ function SeatDialog({ tableId, initialParty = 2, initialName = '', reservationId
           <Field label="Source">
             <select value={source} onChange={(e) => setSource(e.target.value)} className={inputCls} aria-label="Party source">
               <option value="walk_in">Walk-in</option>
-              <option value="phone">Phone</option>
+              <option value="phone">Phone booking</option>
               <option value="online">Online</option>
             </select>
           </Field>

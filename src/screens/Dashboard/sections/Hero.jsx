@@ -13,7 +13,7 @@ export default function Hero({ copy, greeting, date, locationName, restaurantNam
         <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/20 bg-black/20 px-3 py-1 text-[var(--fs-caption)] font-semibold text-white/90 backdrop-blur-sm">
           <span className="h-1.5 w-1.5 rounded-full bg-[var(--success)]" /> {copy.liveShift} · {restaurantName}
         </div>
-        <h1 className="text-3xl font-bold tracking-tight text-white sm:text-[38px]">
+        <h1 className="text-3xl font-bold tracking-tight text-white sm:text-hero">
           {greeting}, <span className="text-[var(--accent)]">{roleLabel}</span>
         </h1>
         <p className="mt-2 max-w-lg text-sm text-white/85 sm:text-base">{copy.heroSub}</p>

@@ -14,6 +14,9 @@ import fs from 'node:fs'
 import path from 'node:path'
 import test from 'node:test'
 import { auditCss, auditFonts, auditResponsive, auditTypeScale, root, runAudit } from '../scripts/audit-ui.mjs'
+import { buildEmpire } from '../src/lib/reducer.js'
+import { buildInvoiceDocument, renderDocumentHtml } from '../src/lib/documents.js'
+import { FONT_FACES, MONO_STACK, SANS_STACK, fontFaceCss } from '../src/lib/typography.js'
 
 const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8')
 
@@ -190,11 +193,46 @@ test('micro type is not hard-coded in components any more', () => {
       const rel = path.join(dir, entry.name)
       if (entry.isDirectory()) walk(rel)
       else if (/\.jsx$/.test(rel)) {
-        const matches = read(rel).match(/text-\[(?:8|9|10|11)px\]/g)
+        const matches = read(rel).match(/text-\[\d+(?:\.\d+)?px\]/g)
         if (matches) offenders.push(`${rel}: ${matches.join(', ')}`)
       }
     }
   }
   walk('src')
-  assert.deepEqual(offenders, [], 'use text-2xs / text-3xs / text-4xs so Khmer can rescale')
+  assert.deepEqual(offenders, [], 'use a named step (text-2xs/3xs/4xs/brand/hero/kpi) so Khmer can rescale')
+})
+
+// ─── The print path ────────────────────────────────────────────────
+// A printed invoice is a standalone HTML string, so it cannot inherit the app
+// stylesheet: it carries its own @font-face + stack, and both must match the
+// faces the app boots with.
+
+test('the JS face list and the CSS @font-face blocks agree', () => {
+  const css = read('src/styles/fonts.css')
+  for (const face of FONT_FACES) {
+    assert.ok(css.includes(face.file), `${face.file} is declared in src/styles/fonts.css`)
+    assert.ok(css.includes(face.unicodeRange), `${face.file} keeps its unicode-range`)
+  }
+  const declared = [...css.matchAll(/url\('\/fonts\/([^']+)'\)/g)].map((match) => match[1])
+  assert.deepEqual(declared.sort(), FONT_FACES.map((face) => face.file).sort(), 'no face is declared twice or left orphaned')
+  assert.ok(SANS_STACK.includes('"Inter Variable"'), 'the JS stack names the bundled family')
+  assert.ok(MONO_STACK.includes('ui-monospace'), 'figures have a monospace fallback')
+})
+
+test('a printed document carries the fonts when it can, and never points at a dead host', () => {
+  const empire = buildEmpire()
+  const shop = empire.locations.downtown
+  const order = Object.values(shop.orders)[0]
+  const doc = buildInvoiceDocument({ shop, order, settings: shop.settings })
+
+  const sameOrigin = renderDocumentHtml(doc, shop.settings, { fontBase: 'https://restora.test' })
+  assert.match(sameOrigin, /@font-face/)
+  assert.match(sameOrigin, /https:\/\/restora\.test\/fonts\/inter-latin-wght-normal\.woff2/)
+  assert.match(sameOrigin, /https:\/\/restora\.test\/fonts\/noto-sans-khmer-khmer-wght-normal\.woff2/)
+  assert.ok(sameOrigin.includes('Inter Variable'), 'the sheet uses the same stack as the app')
+
+  const standalone = renderDocumentHtml(doc, shop.settings, { fontBase: '' })
+  assert.ok(!standalone.includes('@font-face'), 'a downloaded sheet falls back to the OS faces')
+  assert.ok(standalone.includes('Noto Sans Khmer'), 'Khmer text still has a face to land on')
+  assert.ok(!fontFaceCss('').includes('@font-face'))
 })
