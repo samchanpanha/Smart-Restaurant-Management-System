@@ -24,9 +24,113 @@
 
 import express from 'express'
 import { AI_INSIGHT_KINDS, AI_SCOPES, buildAiContext, buildMessages, hashContext } from '../src/lib/ai.js'
-import { listProviders, normalizeProvider, providerDefaults, providerRequest, providerResult } from '../src/lib/ai-providers.js'
+import {
+  listProviders,
+  normalizeProvider,
+  providerDefaults,
+  providerNeedsKey,
+  providerRequest,
+  providerResult,
+} from '../src/lib/ai-providers.js'
 
 const DEFAULT_TIMEOUT_MS = 20000
+// A key that just failed steps aside for this long instead of being retried on
+// every request. Short enough that a transient 500 costs one request.
+const DEFAULT_COOLDOWN_MS = 60000
+const MAX_POOL = 12
+
+function text(value, max = 500) {
+  return String(value ?? '').trim().slice(0, max)
+}
+
+/**
+ * Sanitize a stored key pool. Every entry keeps its own provider/model/endpoint,
+ * so one restaurant can hold "3 DeepSeek keys" *and* "2 Qwen keys" *and* a local
+ * Ollama box, and the router will try them in order. Entries without a key are
+ * dropped, except for local providers (Ollama, LM Studio) which need none.
+ */
+export function normalizeKeyPool(entries, fallbackProvider = 'openai') {
+  const list = Array.isArray(entries) ? entries.slice(0, MAX_POOL) : []
+  const pool = []
+  list.forEach((entry, index) => {
+    if (!entry || typeof entry !== 'object') return
+    const provider = normalizeProvider(entry.provider || fallbackProvider)
+    const apiKey = text(entry.apiKey, 500)
+    if (!apiKey && providerNeedsKey(provider)) return
+    const model = text(entry.model, 120)
+    pool.push({
+      id: text(entry.id, 60) || `key-${index + 1}`,
+      label: text(entry.label, 60),
+      provider,
+      model: model || (entry.provider ? providerDefaults(provider).model : ''),
+      baseUrl: text(entry.baseUrl, 300),
+      apiKey,
+      enabled: entry.enabled !== false,
+    })
+  })
+  return pool
+}
+
+/** `AI_KEYS="sk-a,sk-b"` (same vendor) or a JSON array for mixed vendors. */
+export function parseEnvKeys(raw, provider = 'openai') {
+  const value = text(raw, 4000)
+  if (!value) return []
+  const asJson = value.startsWith('[')
+  if (asJson) {
+    try {
+      const parsed = JSON.parse(value)
+      return normalizeKeyPool(parsed, provider).map((entry, index) => ({ ...entry, id: `env-${index + 1}`, source: 'environment' }))
+    } catch {
+      return []
+    }
+  }
+  return value
+    .split(/[,\s]+/)
+    .map((key) => key.trim())
+    .filter(Boolean)
+    .slice(0, MAX_POOL)
+    .map((apiKey, index) => ({
+      id: `env-${index + 1}`,
+      label: '',
+      provider: normalizeProvider(provider),
+      model: '',
+      baseUrl: '',
+      apiKey,
+      enabled: true,
+      source: 'environment',
+    }))
+}
+
+/**
+ * Ordered attempt list: the tenant's primary config first, then its backup keys,
+ * then the deployment's environment keys. De-duplicated by (provider, key) so a
+ * key that appears twice is only tried once.
+ */
+export function buildAttempts({ primary, pool = [], environment = [], extra = [] } = {}) {
+  const candidates = [primary, ...pool, ...extra, ...environment].filter(Boolean)
+  const seen = new Set()
+  const attempts = []
+  for (const candidate of candidates) {
+    const provider = normalizeProvider(candidate.provider)
+    const apiKey = text(candidate.apiKey, 500)
+    const usable = Boolean(apiKey) || !providerNeedsKey(provider)
+    if (!usable) continue
+    const signature = `${provider}::${apiKey}::${candidate.baseUrl || ''}`
+    if (seen.has(signature)) continue
+    seen.add(signature)
+    attempts.push({
+      id: candidate.id || `attempt-${attempts.length + 1}`,
+      label: candidate.label || '',
+      provider,
+      model: candidate.model || providerDefaults(provider).model,
+      baseUrl: candidate.baseUrl || '',
+      apiKey,
+      source: candidate.source || 'tenant',
+      local: !providerNeedsKey(provider),
+    })
+  }
+  return attempts
+}
 
 // `generatedAt` changes every call, so it must never enter a cache key or the
 // same question would always miss. Everything else in the digest is derived
@@ -44,24 +148,65 @@ function stableHash(context) {
 export function mergeAiConfig(stored, env = {}) {
   const envProvider = normalizeProvider(env.provider)
   const provider = normalizeProvider(stored?.provider || envProvider)
-  const storedModel = String(stored?.model || '').trim()
-  const storedBase = String(stored?.baseUrl || '').trim()
-  const storedKey = String(stored?.apiKey || '').trim()
-  const envModel = String(env.model || '').trim()
-  const envBase = String(env.baseUrl || '').trim()
-  const envKey = String(env.apiKey || '').trim()
+  const storedModel = text(stored?.model, 120)
+  const storedBase = text(stored?.baseUrl, 300)
+  const storedKey = text(stored?.apiKey, 500)
+  const envModel = text(env.model, 120)
+  const envBase = text(env.baseUrl, 300)
+  const envKey = text(env.apiKey, 500)
   // A tenant that names a provider but no model gets that provider's default,
   // not the env model (which belongs to a different provider).
   const model = storedModel
     || (stored?.provider
       ? providerDefaults(provider).model
       : (envModel || providerDefaults(provider).model))
+  const baseUrl = storedBase || envBase || ''
+  const apiKey = storedKey || envKey
+  const source = storedKey ? 'tenant' : (envKey ? 'environment' : 'none')
+
+  const pool = normalizeKeyPool(stored?.keys, provider).filter((entry) => entry.enabled)
+  const environment = []
+  // The deployment's own key is a fallback only when it is not already the
+  // primary (otherwise it would be tried twice).
+  if (envKey && envKey !== apiKey) {
+    environment.push({
+      id: 'env-primary',
+      label: 'Server environment',
+      provider: envProvider,
+      model: envModel || providerDefaults(envProvider).model,
+      baseUrl: envBase,
+      apiKey: envKey,
+      source: 'environment',
+    })
+  }
+  environment.push(...parseEnvKeys(env.keys, envProvider))
+
+  const attempts = buildAttempts({
+    primary: {
+      id: 'primary',
+      label: source === 'tenant' ? 'Primary key' : (source === 'environment' ? 'Server environment' : 'Local model'),
+      provider,
+      model,
+      baseUrl,
+      apiKey,
+      source,
+    },
+    pool: pool.map((entry) => ({ ...entry, label: entry.label || 'Backup key', source: 'tenant' })),
+    environment,
+  })
+
   return {
     provider,
     model,
-    baseUrl: storedBase || envBase || '',
-    apiKey: storedKey || envKey,
-    source: storedKey ? 'tenant' : (envKey ? 'environment' : 'none'),
+    baseUrl,
+    apiKey,
+    source,
+    // Extra keys owned by the tenant (raw, server-side only).
+    keys: pool,
+    // Ordered failover chain used by callModel.
+    attempts,
+    // Spread requests across every key instead of "primary first".
+    rotate: Boolean(stored?.rotate),
   }
 }
 
@@ -81,13 +226,16 @@ export function createAiRouter({
   guestRateLimit = Number(process.env.AI_GUEST_RATE_LIMIT || 6),
   rateWindowMs = Number(process.env.AI_RATE_WINDOW_MS || 60000),
   cacheTtlMs = Number(process.env.AI_CACHE_TTL_MS || 300000),
+  cooldownMs = Number(process.env.AI_FAILOVER_COOLDOWN_MS || DEFAULT_COOLDOWN_MS),
   now = () => Date.now(),
   onBriefing = null,
 } = {}) {
   if (typeof getState !== 'function') throw new Error('createAiRouter requires getState')
   const router = express.Router()
   // Deployment-wide defaults (env). A tenant's stored config overrides these.
-  const envConfig = { provider, model, baseUrl, apiKey }
+  // AI_KEYS adds extra deployment keys (comma-separated, or a JSON array for
+  // mixed vendors) that the failover chain falls back to.
+  const envConfig = { provider, model, baseUrl, apiKey, keys: process.env.AI_KEYS || '' }
   const tenantMw = typeof resolveTenant === 'function'
     ? resolveTenant
     : (req, _res, next) => { req.tenantId = 'default'; next() }
@@ -129,15 +277,70 @@ export function createAiRouter({
     if (cache.size > 500) cache.delete(cache.keys().next().value)
   }
 
-  async function callModel({ system, messages, config }) {
-    const cfg = config || envConfig
-    if (!cfg.apiKey) return { skipped: true, reason: 'no AI_API_KEY configured' }
-    if (typeof fetchImpl !== 'function') return { skipped: true, reason: 'no fetch available' }
+  // ─── Key health + rotation ─────────────────────────────────────────────
+  // Every attempt (primary key, each backup key, each env key) has a health
+  // record. A failure parks that attempt for `cooldownMs` so a dead key or an
+  // exhausted quota does not slow every request; if everything is parked we
+  // still try (least-recently-failed first) rather than refusing to answer.
+  const health = new Map()
+  const rotation = new Map()
+
+  function healthOf(id) {
+    let entry = health.get(id)
+    if (!entry) {
+      entry = { failures: 0, wins: 0, lastError: null, lastErrorAt: null, lastOkAt: null, until: 0 }
+      health.set(id, entry)
+    }
+    return entry
+  }
+
+  function markFailure(id, error) {
+    const entry = healthOf(id)
+    entry.failures += 1
+    entry.lastError = error || 'request failed'
+    entry.lastErrorAt = now()
+    entry.until = now() + cooldownMs
+    stats.errors += 1
+    stats.lastError = entry.lastError
+    return entry
+  }
+
+  function markSuccess(id) {
+    const entry = healthOf(id)
+    entry.failures = 0
+    entry.wins += 1
+    entry.lastOkAt = now()
+    entry.until = 0
+    return entry
+  }
+
+  function parked(attempt) {
+    const entry = health.get(attempt.id)
+    return Boolean(entry && entry.until > now())
+  }
+
+  /** Order the attempts for one call: healthy first, then rotation order. */
+  function orderAttempts(attempts, tenantId, rotate) {
+    let list = attempts.slice()
+    if (rotate && list.length > 1) {
+      const offset = (rotation.get(tenantId) || 0) % list.length
+      rotation.set(tenantId, offset + 1)
+      list = [...list.slice(offset), ...list.slice(0, offset)]
+    }
+    const ready = list.filter((attempt) => !parked(attempt))
+    if (ready.length) return ready
+    // Everything is cooling down: try the ones that have been waiting longest.
+    return list
+      .slice()
+      .sort((a, b) => (health.get(a.id)?.until || 0) - (health.get(b.id)?.until || 0))
+  }
+
+  async function callOne(attempt, { system, messages }) {
     const req = providerRequest({
-      provider: cfg.provider,
-      model: cfg.model,
-      baseUrl: cfg.baseUrl,
-      apiKey: cfg.apiKey,
+      provider: attempt.provider,
+      model: attempt.model,
+      baseUrl: attempt.baseUrl,
+      apiKey: attempt.apiKey,
       system,
       messages,
     })
@@ -152,12 +355,75 @@ export function createAiRouter({
       })
       clearTimeout(timer)
       const json = await res.json().catch(() => ({}))
-      const { text, error } = providerResult({ provider: cfg.provider, json })
-      if (!res.ok || error) return { ok: false, error: error || `HTTP ${res.status}` }
+      const { text, error } = providerResult({ provider: attempt.provider, json })
+      if (!res.ok || error) return { ok: false, error: error || `HTTP ${res.status}`, status: res.status }
       return { ok: true, text }
     } catch (err) {
-      return { ok: false, error: err?.message || 'request failed' }
+      return { ok: false, error: err?.name === 'AbortError' ? `timed out after ${timeoutMs}ms` : (err?.message || 'request failed') }
     }
+  }
+
+  /**
+   * One logical completion, walked down the attempt chain. Returns the winning
+   * attempt so callers can report which key answered (and whether it failed
+   * over) without ever exposing the key itself.
+   */
+  async function callModel({ system, messages, config, tenantId = 'default' }) {
+    const cfg = config || mergeAiConfig(null, envConfig)
+    const attempts = cfg.attempts?.length ? cfg.attempts : []
+    if (!attempts.length) return { skipped: true, reason: 'no AI_API_KEY configured' }
+    if (typeof fetchImpl !== 'function') return { skipped: true, reason: 'no fetch available' }
+
+    const order = orderAttempts(attempts, tenantId, cfg.rotate)
+    const tried = []
+    let lastError = null
+    for (const attempt of order) {
+      const result = await callOne(attempt, { system, messages })
+      if (result.ok) {
+        markSuccess(attempt.id)
+        stats.replies += 1
+        return {
+          ok: true,
+          text: result.text,
+          via: attempt.id,
+          viaLabel: attempt.label,
+          provider: attempt.provider,
+          model: attempt.model,
+          attempts: tried.length + 1,
+          failover: tried.length > 0,
+          tried,
+        }
+      }
+      markFailure(attempt.id, result.error)
+      tried.push({ id: attempt.id, label: attempt.label, provider: attempt.provider, error: result.error })
+      lastError = result.error
+      stats.lastError = lastError
+    }
+    return { ok: false, error: lastError || 'all attempts failed', tried, attempts: tried.length }
+  }
+
+  /** Kernel-safe view of the key pool for the settings screen (never a key). */
+  function poolStatus(tenantId) {
+    const cfg = configFor(tenantId)
+    return cfg.attempts.map((attempt) => {
+      const entry = health.get(attempt.id)
+      const parkedNow = Boolean(entry && entry.until > now())
+      return {
+        id: attempt.id,
+        label: attempt.label,
+        provider: attempt.provider,
+        model: attempt.model,
+        source: attempt.source,
+        local: attempt.local,
+        hasKey: Boolean(attempt.apiKey),
+        status: parkedNow ? 'cooldown' : entry?.lastOkAt ? 'ok' : entry?.failures ? 'error' : 'idle',
+        failures: entry?.failures || 0,
+        wins: entry?.wins || 0,
+        lastError: entry?.lastError || null,
+        cooldownUntil: parkedNow ? entry.until : null,
+        lastOkAt: entry?.lastOkAt ? new Date(entry.lastOkAt).toISOString() : null,
+      }
+    })
   }
 
   function shopFor(tenantId, locId) {
@@ -206,9 +472,10 @@ export function createAiRouter({
       scopes: AI_SCOPES,
       kinds: AI_INSIGHT_KINDS,
     }
-    // Operational stats (request counts, last provider error) are staff-only.
+    // Operational stats and the key-pool health are staff-only: they describe
+    // the deployment's keys (counts and failures), never the key values.
     if (authed) {
-      res.json({ ...payload, rateLimit, guestRateLimit, stats })
+      res.json({ ...payload, rateLimit, guestRateLimit, stats, rotate: cfg.rotate, keyCount: cfg.attempts.length, pool: poolStatus(req.tenantId) })
       return
     }
     res.json({ ...payload, guestRateLimit })
@@ -239,19 +506,25 @@ export function createAiRouter({
       return res.json({ ok: true, reply: cached.text, scope, provider: cfg.provider, model: cfg.model, cached: true })
     }
 
-    const result = await callModel({ system, messages, config: cfg })
+    const result = await callModel({ system, messages, config: cfg, tenantId: req.tenantId })
     if (result.skipped) {
       stats.skipped += 1
       return res.status(503).json({ ok: false, configured: false, error: result.reason })
     }
-    if (!result.ok) {
-      stats.errors += 1
-      stats.lastError = result.error
-      return res.status(502).json({ ok: false, error: result.error })
-    }
-    stats.replies += 1
+    if (!result.ok) return res.status(502).json({ ok: false, error: result.error, tried: result.tried })
     cacheSet(cacheKey, { text: result.text })
-    res.json({ ok: true, reply: result.text, scope, provider: cfg.provider, model: cfg.model, cached: false })
+    res.json({
+      ok: true,
+      reply: result.text,
+      scope,
+      provider: result.provider,
+      model: result.model,
+      via: result.via,
+      viaLabel: result.viaLabel,
+      failover: result.failover,
+      attempts: result.attempts,
+      cached: false,
+    })
   })
 
   router.post('/api/ai/insight', tenantMw, async (req, res) => {
@@ -274,19 +547,25 @@ export function createAiRouter({
       return res.json({ ok: true, kind, reply: cached.text, scope, provider: cfg.provider, model: cfg.model, cached: true })
     }
 
-    const result = await callModel({ system, messages, config: cfg })
+    const result = await callModel({ system, messages, config: cfg, tenantId: req.tenantId })
     if (result.skipped) {
       stats.skipped += 1
       return res.status(503).json({ ok: false, configured: false, error: result.reason })
     }
-    if (!result.ok) {
-      stats.errors += 1
-      stats.lastError = result.error
-      return res.status(502).json({ ok: false, error: result.error })
-    }
-    stats.replies += 1
+    if (!result.ok) return res.status(502).json({ ok: false, error: result.error, tried: result.tried })
     cacheSet(cacheKey, { text: result.text })
-    res.json({ ok: true, kind, reply: result.text, scope, provider: cfg.provider, model: cfg.model, cached: false })
+    res.json({
+      ok: true,
+      kind,
+      reply: result.text,
+      scope,
+      provider: result.provider,
+      model: result.model,
+      via: result.via,
+      failover: result.failover,
+      attempts: result.attempts,
+      cached: false,
+    })
   })
 
   // Shift briefing. `deliver:true` hands the text to onBriefing (Telegram push).
@@ -308,17 +587,12 @@ export function createAiRouter({
     let text = cached?.text
     if (cached) stats.cached += 1
     else {
-      const result = await callModel({ system, messages, config: cfg })
+      const result = await callModel({ system, messages, config: cfg, tenantId: req.tenantId })
       if (result.skipped) {
         stats.skipped += 1
         return res.status(503).json({ ok: false, configured: false, error: result.reason })
       }
-      if (!result.ok) {
-        stats.errors += 1
-        stats.lastError = result.error
-        return res.status(502).json({ ok: false, error: result.error })
-      }
-      stats.replies += 1
+      if (!result.ok) return res.status(502).json({ ok: false, error: result.error, tried: result.tried })
       text = result.text
       cacheSet(cacheKey, { text })
     }
@@ -338,16 +612,28 @@ export function createAiRouter({
   // Accepts an override so an unsaved key can be tried before it is stored.
   async function probe(tenantId, override = null) {
     const cfg = configFor(tenantId, override)
-    if (!cfg.apiKey) return { ok: false, configured: false, error: 'No API key set.' }
+    if (!cfg.attempts.length) return { ok: false, configured: false, error: 'No API key set.' }
+    // `keyId` targets one stored key from the pool ("Test" on a backup key), so
+    // the check reports on that key instead of walking the whole chain.
+    const only = override?.keyId ? cfg.attempts.filter((attempt) => attempt.id === override.keyId) : null
+    const scoped = only && only.length ? { ...cfg, attempts: only, rotate: false } : { ...cfg, attempts: cfg.attempts.slice(0, 1), rotate: false }
     const result = await callModel({
       system: 'You are a connectivity check. Reply with the single word: OK.',
       messages: [{ role: 'user', content: 'Reply with the single word: OK.' }],
-      config: cfg,
+      config: scoped,
+      tenantId,
     })
     if (result.skipped) return { ok: false, configured: false, error: result.reason }
-    if (!result.ok) return { ok: false, error: result.error }
-    return { ok: true, reply: result.text, provider: cfg.provider, model: cfg.model }
+    if (!result.ok) return { ok: false, error: result.error, tried: result.tried }
+    return {
+      ok: true,
+      reply: result.text,
+      provider: result.provider,
+      model: result.model,
+      via: result.via,
+      viaLabel: result.viaLabel,
+    }
   }
 
-  return { router, stats, probe, configFor }
+  return { router, stats, probe, configFor, poolStatus }
 }

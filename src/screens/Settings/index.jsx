@@ -37,7 +37,7 @@ const SECTIONS = [
   { id: 'food', label: 'Food & menu', blurb: 'Tags, allergens, courses, photos, service windows' },
   { id: 'pos', label: 'Service & POS', blurb: 'Tips, splits, printers, QR' },
   { id: 'alerts', label: 'Alerts', blurb: 'What pings whom, and when' },
-  { id: 'ai', label: 'AI assistant', blurb: 'Provider, model, API key' },
+  { id: 'ai', label: 'AI assistant', blurb: 'Provider, model, API key, failover' },
   { id: 'data', label: 'Data & backup', blurb: 'Registry, export, reset' },
 ]
 
@@ -231,7 +231,7 @@ export default function SettingsScreen({ initialSection = 'business' }) {
               </span>
               <span className="text-xs font-bold text-zinc-800">{check.label}</span>
             </div>
-            {!check.ok && <p className="mt-1.5 text-[11px] leading-snug text-amber-800">{check.fix}</p>}
+            {!check.ok && <p className="mt-1.5 text-2xs leading-snug text-amber-800">{check.fix}</p>}
           </button>
         ))}
       </div>
@@ -252,7 +252,7 @@ export default function SettingsScreen({ initialSection = 'business' }) {
                   {sectionLabels[entry.id] || entry.label}
                   {lang !== 'en' && <span className="sr-only"> {entry.label}</span>}
                 </span>
-                <span className="mt-0.5 block text-[11px] leading-snug text-zinc-500">{entry.blurb}</span>
+                <span className="mt-0.5 block text-2xs leading-snug text-zinc-500">{entry.blurb}</span>
               </span>
               {sectionDirty(entry.id) && (
                 <span
@@ -263,7 +263,7 @@ export default function SettingsScreen({ initialSection = 'business' }) {
               )}
             </button>
           ))}
-          <div className="mt-1 border-t border-zinc-100 px-3 py-2.5 text-[11px] text-zinc-500">
+          <div className="mt-1 border-t border-zinc-100 px-3 py-2.5 text-2xs text-zinc-500">
             {dirtyCount > 0
               ? <span className="font-semibold text-amber-700">{dirtyCount} section{dirtyCount === 1 ? '' : 's'} with unsaved edits</span>
               : 'All changes saved'}
