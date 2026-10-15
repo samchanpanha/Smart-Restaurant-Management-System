@@ -448,3 +448,91 @@ test('naming a restaurant that does not exist is a 404 on the user routes too', 
   assert.equal(scoped.status, 200)
   assert.ok(scoped.data.users.every((user) => user.ownerId === real.id))
 })
+
+// ─── A host owner manages *their own* restaurant ────────────────────
+// Registration makes the first account a host owner: a super admin that also
+// owns a restaurant. The Users/Roles screens then opened (reads are 200) but
+// every action answered 400 "an owner is required", because a super admin's
+// target defaults to "all restaurants" and the UI never named one. Managing
+// your own shop must not require a query parameter the screen does not send.
+
+test('a host owner reads and writes their own restaurant by default', async () => {
+  const { db } = await import('../server/db.js')
+
+  // A tenant owner, promoted the way the bootstrap promotes the first account.
+  const made = await api('POST', '/api/admin/owners', {
+    cookie: (await api('POST', '/api/auth/login', { body: { email: 'root@restora.test', password: 'super-secret-1' } })).cookie,
+    body: { ownerName: 'Harbor Host', name: 'Hana Host', email: 'hana@host.test', password: 'host-pass-1' },
+  })
+  assert.equal(made.status, 201)
+  const restaurantId = made.data.owner.id
+  db.prepare('UPDATE auth_users SET is_super_admin = 1, role_id = ? WHERE id = ?').run('sys_super', made.data.user.id)
+
+  const login = await api('POST', '/api/auth/login', {
+    body: { email: 'hana@host.test', password: 'host-pass-1' },
+  })
+  assert.equal(login.data.user.isSuperAdmin, true)
+
+  // Reads default to their own restaurant, not the platform view.
+  const users = await api('GET', '/api/users', { cookie: login.cookie })
+  assert.equal(users.status, 200)
+  assert.deepEqual(users.data.users.map((user) => user.email), ['hana@host.test'])
+  assert.ok(users.data.users.every((user) => user.ownerId === restaurantId))
+
+  // Writes land in their own restaurant — this is the reported failure.
+  const staff = await api('POST', '/api/users', {
+    cookie: login.cookie,
+    body: { name: 'Sam Server', email: 'sam@host.test', password: 'sam-pass-123', roleId: 'sys_server' },
+  })
+  assert.equal(staff.status, 201, 'a host owner can add staff without naming a restaurant')
+  assert.equal(staff.data.user.ownerId, restaurantId)
+
+  const role = await api('POST', '/api/roles', {
+    cookie: login.cookie,
+    body: { key: 'bar', label: 'Bar', screens: ['floor', 'tickets'] },
+  })
+  assert.equal(role.status, 201, 'and create a role for it')
+  assert.equal(role.data.role.ownerId, restaurantId)
+
+  // Their own custom role now shows up in their list.
+  const roles = await api('GET', '/api/roles', { cookie: login.cookie })
+  assert.ok(roles.data.roles.some((entry) => entry.key === 'bar'))
+
+  // Another restaurant stays reachable by naming it, and is never touched.
+  const others = await api('GET', '/api/users?ownerId=owner_ghost', { cookie: login.cookie })
+  assert.equal(others.status, 404)
+  const named = await api('GET', '/api/users', {
+    cookie: (await api('POST', '/api/auth/login', { body: { email: 'nora@harbor.test', password: 'hunter2-long' } })).cookie,
+  })
+  assert.ok(named.data.users.length >= 1)
+  assert.ok(named.data.users.every((user) => user.email !== 'sam@host.test'), 'the other restaurant is untouched')
+
+  // Put the tenant back to a plain owner for the tests that follow.
+  db.prepare('UPDATE auth_users SET is_super_admin = 0, role_id = ? WHERE id = ?').run('sys_owner', made.data.user.id)
+})
+
+test('a platform admin with no restaurant is told to name one', async () => {
+  // The seeded super admin owns nothing, so a write cannot guess a target.
+  const admin = await api('POST', '/api/auth/login', {
+    body: { email: 'root@restora.test', password: 'super-secret-1' },
+  })
+  const me = await api('GET', '/api/auth/me', { cookie: admin.cookie })
+  assert.equal(me.data.user.owner, null)
+
+  const attempt = await api('POST', '/api/users', {
+    cookie: admin.cookie,
+    body: { name: 'Nobody', email: 'nobody@nowhere.test', password: 'nobody-pass-1', roleId: 'sys_server' },
+  })
+  assert.equal(attempt.status, 400)
+  assert.match(attempt.data.error, /ownerId=/, 'the message says how to target a restaurant')
+
+  // …and naming one works.
+  const owners = await api('GET', '/api/admin/owners', { cookie: admin.cookie })
+  const target = owners.data.owners.find((owner) => owner.slug === 'harbor-bistro')
+  const scoped = await api('POST', `/api/users?ownerId=${target.id}`, {
+    cookie: admin.cookie,
+    body: { name: 'Picked Staff', email: 'picked@harbor.test', password: 'picked-pass-1', roleId: 'sys_server' },
+  })
+  assert.equal(scoped.status, 201)
+  assert.equal(scoped.data.user.ownerId, target.id)
+})

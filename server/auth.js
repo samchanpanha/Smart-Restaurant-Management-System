@@ -630,11 +630,33 @@ export function createAuthRouter() {
     return typeof raw === 'string' ? raw.trim() : ''
   }
 
-  // Which owner's records a request may touch. Super admin may name any
-  // owner (or none, to mean "all owners"); everyone else is pinned.
+  /**
+   * Which owner's records a request may touch.
+   *
+   * A signed-in user is pinned to their own restaurant. A super admin may name
+   * any restaurant with `?ownerId=`, and otherwise acts on **their own** if
+   * they have one — a host owner runs a restaurant and must be able to manage
+   * it (its staff and its roles) from the Users/Roles screens, which is what
+   * registration creates. Only a platform admin with no restaurant of their
+   * own falls through to `null`, meaning "all restaurants".
+   */
   function targetOwnerId(req) {
-    if (req.auth.user.is_super_admin) return namedOwnerId(req) || null
+    if (req.auth.user.is_super_admin) return namedOwnerId(req) || req.auth.user.owner_id || null
     return req.auth.user.owner_id
+  }
+
+  /**
+   * A write needs one restaurant to write to. The UI always sends one when the
+   * actor has their own (or picks one); a platform admin who named nothing is
+   * told what to do instead of getting a bare "an owner is required".
+   */
+  function writeOwnerId(req, res) {
+    const ownerId = targetOwnerId(req)
+    if (ownerId) return ownerId
+    res.status(400).json({
+      error: 'Pick a restaurant first — this account is not tied to one, so name it with ?ownerId=<id> (GET /api/admin/owners lists them).',
+    })
+    return null
   }
 
   // Naming a restaurant that does not exist is a 404 everywhere, never an
@@ -696,13 +718,16 @@ export function createAuthRouter() {
     if (rejectUnknownOwner(req, res)) return
     const ownerId = targetOwnerId(req)
     const system = q.systemRoles.all().map(roleView)
-    if (req.auth.user.is_super_admin && !ownerId) return res.json({ roles: system })
+    // No restaurant at all (a platform-only admin): nothing of their own to
+    // list, so the system roles are the honest answer until they name one.
+    if (!ownerId) return res.json({ roles: system })
     if (!ownerExists(ownerId)) return badRequest(res, 'an owner is required')
     return res.json({ roles: [...system, ...q.ownerRoles.all(ownerId).map(roleView)] })
   })
 
   routerApp.post('/api/roles', requireAuth, can('roles'), (req, res) => {
-    const ownerId = targetOwnerId(req)
+    const ownerId = writeOwnerId(req, res)
+    if (!ownerId) return
     if (!ownerExists(ownerId)) return badRequest(res, 'an owner is required')
     const { key, label, screens } = req.body || {}
     const cleanKey = String(key ?? '').trim().toLowerCase()
@@ -754,7 +779,8 @@ export function createAuthRouter() {
   })
 
   routerApp.post('/api/users', requireAuth, can('users'), (req, res) => {
-    const ownerId = targetOwnerId(req)
+    const ownerId = writeOwnerId(req, res)
+    if (!ownerId) return
     if (!ownerExists(ownerId)) return badRequest(res, 'an owner is required')
     const { name, email, password, roleId } = req.body || {}
     const cleanName = String(name ?? '').trim()

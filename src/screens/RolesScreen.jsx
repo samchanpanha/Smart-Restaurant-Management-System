@@ -8,6 +8,7 @@ import { ALL_SCREENS } from '../lib/auth'
 import { NAV_SECTIONS } from '../lib/constants'
 import { translateScreenLabel, useI18n } from '../lib/i18n'
 import { apiFetch } from '../lib/api'
+import { ownerQuery, useRestaurantScope } from '../lib/restaurant-scope'
 
 const cardCls = 'rounded-2xl border border-zinc-200/80 bg-white shadow-sm'
 const input = 'min-h-10 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 outline-none transition focus:border-orange-300 focus:ring-2 focus:ring-orange-100'
@@ -35,6 +36,8 @@ async function send(method, route, body) {
 
 export default function RolesScreen() {
   const { lang, dict } = useI18n()
+  // Same rule as Users: a host owner manages their own restaurant's roles.
+  const scope = useRestaurantScope()
   const rl = dict.rolesScreen || {}
   const [roles, setRoles] = useState([])
   const [error, setError] = useState('')
@@ -44,7 +47,7 @@ export default function RolesScreen() {
 
   const load = useCallback(async () => {
     try {
-      const list = await getJson('/api/roles')
+      const list = await getJson(`/api/roles${ownerQuery(scope.ownerId)}`)
       setRoles(list.roles || [])
       setError('')
     } catch (failure) {
@@ -52,7 +55,7 @@ export default function RolesScreen() {
     } finally {
       setReady(true)
     }
-  }, [])
+  }, [scope.ownerId])
 
   useEffect(() => { load() }, [load])
 
@@ -69,7 +72,7 @@ export default function RolesScreen() {
     event.preventDefault()
     setBusy(true)
     try {
-      await send('POST', '/api/roles', draft)
+      await send('POST', `/api/roles${ownerQuery(scope.ownerId)}`, draft)
       setDraft({ key: '', label: '', screens: [] })
       await load()
     } catch (failure) {

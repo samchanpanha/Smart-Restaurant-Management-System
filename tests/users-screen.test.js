@@ -39,6 +39,10 @@ const requests = []
 
 let sessionAlive = true
 let meUser = null
+const RESTAURANTS = [
+  { id: 'owner_1', name: 'Harbor Bistro', slug: 'harbor-bistro', status: 'active' },
+  { id: 'owner_2', name: 'Riverside Grill', slug: 'riverside-grill', status: 'active' },
+]
 const USERS = [
   { id: 'user_owner', ownerId: 'owner_1', ownerName: 'Harbor Bistro', email: 'nora@harbor.test', name: 'Nora Owner', roleId: 'sys_owner', role: { id: 'sys_owner', key: 'owner', label: 'Owner', screens: ['*'] }, status: 'active' },
   { id: 'user_sam', ownerId: 'owner_1', ownerName: 'Harbor Bistro', email: 'sam@harbor.test', name: 'Sam Server', roleId: 'sys_server', role: { id: 'sys_server', key: 'server', label: 'Server', screens: ['floor', 'tickets'] }, status: 'active' },
@@ -54,6 +58,7 @@ globalThis.fetch = async (url, opts = {}) => {
   requests.push({ href, method: opts.method || 'GET', auth: opts.headers?.Authorization ?? opts.headers?.get?.('Authorization') ?? null })
   if (!sessionAlive) return json({ error: 'sign in required' }, 401)
   if (href.includes('/api/auth/me')) return json({ user: meUser })
+  if (href.includes('/api/admin/owners')) return json({ owners: RESTAURANTS })
   if (href.includes('/api/users')) return json({ users: USERS })
   if (href.includes('/api/roles')) return json({ roles: ROLES })
   return json({ ok: true })
@@ -85,6 +90,18 @@ let container = null
 let root = null
 
 const byTestId = (id) => document.querySelector(`[data-testid="${id}"]`)
+
+async function remount() {
+  act(() => { root?.unmount() })
+  container?.remove()
+  container = document.createElement('div')
+  document.body.appendChild(container)
+  root = createRoot(container)
+  act(() => {
+    root.render(React.createElement(AuthProvider, null, React.createElement(UsersScreen)))
+  })
+  await settle(80)
+}
 
 before(async () => {
   // The workspace defaults to Khmer; assert the English wording.
@@ -140,4 +157,47 @@ test('a session that died explains itself and offers the way back in', async () 
   sessionAlive = true
   await settle(40)
   assert.match(document.body.textContent || '', /Sam Server/)
+})
+
+// ─── A host owner manages their own restaurant ──────────────────────
+// The reported failure: register the first account (a host owner — a super
+// admin that also owns a restaurant), open Users, and every action answered
+// "an owner is required" because the screen never named a restaurant. The
+// screen now names its own, and a host owner can switch.
+
+test('a host owner scopes Users to their own restaurant and can switch', async () => {
+  meUser = {
+    id: 'user_super',
+    email: 'hana@host.test',
+    name: 'Hana Host',
+    isSuperAdmin: true,
+    role: { id: 'sys_super', key: 'super', label: 'Super admin', screens: ['*'] },
+    owner: RESTAURANTS[0],
+    screens: ['*'],
+  }
+  await remount()
+
+  const list = requests.filter((entry) => entry.href.includes('/api/users')).pop()
+  assert.ok(list, 'the roster was requested')
+  assert.match(list.href, /ownerId=owner_1/, 'and it names the host owner\'s own restaurant')
+
+  const picker = byTestId('users-restaurant')
+  assert.ok(picker, 'a host owner gets a restaurant picker')
+  assert.equal(picker.value, 'owner_1')
+
+  // Switching restaurant re-reads that restaurant's staff.
+  const before = requests.length
+  const setter = Object.getOwnPropertyDescriptor(dom.window.HTMLSelectElement.prototype, 'value')?.set
+  act(() => {
+    setter?.call(picker, 'owner_2')
+    picker.dispatchEvent(new dom.window.Event('change', { bubbles: true }))
+  })
+  await settle(60)
+  const after = requests.slice(before).filter((entry) => entry.href.includes('/api/users')).pop()
+  assert.ok(after, 'switching re-reads the roster')
+  assert.match(after.href, /ownerId=owner_2/)
+
+  // Back to the plain owner for any test that follows.
+  meUser = null
+  await remount()
 })

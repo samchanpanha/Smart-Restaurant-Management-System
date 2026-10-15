@@ -66,19 +66,30 @@ workspace; the guest QR app and the Telegram mini app stay open.
   `RESTORA_BOOTSTRAP_HOST_OWNER=0` to make even the first one unprivileged.
 - Users and Roles are scoped to their owner, and every owner screen works the
   moment a restaurant registers: the standard roles (owner, manager, server,
-  kitchen, host) are assignable with no seeding step. A manager sees only their
-  own team, nobody below a super admin can grant a role broader than their own,
-  and an **owner account** can only be changed by another owner (or the
-  platform) — with the last active owner guarded, so nobody can demote, disable,
-  or delete a restaurant's way out of its own admin screens.
+  kitchen, host) are assignable with no seeding step. A **host owner** — a
+  super admin that also owns a restaurant, which is exactly what registration
+  creates — manages **their own** restaurant: Users and Roles open on it, list
+  only its people and roles, and add to it, with a picker to switch to another
+  restaurant. Only a platform admin with no restaurant of their own has to
+  name one first, which the screen offers as a picker — and the API answers
+  *Pick a restaurant first* with the exact call to use when one is missing.
+  A manager sees only their own team, nobody below a super admin can grant a
+  role broader than their own, and an **owner account** can only be changed by
+  another owner (or the platform) — with the last active owner guarded, so
+  nobody can demote, disable, or delete a restaurant's way out of its own
+  admin screens.
 - A **super admin** (`SUPERADMIN_EMAIL` / `SUPERADMIN_PASSWORD`) gets a Host
   owners console to add, suspend, or delete restaurants.
 - Every state table, read model, action log, and SSE stream is partitioned by
   `owner_id`, so two restaurants never see each other's floor, stock, or menu.
 
 The API picks a tenant per request: a signed-in user is pinned to their own
-owner; a super admin names one with `?ownerId=`; guests and the mini app pick
-one with `?owner=<slug>` (a named tenant that does not exist is a `404`). The
+owner; a super admin names one with `?ownerId=`, and when they own a restaurant
+that is the default — so the console is one click away instead of a write that
+fails for a missing parameter. A super admin that owns nothing defaults to the
+platform view for reads, and a write without `?ownerId=` is a `400` naming the
+call to make; guests and the mini app pick one with `?owner=<slug>` (a named
+tenant that does not exist is a `404`). The
 Telegram bot is bound to `RESTORA_TENANT` (first owner, else legacy `default`).
 
 ## Workspace tabs

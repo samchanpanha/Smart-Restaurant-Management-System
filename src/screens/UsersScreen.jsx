@@ -7,6 +7,7 @@ import { Icon } from '../components/Icon'
 import { useAuth } from '../lib/auth'
 import { useI18n } from '../lib/i18n'
 import { apiFetch } from '../lib/api'
+import { ownerQuery, useRestaurantScope } from '../lib/restaurant-scope'
 
 // A 401 means the session is gone (expired, revoked, or the browser stopped
 // sending the cookie). Say so plainly and offer the way back in instead of
@@ -51,6 +52,11 @@ async function send(method, route, body) {
 
 export default function UsersScreen() {
   const { user: me, refresh } = useAuth()
+  // Which restaurant this roster belongs to: the signed-in owner's own, or the
+  // one a host owner picked. The server defaults to the same restaurant, but
+  // sending it keeps the request honest — an unqualified write used to fail
+  // with "an owner is required" for a host owner.
+  const scope = useRestaurantScope()
   const { lang, dict } = useI18n()
   const us = useMemo(() => dict.users || {}, [dict])
   const [users, setUsers] = useState([])
@@ -69,7 +75,8 @@ export default function UsersScreen() {
 
   const load = useCallback(async () => {
     try {
-      const [userList, roleList] = await Promise.all([getJson('/api/users'), getJson('/api/roles')])
+      const query = ownerQuery(scope.ownerId)
+      const [userList, roleList] = await Promise.all([getJson(`/api/users${query}`), getJson(`/api/roles${query}`)])
       setUsers(userList.users || [])
       setRoles(roleList.roles || [])
       setError('')
@@ -79,7 +86,7 @@ export default function UsersScreen() {
     } finally {
       setReady(true)
     }
-  }, [fail])
+  }, [fail, scope.ownerId])
 
   useEffect(() => { load() }, [load])
 
@@ -87,7 +94,7 @@ export default function UsersScreen() {
     event.preventDefault()
     setBusy(true)
     try {
-      await send('POST', '/api/users', draft)
+      await send('POST', `/api/users${ownerQuery(scope.ownerId)}`, draft)
       setDraft({ name: '', email: '', password: '', roleId: '' })
       await load()
     } catch (failure) {
@@ -113,6 +120,19 @@ export default function UsersScreen() {
   return (
     <div className="mx-auto max-w-5xl space-y-5">
       <header>
+        {scope.isSuper && scope.owners.length > 1 && (
+          <label className="mb-3 flex flex-wrap items-center gap-2 text-xs font-semibold text-zinc-500">
+            <span>{us.restaurant || 'Restaurant'}</span>
+            <select
+              data-testid="users-restaurant"
+              value={scope.ownerId}
+              onChange={(event) => scope.setOwnerId(event.target.value)}
+              className="min-h-9 rounded-lg border border-zinc-200 bg-white px-2 text-xs font-medium text-zinc-700"
+            >
+              {scope.owners.map((owner) => <option key={owner.id} value={owner.id}>{owner.name}</option>)}
+            </select>
+          </label>
+        )}
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900">
           {us.title || 'Users'}
           {lang !== 'en' && <span className="sr-only"> Users</span>}
@@ -149,6 +169,7 @@ export default function UsersScreen() {
         <section className={`${cardCls} overflow-hidden`}>
           <div className="border-b border-zinc-100 px-5 py-3 text-sm font-semibold text-zinc-700">
             {users.length} {users.length === 1 ? 'person' : 'people'}
+            {scope.currentName ? <span className="font-normal text-zinc-400"> · {scope.currentName}</span> : null}
           </div>
           {!ready ? (
             <p className="px-5 py-8 text-sm text-zinc-400">Loading…</p>
