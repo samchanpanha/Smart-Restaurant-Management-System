@@ -38,6 +38,7 @@ const json = (body, status = 200) => ({ ok: status < 400, status, json: async ()
 const requests = []
 
 let sessionAlive = true
+let dataRoutesFail = false
 let meUser = null
 const RESTAURANTS = [
   { id: 'owner_1', name: 'Harbor Bistro', slug: 'harbor-bistro', status: 'active' },
@@ -58,6 +59,7 @@ globalThis.fetch = async (url, opts = {}) => {
   requests.push({ href, method: opts.method || 'GET', auth: opts.headers?.Authorization ?? opts.headers?.get?.('Authorization') ?? null })
   if (!sessionAlive) return json({ error: 'sign in required' }, 401)
   if (href.includes('/api/auth/me')) return json({ user: meUser })
+  if (dataRoutesFail && !href.includes('/api/auth/')) return json({ error: 'sign in required' }, 401)
   if (href.includes('/api/admin/owners')) return json({ owners: RESTAURANTS })
   if (href.includes('/api/users')) return json({ users: USERS })
   if (href.includes('/api/roles')) return json({ roles: ROLES })
@@ -70,7 +72,14 @@ const { createRoot } = await import('react-dom/client')
 
 const server = await createServer({ server: { middlewareMode: true, hmr: false }, appType: 'custom', logLevel: 'error' })
 const { default: UsersScreen } = await server.ssrLoadModule('/src/screens/UsersScreen.jsx')
-const { AuthProvider } = await server.ssrLoadModule('/src/lib/auth.jsx')
+const { AuthProvider, useAuth } = await server.ssrLoadModule('/src/lib/auth.jsx')
+const { setSessionToken, getSessionToken, apiFetch } = await server.ssrLoadModule('/src/lib/api.js')
+
+/** What the session looks like from the outside: signed in, and why not. */
+function AuthProbe() {
+  const { user, sessionEnded } = useAuth()
+  return React.createElement('span', { 'data-testid': 'auth-probe' }, `${user ? `in:${user.email}` : 'out'}${sessionEnded ? ':ended' : ''}`)
+}
 const { setAppLang } = await server.ssrLoadModule('/src/lib/i18n.js')
 
 const settle = async (ms = 40) => {
@@ -98,7 +107,10 @@ async function remount() {
   document.body.appendChild(container)
   root = createRoot(container)
   act(() => {
-    root.render(React.createElement(AuthProvider, null, React.createElement(UsersScreen)))
+    root.render(React.createElement(AuthProvider, null,
+      React.createElement(React.Fragment, null,
+        React.createElement(UsersScreen),
+        React.createElement(AuthProbe))))
   })
   await settle(80)
 }
@@ -198,6 +210,44 @@ test('a host owner scopes Users to their own restaurant and can switch', async (
   assert.match(after.href, /ownerId=owner_2/)
 
   // Back to the plain owner for any test that follows.
+  meUser = null
+  await remount()
+})
+
+// ─── One 401 is not a sign-out ──────────────────────────────────────
+// "I can't access Users — it logs out my session." A 401 from a data route used
+// to clear the token and then ask /api/auth/me, which of course also said "no
+// session", so a single request that could not carry the session ended the
+// workspace. The session check decides now, not the failing request.
+
+test('a rejected data call does not sign out a live session', async () => {
+  meUser = {
+    id: 'user_owner', email: 'nora@harbor.test', name: 'Nora Owner', isSuperAdmin: false,
+    role: { id: 'sys_owner', key: 'owner', label: 'Owner', screens: ['*'] },
+    owner: RESTAURANTS[0], screens: ['*'],
+  }
+  sessionAlive = true
+  // A tab that holds a session, the way it does after sign-in or register.
+  setSessionToken('tok-live')
+  dataRoutesFail = true
+  await remount()
+  await settle(160)
+
+  assert.equal(getSessionToken(), 'tok-live', 'one rejected call does not throw the token away')
+  assert.equal(byTestId('auth-probe').textContent, 'in:nora@harbor.test', 'the session survives the request')
+  const alert = document.querySelector('[role="alert"]')
+  assert.ok(alert, 'the screen still explains what failed')
+
+  // And when /api/auth/me agrees the session is gone, the sign-in screen is it —
+  // reached from the same provider, the way a real tab gets there.
+  sessionAlive = false
+  await act(async () => { await apiFetch('/api/users').catch(() => {}) })
+  await settle(200)
+  assert.equal(getSessionToken(), null, 'a session that really ended is cleared')
+  assert.equal(byTestId('auth-probe').textContent, 'out:ended', 'and the sign-in screen can say why')
+
+  sessionAlive = true
+  dataRoutesFail = false
   meUser = null
   await remount()
 })

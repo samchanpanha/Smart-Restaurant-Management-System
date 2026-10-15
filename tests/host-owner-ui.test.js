@@ -8,6 +8,11 @@
 //
 // Reads alone would not have caught it: the roster loaded (200) and only the
 // buttons failed, so this test goes all the way to a staff member and a role.
+//
+// The second test is the transport: a workspace embedded in a cross-site frame
+// (the live preview, a tablet dashboard inside another app) gets no cookie
+// back, and that is where "it logs my session out when I open Users" came from.
+// The session has to live on the token alone.
 
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
@@ -58,7 +63,8 @@ const calls = []
 const forward = async (input, init) => {
   const raw = typeof input === 'string' ? input : input?.url
   const res = await nodeFetch(raw?.startsWith('/') ? base + raw : raw, init)
-  calls.push({ method: init?.method || 'GET', url: raw, status: res.status })
+  const auth = Boolean(new Headers(init?.headers || {}).get('Authorization'))
+  calls.push({ method: init?.method || 'GET', url: raw, status: res.status, auth })
   return res
 }
 globalThis.fetch = forward
@@ -72,6 +78,9 @@ before(async () => {
   app.use(express.json())
   seedAuth()
   app.use(createAuthRouter())
+  // The state server is not what this file tests; the app only has to show it
+  // asked for it with the session attached.
+  app.get('/api/state', (req, res) => res.json({ state: null }))
   await new Promise((resolve) => { server = app.listen(0, '127.0.0.1', resolve) })
   base = `http://127.0.0.1:${server.address().port}`
 })
@@ -87,7 +96,7 @@ const React = (await import('react')).default
 const { act } = await import('react')
 const { createRoot } = await import('react-dom/client')
 const vite = await createServer({ server: { middlewareMode: true, hmr: false }, appType: 'custom', logLevel: 'error' })
-const { installApiTransport } = await vite.ssrLoadModule('/src/lib/api.js')
+const { installApiTransport, setSessionToken, clearSessionToken } = await vite.ssrLoadModule('/src/lib/api.js')
 const { AuthProvider, useAuth } = await vite.ssrLoadModule('/src/lib/auth.jsx')
 const { RestoraProvider } = await vite.ssrLoadModule('/src/lib/store.jsx')
 const { default: AppShell } = await vite.ssrLoadModule('/src/components/AppShell.jsx')
@@ -211,4 +220,50 @@ test('registering a host owner leads into Users and Roles they can write', async
   const myRestaurant = await fetch(`${base}/api/auth/me`, { headers: { Authorization: `Bearer ${dom.window.localStorage.getItem('restora-session-token')}` } }).then((res) => res.json())
   assert.equal(myRestaurant.user.owner.name, OWNER.ownerName)
 
+})
+
+// ─── The workspace without a cookie ─────────────────────────────────
+// Everything here talks to the scratch server over a transport that cannot
+// carry cookies (node's fetch has no jar) and sends only the bearer token, so
+// this is exactly the browser that blocked the cookie: the workspace must still
+// open its own restaurant's floor and roster.
+
+test('the workspace works on the session token alone', async (t) => {
+  const registered = await fetch(`${base}/api/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ownerName: 'No-Cookie Cafe', name: 'Casey Owner', email: 'casey@nocookie.test', password: 'casey-pass-1' }),
+  }).then((res) => res.json())
+  assert.equal(registered.user.owner.name, 'No-Cookie Cafe')
+  setSessionToken(registered.token)
+
+  const own = document.createElement('div')
+  document.body.appendChild(own)
+  const tree = createRoot(own)
+  t.after(() => {
+    try { act(() => { tree.unmount() }) } catch { /* already gone */ }
+    own.remove()
+    clearSessionToken()
+  })
+
+  const before = calls.length
+  act(() => {
+    tree.render(
+      React.createElement(AuthProvider, null,
+        React.createElement(RestoraProvider, null,
+          React.createElement(AppShell, null, React.createElement(Router)))),
+    )
+  })
+  assert.ok(await until(() => Boolean(navButton('Users'))), 'the shell opened with no cookie in sight')
+  assert.ok(!document.body.textContent.includes('Connecting to service…'), 'no boot screen in the way')
+
+  const sent = calls.slice(before)
+  const state = sent.find((call) => call.url.startsWith('/api/state'))
+  assert.ok(state, `the workspace asked for its state: ${JSON.stringify(sent.slice(0, 6))}`)
+  assert.ok(state.auth, 'and asked for it with the session token')
+  assert.ok(!sent.some((call) => call.status === 401), `nothing answered sign in required: ${JSON.stringify(sent.filter((call) => call.status === 401))}`)
+
+  act(() => { navButton('Users').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  assert.ok(await until(() => settled() && panel().includes('casey@nocookie.test')), 'and Users lists their own roster')
+  assert.ok(!document.body.textContent.includes('sign in required'))
 })

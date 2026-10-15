@@ -36,7 +36,7 @@ after(async () => {
   fs.rmSync(dataDir, { recursive: true, force: true })
 })
 
-async function api(method, route, { body, cookie, token, proto } = {}) {
+async function api(method, route, { body, cookie, token, proto, headers: extra } = {}) {
   const res = await fetch(base + route, {
     method,
     headers: {
@@ -44,6 +44,7 @@ async function api(method, route, { body, cookie, token, proto } = {}) {
       ...(cookie ? { Cookie: cookie } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(proto ? { 'X-Forwarded-Proto': proto } : {}),
+      ...(extra || {}),
     },
     body: body ? JSON.stringify(body) : undefined,
   })
@@ -293,6 +294,28 @@ test('the session cookie fits the transport it arrived on', async () => {
   // And the cookie still authenticates on its own.
   const me = await api('GET', '/api/auth/me', { cookie: secure.cookie })
   assert.equal(me.data.user.email, 'nora@harbor.test')
+})
+
+test('an https front is recognised even when the proxy hides the protocol', async () => {
+  // Not every proxy forwards X-Forwarded-Proto, and when the workspace is
+  // embedded in a frame a Lax cookie is never sent back: the operator sees the
+  // app sign them out on the next screen. These are the other traces of TLS a
+  // browser leaves, and they have to be enough to pick None + Secure.
+  const login = { body: { email: 'nora@harbor.test', password: 'hunter2-long' } }
+  const viaSsl = await api('POST', '/api/auth/login', { ...login, headers: { 'X-Forwarded-Ssl': 'on' } })
+  assert.match(viaSsl.setCookie, /SameSite=None/)
+  assert.match(viaSsl.setCookie, /Secure/)
+
+  const viaOrigin = await api('POST', '/api/auth/login', { ...login, headers: { Origin: 'https://harbor-bistro.example' } })
+  assert.match(viaOrigin.setCookie, /Partitioned/)
+
+  const viaCf = await api('POST', '/api/auth/login', { ...login, headers: { 'CF-Visitor': '{\"scheme\":\"https\"}' } })
+  assert.match(viaCf.setCookie, /SameSite=None/)
+
+  // With no trace at all the server keeps the LAN-safe Lax cookie.
+  const plain = await api('POST', '/api/auth/login', { ...login, headers: { Origin: 'http://192.168.1.20:3001' } })
+  assert.match(plain.setCookie, /SameSite=Lax/)
+  assert.ok(!/Secure/.test(plain.setCookie))
 })
 
 test('a token session resolves to the same tenant as the cookie session', async () => {

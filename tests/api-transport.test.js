@@ -35,6 +35,20 @@ globalThis.CustomEvent = class { constructor(type, init) { this.type = type; thi
 globalThis.location = globalThis.window.location
 globalThis.Headers = Headers
 
+// The page's own cookie jar, as a document double.
+const jar = new Map()
+globalThis.document = {
+  get cookie() {
+    return [...jar.entries()].map(([key, value]) => `${key}=${value}`).join('; ')
+  },
+  set cookie(raw) {
+    const [pair, ...attrs] = String(raw).split('; ')
+    const [key, value] = pair.split('=')
+    if (attrs.some((attr) => /^max-age=0$/i.test(attr))) jar.delete(key)
+    else jar.set(key, value)
+  },
+}
+
 const api = await import('../src/lib/api.js')
 
 test('the token is remembered across calls and cleared on sign out', () => {
@@ -125,4 +139,36 @@ test('no screen calls the API without the session transport', () => {
   }
   walk('src')
   assert.deepEqual(offenders, [], 'every /api call goes through apiFetch (or the installed transport)')
+})
+
+// ─── The token outlives storage ──────────────────────────────────────
+// A workspace embedded in a cross-site frame is exactly where localStorage is
+// unavailable or partitioned away: the session looked fine (the register/login
+// answer was in memory) and then every screen answered "sign in required" on
+// the next page load, which the operator sees as being logged out. The token
+// now also rides in a cookie the page can read, so it survives both.
+
+test('the token is kept where localStorage cannot hold it', async () => {
+  api.setSessionToken('tok-framed')
+  assert.equal(jar.get('restora_client_token'), 'tok-framed', 'written to the page cookie')
+  assert.match(globalThis.document.cookie, /restora_client_token=tok-framed/)
+
+  // A fresh page load with storage blocked, holding only that cookie.
+  const brokenStorage = {
+    getItem() { throw new Error('third-party storage is blocked') },
+    setItem() { throw new Error('third-party storage is blocked') },
+    removeItem() { throw new Error('third-party storage is blocked') },
+  }
+  globalThis.localStorage = brokenStorage
+  const reloaded = await import('../src/lib/api.js?reload=1')
+  assert.equal(reloaded.getSessionToken(), 'tok-framed', 'the next page load still has the session')
+  assert.equal(reloaded.sessionHeaders().get('Authorization'), 'Bearer tok-framed')
+  assert.equal(reloaded.withSessionToken('/api/events'), '/api/events?token=tok-framed')
+
+  // Signing out clears both homes.
+  reloaded.clearSessionToken()
+  assert.equal(jar.get('restora_client_token'), undefined, 'the cookie is cleared too')
+  assert.equal(reloaded.getSessionToken(), null)
+
+  globalThis.localStorage = { getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) }
 })

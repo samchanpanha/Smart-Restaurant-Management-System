@@ -76,9 +76,13 @@ const MIN_PASSWORD = 8
 // the same screen components the sidebar already knows.
 export const ALL_SCREENS = [
   'dashboard', 'floor', 'tickets', 'kitchen', 'menu', 'catalog', 'inventory',
-  'movements', 'purchases', 'suppliers', 'reports', 'costing', 'settings',
-  'telegram', 'system', 'users', 'roles', 'owners',
+  'movements', 'purchases', 'suppliers', 'reports', 'costing', 'assistant',
+  'settings', 'telegram', 'system', 'users', 'roles', 'owners',
 ]
+
+// The workspace nav is the same list — tests/screen-grant.test.js fails if they
+// drift, because a screen the server does not know about can never be granted
+// to anyone (Ops Copilot was missing here while the sidebar offered it).
 
 // System roles are shared by every host owner (owner_id NULL, is_system 1).
 // The super admin owns the tenant console; a host owner runs their own shop.
@@ -87,11 +91,11 @@ const SYSTEM_ROLES = [
   { id: 'sys_owner', key: 'owner', label: 'Owner', screens: ALL_SCREENS.filter((s) => s !== 'owners') },
   {
     id: 'sys_manager', key: 'manager', label: 'Manager',
-    screens: ['dashboard', 'floor', 'tickets', 'kitchen', 'menu', 'catalog', 'inventory', 'movements', 'purchases', 'suppliers', 'reports', 'costing', 'settings', 'telegram', 'users'],
+    screens: ['dashboard', 'floor', 'tickets', 'kitchen', 'menu', 'catalog', 'inventory', 'movements', 'purchases', 'suppliers', 'reports', 'costing', 'assistant', 'settings', 'telegram', 'users'],
   },
   { id: 'sys_server', key: 'server', label: 'Server', screens: ['floor', 'tickets'] },
   { id: 'sys_kitchen', key: 'kitchen', label: 'Kitchen', screens: ['kitchen'] },
-  { id: 'sys_host', key: 'host', label: 'Host', screens: ['floor', 'dashboard'] },
+  { id: 'sys_host', key: 'host', label: 'Host', screens: ['floor', 'dashboard', 'assistant'] },
 ]
 
 const ROLE_BY_KEY = Object.fromEntries(SYSTEM_ROLES.map((role) => [role.key, role]))
@@ -184,10 +188,61 @@ function parseCookies(header = '') {
  * Railway/Fly) `req.secure` is false unless trust proxy is on, so the
  * forwarded proto is what actually tells the truth.
  */
+/**
+ * One line per interesting request about how this server sees its transport.
+ *
+ * Off unless RESTORA_DEBUG_TRANSPORT=1. It exists because "it logs me out when
+ * I open Users" cannot be reproduced from the server side: the answer is in
+ * what the *browser* sent, and this is how to read it — whether the proxy
+ * forwarded the protocol, whether the request arrived with the cookie, with the
+ * bearer token, or with neither.
+ */
+let transportLogs = 0
+function logTransport(req, note, secure) {
+  if (process.env.RESTORA_DEBUG_TRANSPORT !== '1' || transportLogs >= 50) return
+  transportLogs += 1
+  const headers = req.headers || {}
+  console.log(`[restora] transport ${note} ${req.method} ${req.originalUrl || req.url} ${JSON.stringify({
+    secure: typeof secure === 'boolean' ? secure : isSecureRequest(req),
+    forwardedProto: headers['x-forwarded-proto'] || null,
+    origin: headers.origin || null,
+    referer: headers.referer ? String(headers.referer).slice(0, 30) : null,
+    cookie: Boolean(headers.cookie),
+    bearer: Boolean(headers.authorization),
+    host: headers.host || null,
+  })}`)
+}
+
 function isSecureRequest(req) {
   if (req.secure) return true
-  const proto = String(req.headers?.['x-forwarded-proto'] || '').split(',')[0].trim().toLowerCase()
-  return proto === 'https'
+  const headers = req.headers || {}
+  const proto = String(headers['x-forwarded-proto'] || '').split(',')[0].trim().toLowerCase()
+  if (proto === 'https') return true
+  // Not every proxy forwards the protocol, and getting this wrong is not
+  // cosmetic: without `Secure; SameSite=None` a cross-site iframe never sends
+  // the cookie back, so the workspace looks signed in (the register/login
+  // response is in memory) while the next screen answers 401 and the app signs
+  // the operator out. A frame loaded over https always leaves one of these
+  // traces, and a browser will not send an http request from an https page.
+  const ssl = String(headers['x-forwarded-ssl'] || '').toLowerCase() === 'on'
+  const frontEnd = String(headers['front-end-https'] || '').toLowerCase() === 'on'
+  const visitor = String(headers['cf-visitor'] || '')
+  if (ssl || frontEnd || /"scheme"\s*:\s*"https"/.test(visitor)) return true
+  if (String(headers.origin || '').startsWith('https://')) return true
+  return String(headers.referer || '').startsWith('https://')
+}
+
+/**
+ * isSecureRequest, plus the session log when debugging.
+ *
+ * This only fires on the requests that set or clear the session cookie, so the
+ * log stays a handful of lines and still shows what mattered: how the
+ * registration request arrived and which cookie shape went back.
+ */
+function secureTransport(req) {
+  const secure = isSecureRequest(req)
+  logTransport(req, 'cookie', secure)
+  return secure
 }
 
 /**
@@ -385,8 +440,14 @@ export function seedSystemRoles() {
   const created = nowIso()
   const insertSystem = db.prepare(`INSERT OR IGNORE INTO auth_roles
     (id, owner_id, key, label, screens, is_system, created_at) VALUES (?, NULL, ?, ?, ?, 1, ?)`)
+  // System roles are not editable, so restating them is safe — and it is the
+  // only way a database created by an earlier release learns about a screen
+  // that has been added since (an existing install kept the old grant list and
+  // silently hid the new screen from its owner).
+  const updateSystem = db.prepare('UPDATE auth_roles SET label = ?, screens = ? WHERE id = ? AND is_system = 1')
   for (const role of SYSTEM_ROLES) {
     insertSystem.run(role.id, role.key, role.label, JSON.stringify(role.screens), created)
+    updateSystem.run(role.label, JSON.stringify(role.screens), role.id)
   }
 }
 
@@ -534,7 +595,12 @@ export function shouldBootstrapHostOwner(env = process.env) {
 
 export function createAuthRouter() {
   function requireAuth(req, res, next) {
-    if (!req.auth) return res.status(401).json({ error: 'sign in required' })
+    if (!req.auth) {
+      // The request that produced the operator's "sign in required" — with the
+      // evidence of what the browser did and did not send.
+      logTransport(req, '401')
+      return res.status(401).json({ error: 'sign in required' })
+    }
     return next()
   }
 
@@ -578,7 +644,7 @@ export function createAuthRouter() {
         + 'Set SUPERADMIN_EMAIL/SUPERADMIN_PASSWORD, or RESTORA_BOOTSTRAP_HOST_OWNER=0 to change this.')
     }
     const session = startSession(userId)
-    res.setHeader('Set-Cookie', cookieHeader(session.token, session.maxAge, { secure: isSecureRequest(req) }))
+    res.setHeader('Set-Cookie', cookieHeader(session.token, session.maxAge, { secure: secureTransport(req) }))
     return res.status(201).json({
       // The token travels in the body as well as the cookie: a browser that
       // cannot store or send the cookie (embedded frame, third-party cookie
@@ -598,7 +664,7 @@ export function createAuthRouter() {
     }
     if (user.status !== 'active') return res.status(403).json({ error: 'this account is disabled' })
     const session = startSession(user.id)
-    res.setHeader('Set-Cookie', cookieHeader(session.token, session.maxAge, { secure: isSecureRequest(req) }))
+    res.setHeader('Set-Cookie', cookieHeader(session.token, session.maxAge, { secure: secureTransport(req) }))
     return res.json({
       token: session.token,
       user: publicUser(user, user.owner_id ? q.ownerById.get(user.owner_id) : null),
@@ -610,7 +676,7 @@ export function createAuthRouter() {
     // an embedded terminal revokes the token it was given at sign-in.
     const token = sessionTokenFrom(req)
     if (token) q.deleteSession.run(token)
-    res.setHeader('Set-Cookie', cookieHeader('', 0, { secure: isSecureRequest(req) }))
+    res.setHeader('Set-Cookie', cookieHeader('', 0, { secure: secureTransport(req) }))
     return res.json({ ok: true })
   })
 

@@ -146,6 +146,11 @@ function resolveTenant(req, res, next) {
 // ─── App ────────────────────────────────────────────────────────
 
 const app = express()
+// Behind a proxy (the preview host, a reverse proxy, Railway/Fly) the socket is
+// plain http, so `req.secure` is only truthful with this. The session cookie
+// depends on it: over https it must be `Secure; SameSite=None` or a cross-site
+// iframe drops it and the operator gets signed out on the next screen.
+app.set('trust proxy', true)
 app.use(express.json({ limit: '1mb' }))
 app.use(attachAuth)
 

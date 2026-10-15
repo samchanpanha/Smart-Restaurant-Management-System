@@ -57,6 +57,7 @@ Env vars: `AI_API_KEY`, `AI_KEYS`, `AI_PROVIDER`, `AI_MODEL`, `AI_BASE_URL`, `AI
 
 ## Operational gotchas
 
+- The session travels two ways on purpose: the HttpOnly cookie *and* a bearer token in `localStorage` (plus a JS-readable `restora_client_token` cookie). A workspace in a cross-site frame, or a browser with third-party cookies blocked, drops the cookie — when a report says "it signs me out when I open X", start with `RESTORA_DEBUG_TRANSPORT=1`, which logs how each cookie was decided and every 401 with what the request carried.
 - The root `.env` is a **stale leftover** from a Postgres/Spring Boot template and is never loaded (no `dotenv`). Real config is `process.env` only: `PORT`, `HOST`, `RESTORA_*`, `TELEGRAM_*`, `SUPERADMIN_*`, `AI_*` (see README).
 - `server/data/` (SQLite) and `dist/` are git-ignored. In Docker the DB lives on the `restora-data` volume — seed it with `docker compose exec restora npm run seed:demo`, not from the host.
 - Commits follow Conventional Commits (`feat:`, `fix:`, `docs:`, `style:`), often with a scope (`feat(tenant): …`).

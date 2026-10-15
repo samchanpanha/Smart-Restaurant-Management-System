@@ -19,6 +19,14 @@
 
 const TOKEN_KEY = 'restora-session-token'
 const UNAUTHORIZED_EVENT = 'restora:unauthorized'
+// A second home for the token, in a cookie the page can read. Where storage is
+// unavailable or isolated — a workspace embedded in a cross-site frame, private
+// mode, a sandboxed iframe — localStorage silently keeps nothing, and the next
+// page load has no session at all while the cookie still rides along. The
+// server's own cookie stays the primary path; this is the belt to the bearer
+// token's braces, and it is what the SSE stream needs in that context.
+const TOKEN_COOKIE = 'restora_client_token'
+const TOKEN_MAX_AGE = 60 * 60 * 24 * 7
 
 function storage() {
   try {
@@ -29,14 +37,50 @@ function storage() {
   }
 }
 
+function storedToken() {
+  const store = storage()
+  if (!store) return null
+  try {
+    return store.getItem(TOKEN_KEY) || null
+  } catch {
+    return null
+  }
+}
+
+function cookieToken() {
+  try {
+    if (typeof document === 'undefined' || typeof document.cookie !== 'string') return null
+    const hit = document.cookie.split('; ').find((entry) => entry.startsWith(`${TOKEN_COOKIE}=`))
+    if (!hit) return null
+    const raw = hit.slice(TOKEN_COOKIE.length + 1)
+    return decodeURIComponent(raw) || null
+  } catch {
+    return null
+  }
+}
+
+function writeCookieToken(value) {
+  try {
+    if (typeof document === 'undefined' || typeof document.cookie !== 'string') return
+    const https = typeof location !== 'undefined' && location.protocol === 'https:'
+    // Same rules as the server's own cookie: over https a frame is a third
+    // party, so `SameSite=None; Secure` (partitioned, like the server's) is the
+    // only shape a browser in an embedded workspace will keep.
+    const sameSite = https ? 'SameSite=None; Secure; Partitioned' : 'SameSite=Lax'
+    const age = value ? `Max-Age=${TOKEN_MAX_AGE}` : 'Max-Age=0'
+    document.cookie = `${TOKEN_COOKIE}=${value ? encodeURIComponent(value) : ''}; Path=/; ${sameSite}; ${age}`
+  } catch {
+    /* a document that refuses cookies (sandboxed frame) keeps the token in memory */
+  }
+}
+
 let token = null
 let loaded = false
 
 function load() {
   if (loaded) return token
   loaded = true
-  const store = storage()
-  token = store ? store.getItem(TOKEN_KEY) || null : null
+  token = storedToken() || cookieToken()
   return token
 }
 
@@ -58,6 +102,7 @@ export function setSessionToken(next) {
   } catch {
     /* private mode: the token still works for this page's lifetime */
   }
+  writeCookieToken(token)
   return token
 }
 

@@ -30,6 +30,7 @@ With the API running, extra environment (all optional — nothing breaks without
 | `TELEGRAM_WEBHOOK_SECRET` | Shared secret Telegram must echo back on every update. |
 | `RESTORA_PUBLIC_URL` | Public origin used for guest / mini-app links in replies. |
 | `RESTORA_DATA` | Where `restora.sqlite` lives (default `server/data/`). |
+| `RESTORA_DEBUG_TRANSPORT` | `1` logs how each session cookie was decided and every `401` with what the request carried (proto/cookie/token). For "the app signs me out when I open a screen" reports. |
 | `SUPERADMIN_EMAIL` / `SUPERADMIN_PASSWORD` / `SUPERADMIN_NAME` | Seed (or promote) the platform super admin on boot. Optional: the first account to register becomes the host owner (see below). |
 | `RESTORA_BOOTSTRAP_HOST_OWNER` | `0` makes registration always create a plain restaurant owner. Default: whenever the platform has no super admin yet, the first registration hosts the owner. |
 | `RESTORA_TENANT` | Slug (or id) of the owner the Telegram bot serves; defaults to the first owner, else the legacy `default` tenant. |

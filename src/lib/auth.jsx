@@ -4,7 +4,7 @@
 // safe anonymous shape instead of throwing when no provider is mounted.
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { apiFetch, clearSessionToken, getSessionToken, onUnauthorized, setSessionToken } from './api'
+import { apiFetch, clearSessionToken, onUnauthorized, setSessionToken } from './api'
 import { NAV_SECTIONS } from './constants'
 
 const AuthContext = createContext(null)
@@ -22,6 +22,7 @@ const ANONYMOUS = {
   user: null,
   loading: false,
   screens: null,
+  sessionEnded: false,
   login: async () => { throw new Error('Auth is not available here') },
   register: async () => { throw new Error('Auth is not available here') },
   logout: async () => {},
@@ -43,14 +44,20 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
 
+  // True when a session ended under the operator's feet, so the sign-in screen
+  // can say why instead of appearing out of nowhere.
+  const [sessionEnded, setSessionEnded] = useState(false)
+
   const refresh = useCallback(async () => {
     try {
       const res = await apiFetch('/api/auth/me')
       const json = await res.json().catch(() => ({}))
       if (!json.user) clearSessionToken()
       setUser(json.user || null)
+      return json.user || null
     } catch {
       setUser(null)
+      return null
     } finally {
       setLoading(false)
     }
@@ -65,11 +72,22 @@ export function AuthProvider({ children }) {
   // Several screens can fail at the same moment, so the re-check is collapsed:
   // one pass at a time, and nothing to do once the session is already gone.
   const checking = useRef(false)
-  useEffect(() => onUnauthorized(() => {
+  const signedIn = useRef(false)
+  useEffect(() => { signedIn.current = Boolean(user) }, [user])
+
+  useEffect(() => onUnauthorized(async () => {
     if (checking.current) return
     checking.current = true
-    if (getSessionToken()) clearSessionToken()
-    Promise.resolve(refresh()).finally(() => { checking.current = false })
+    // Ask /api/auth/me *before* throwing the session away. It carries both the
+    // cookie and the bearer token, so it is the honest answer to "is this
+    // session really gone?" — while clearing the token first (the old order)
+    // guaranteed the answer was yes, and a single 401 from any one request
+    // signed the operator out on the spot. That is what "clicking Users logs
+    // me out" was: a request that could not carry the session yet.
+    const hadSession = signedIn.current
+    const me = await refresh()
+    checking.current = false
+    if (hadSession && !me) setSessionEnded(true)
   }), [refresh])
 
   const login = useCallback(async (email, password) => {
@@ -78,6 +96,7 @@ export function AuthProvider({ children }) {
     // cannot be stored or sent back.
     if (json.token) setSessionToken(json.token)
     setUser(json.user || null)
+    setSessionEnded(false)
     return json.user
   }, [])
 
@@ -85,6 +104,7 @@ export function AuthProvider({ children }) {
     const json = await call('/api/auth/register', fields)
     if (json.token) setSessionToken(json.token)
     setUser(json.user || null)
+    setSessionEnded(false)
     return json.user
   }, [])
 
@@ -97,7 +117,7 @@ export function AuthProvider({ children }) {
   const screens = useMemo(() => normalizeScreens(user?.screens), [user])
 
   const value = useMemo(
-    () => ({ user, loading, screens, login, register, logout, refresh }),
+    () => ({ user, loading, screens, sessionEnded, login, register, logout, refresh }),
     [user, loading, screens, login, register, logout, refresh],
   )
 

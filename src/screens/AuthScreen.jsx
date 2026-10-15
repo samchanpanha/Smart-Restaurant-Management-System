@@ -9,7 +9,7 @@ import { useDomTranslator, useI18n } from '../lib/i18n'
 const INPUT = 'w-full rounded-lg border border-[var(--color-ink-600)] bg-[var(--color-ink-900)] px-3 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-orange-400 focus:outline-none'
 
 export default function AuthScreen() {
-  const { login, register } = useAuth()
+  const { login, register, sessionEnded } = useAuth()
   const { lang, dict } = useI18n()
   useDomTranslator(null, lang)
   const au = dict.auth || {}
@@ -105,6 +105,14 @@ export default function AuthScreen() {
                 placeholder="At least 8 characters" className={INPUT}
               />
             </label>
+
+            {/* A session that ended on its own is not the operator's mistake:
+                say what happened instead of showing a bare sign-in form. */}
+            {sessionEnded && !error && (
+              <p role="status" data-testid="session-ended" className="rounded-lg bg-amber-500/10 px-3 py-2 text-sm text-amber-200 ring-1 ring-inset ring-amber-500/30">
+                {au.sessionEnded || 'Your session ended — sign in again to continue where you left off.'}
+              </p>
+            )}
 
             {error && (
               <p role="alert" className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-300 ring-1 ring-inset ring-red-500/30">
