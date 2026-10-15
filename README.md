@@ -163,6 +163,25 @@ snapshot. Override with `DEMO_OWNER_NAME`, `DEMO_SLUG`, `DEMO_PASSWORD`, and
 `RESTORA_DATA` (to target a specific database). The guest menu for the demo
 is `/login` and `/?owner=restora-demo`.
 
+### Trying the host-owner flow on a clean install
+
+The first account to register becomes the **host owner** — a super admin that
+also owns the restaurant it just created (`RESTORA_BOOTSTRAP_HOST_OWNER=0`
+turns that off). To walk that exact path without touching your own data, run a
+second instance against an empty database:
+
+```sh
+npm run build
+RESTORA_DATA=/tmp/restora-fresh PORT=3002 npm run server
+```
+
+Open `:3002`, press **Create account**, and you land in the workspace with
+Users, Roles, and the Host owners console — scoped to the restaurant you just
+named. Adding a person or a house role there must answer `201`; if it answers
+`400 an owner is required`, the host owner is not being given its own
+restaurant (`tests/host-owner-ui.test.js` drives this whole path in the suite).
+Every later registration on that instance is an ordinary restaurant owner.
+
 ### SQLite menu catalog
 
 The existing snapshot/action-log database now also maintains a normalized,

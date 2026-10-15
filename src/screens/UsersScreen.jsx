@@ -168,8 +168,10 @@ export default function UsersScreen() {
       <div className="grid gap-5 lg:grid-cols-[1.6fr_1fr]">
         <section className={`${cardCls} overflow-hidden`}>
           <div className="border-b border-zinc-100 px-5 py-3 text-sm font-semibold text-zinc-700">
-            {users.length} {users.length === 1 ? 'person' : 'people'}
-            {scope.currentName ? <span className="font-normal text-zinc-400"> · {scope.currentName}</span> : null}
+            {/* "0 people" while the roster is still on its way reads as an
+                empty restaurant — say what is actually happening. */}
+            {ready ? `${users.length} ${users.length === 1 ? 'person' : 'people'}` : 'Loading…'}
+            {ready && scope.currentName ? <span className="font-normal text-zinc-400"> · {scope.currentName}</span> : null}
           </div>
           {!ready ? (
             <p className="px-5 py-8 text-sm text-zinc-400">Loading…</p>
@@ -230,6 +232,11 @@ export default function UsersScreen() {
               <option value="">{us.role || 'Choose a role…'}</option>
               {roles.map((role) => <option key={role.id} value={role.id}>{role.label}</option>)}
             </select>
+            {ready && roles.length === 0 && (
+              <p className="text-xs text-amber-700">
+                {us.noRoles || 'No roles to assign yet — create one on the Roles screen, then add the person here.'}
+              </p>
+            )}
             <button type="submit" disabled={busy || roles.length === 0} className={`${btnPrimary} w-full`}>
               {busy ? 'Adding…' : (us.createUser || 'Add user')}
             </button>

@@ -772,9 +772,21 @@ app.get('/api/events', resolveTenant, (req, res) => {
 
 const rootDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const distDir = path.join(rootDir, 'dist')
+// A rebuild replaces the hashed files under assets/, so index.html must never
+// come from a cache: a tab holding yesterday's index.html asks for
+// `assets/UsersScreen-<old-hash>.js`, which no longer exists, and the lazy
+// screen dies with "Something went wrong" on a perfectly healthy server. That
+// is what an operator reports as "Users is broken", not "the bundle is old".
+// The hashed files themselves are the opposite — immutable by name.
 if (fs.existsSync(distDir)) {
-  app.use(express.static(distDir))
+  app.use(express.static(distDir, {
+    setHeaders(res, filePath) {
+      if (filePath.endsWith('.html')) res.setHeader('Cache-Control', 'no-store')
+      else if (filePath.includes(`${path.sep}assets${path.sep}`)) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
+    },
+  }))
   app.get(/^(?!\/api\/).*/, (req, res) => {
+    res.setHeader('Cache-Control', 'no-store')
     res.sendFile(path.join(distDir, 'index.html'))
   })
   console.log('[restora] serving frontend from dist/')
