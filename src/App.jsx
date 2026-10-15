@@ -31,6 +31,7 @@ const SettingsScreen = lazy(() => import('./screens/SettingsScreen'))
 const CostingScreen = lazy(() => import('./screens/CostingScreen'))
 const ReportsScreen = lazy(() => import('./screens/ReportsScreen'))
 const TelegramScreen = lazy(() => import('./screens/TelegramScreen'))
+const AssistantScreen = lazy(() => import('./screens/AssistantScreen'))
 const UsersScreen = lazy(() => import('./screens/UsersScreen'))
 const RolesScreen = lazy(() => import('./screens/RolesScreen'))
 const OwnersScreen = lazy(() => import('./screens/OwnersScreen'))
@@ -117,6 +118,7 @@ const SCREENS = {
   costing: CostingScreen,
   reports: ReportsScreen,
   telegram: TelegramScreen,
+  assistant: AssistantScreen,
   users: UsersScreen,
   roles: RolesScreen,
   owners: OwnersScreen,

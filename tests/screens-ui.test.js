@@ -63,6 +63,7 @@ const MARKERS = {
   suppliers: 'Suppliers',
   reports: 'Reports & Analytics',
   costing: 'Food Cost & Profit',
+  assistant: 'Ops Copilot',
   settings: 'Settings & Documents',
   telegram: 'Telegram',
   settings: 'Settings',
@@ -156,6 +157,25 @@ for (const section of NAV_SECTIONS) {
     })
   }
 }
+
+test('the dashboard renders the spec §9.1 widgets', async () => {
+  await freshApp()
+  clickNav('Dashboard')
+  await settle()
+  await flush()
+  for (const id of [
+    'dashboard-kpis',
+    'dashboard-sales',
+    'dashboard-sales-spark',
+    'dashboard-alerts',
+    'dashboard-menu-engineering',
+    'dashboard-kitchen-sla',
+    'dashboard-floor-snapshot',
+  ]) {
+    assert.ok(document.querySelector(`[data-testid="${id}"]`), `dashboard renders ${id}`)
+  }
+  assert.equal(panel().textContent.includes('Something went wrong'), false)
+})
 
 test('the purchases screen shows supplier totals and the seeded orders', async () => {
   await freshApp()
@@ -418,6 +438,23 @@ test('settings saves one section without publishing edits made in another', asyn
 
   assert.equal(document.querySelector('[data-testid="section-dirty-business"]'), null, 'saving clears the section marker')
   assert.ok(panel().textContent.includes('Test Kitchen'), 'the saved name is published to the store')
+})
+
+test('the AI section configures a provider instead of using the draft save bar', async () => {
+  await freshApp()
+  clickNav('Settings')
+  await settle()
+
+  const aiTab = [...document.querySelectorAll('[aria-label="Settings sections"] button')]
+    .find((entry) => (entry.textContent || '').includes('Provider, model, API key'))
+  assert.ok(aiTab, 'Settings lists an AI assistant section')
+  act(() => { aiTab.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+
+  assert.ok(document.querySelector('[data-testid="ai-config-provider"]'), 'the provider picker renders')
+  assert.ok(document.querySelector('[data-testid="ai-config-key"]'), 'the key field renders')
+  assert.ok(document.querySelector('[data-testid="ai-config-save"]'), 'the section has its own save button')
+  assert.equal(document.querySelector('[data-testid="section-save-status"]'), null, 'the draft save bar is hidden for AI')
 })
 
 test('the setup wizard steps through sections and publishes on finish', async () => {

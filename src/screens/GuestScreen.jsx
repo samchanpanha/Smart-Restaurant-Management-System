@@ -5,6 +5,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import LanguageSwitcher from '../components/LanguageSwitcher'
+import MenuConcierge from '../components/MenuConcierge'
 import { Sheet } from '../components/ui'
 import {
   translateCategory,
@@ -343,6 +344,7 @@ export default function GuestScreen({ tableId, allowPickup = false, onSelfSeat =
   const [moveTargetId, setMoveTargetId] = useState('')
   const [moveReason, setMoveReason] = useState('')
   const [moveSubmitted, setMoveSubmitted] = useState(false)
+  const [askOpen, setAskOpen] = useState(false)
 
   const table = state.tables.find((t) => t.id === tableId)
   const moveCandidates = useMemo(
@@ -580,6 +582,15 @@ export default function GuestScreen({ tableId, allowPickup = false, onSelfSeat =
             )}
           </div>
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setAskOpen(true)}
+              data-testid="guest-ask-menu"
+              className="min-h-[44px] rounded-full bg-amber-500 px-3.5 text-xs font-bold text-stone-950 shadow-sm active:bg-amber-400"
+            >
+              ✨ {lang === 'km' ? 'សួរម្ហូប' : lang === 'zh' ? '咨询菜单' : 'Menu help'}
+              {lang !== 'en' && <span className="sr-only"> Ask about the menu</span>}
+            </button>
             {!pickup && (
               <button
                 type="button"
@@ -922,6 +933,8 @@ export default function GuestScreen({ tableId, allowPickup = false, onSelfSeat =
               )}
           </Sheet>
         )}
+
+        {askOpen && <MenuConcierge lang={lang} locId={locId} onClose={() => setAskOpen(false)} />}
       </div>
     </div>
   )

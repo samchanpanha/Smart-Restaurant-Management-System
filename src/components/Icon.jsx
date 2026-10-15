@@ -17,6 +17,7 @@ import {
   LayoutList,
   LineChart,
   Lock,
+  MessagesSquare,
   Pin,
   Plus,
   Printer,
@@ -26,6 +27,7 @@ import {
   Settings,
   ShieldCheck,
   ShoppingCart,
+  Sparkles,
   Store,
   Trash2,
   TriangleAlert,
@@ -71,6 +73,8 @@ const ICONS = {
   shield: ShieldCheck,
   building: Building2,
   warning: TriangleAlert,
+  sparkles: Sparkles,
+  message: MessagesSquare,
 }
 
 export function Icon({ name, size = 20, className = '', strokeWidth = 1.8, ...props }) {

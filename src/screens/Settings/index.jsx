@@ -16,6 +16,7 @@ import StatusPill from '../../components/StatusPill'
 import { configurationAudit } from '../../lib/settings'
 import { useI18n } from '../../lib/i18n'
 import { useRestora } from '../../lib/store'
+import { AiSection } from './sections/Ai'
 import { AlertsSection } from './sections/Alerts'
 import { BusinessSection } from './sections/Business'
 import { DataSection } from './sections/Data'
@@ -36,6 +37,7 @@ const SECTIONS = [
   { id: 'food', label: 'Food & menu', blurb: 'Tags, allergens, courses, photos, service windows' },
   { id: 'pos', label: 'Service & POS', blurb: 'Tips, splits, printers, QR' },
   { id: 'alerts', label: 'Alerts', blurb: 'What pings whom, and when' },
+  { id: 'ai', label: 'AI assistant', blurb: 'Provider, model, API key' },
   { id: 'data', label: 'Data & backup', blurb: 'Registry, export, reset' },
 ]
 
@@ -43,6 +45,7 @@ const SECTION_ICON = {
   documents: 'doc',
   money: 'costing',
   stock: 'inventory',
+  ai: 'sparkles',
   data: 'layers',
 }
 
@@ -68,6 +71,7 @@ export default function SettingsScreen({ initialSection = 'business' }) {
     food: st.foodTab || 'Food & menu',
     pos: st.posTab || 'Service & POS',
     alerts: st.notificationsTab || 'Alerts & notifications',
+    ai: st.aiTab || 'AI assistant',
     data: st.dataTab || 'Data & reset',
   }
 
@@ -156,6 +160,8 @@ export default function SettingsScreen({ initialSection = 'business' }) {
         return <PosSection draft={draft} patch={patch} />
       case 'alerts':
         return <AlertsSection draft={draft} patch={patch} />
+      case 'ai':
+        return <AiSection />
       case 'data':
         return <DataSection state={state} draft={draft} dispatch={dispatch} empire={empire} locId={locId} link={link} resync={resync} />
       default:
@@ -267,6 +273,9 @@ export default function SettingsScreen({ initialSection = 'business' }) {
         <div className="space-y-4">
           {renderSection(section)}
 
+          {/* The AI section saves itself against the server, so it does not
+              use the draft-first section save bar. */}
+          {section !== 'ai' && (
           <div className="sticky bottom-2 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur">
             <span className="text-xs text-zinc-500" data-testid="section-save-status">
               {sectionDirty(section) ? 'Unsaved edits in this section' : 'This section has no unsaved edits'}
@@ -292,6 +301,7 @@ export default function SettingsScreen({ initialSection = 'business' }) {
               </button>
             </div>
           </div>
+          )}
         </div>
       </div>
 

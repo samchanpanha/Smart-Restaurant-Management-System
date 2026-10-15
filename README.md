@@ -31,6 +31,9 @@ With the API running, extra environment (all optional — nothing breaks without
 | `SUPERADMIN_EMAIL` / `SUPERADMIN_PASSWORD` / `SUPERADMIN_NAME` | Seed (or promote) the platform super admin on boot. |
 | `RESTORA_TENANT` | Slug (or id) of the owner the Telegram bot serves; defaults to the first owner, else the legacy `default` tenant. |
 | `RESTORA_SECURE_COOKIES` | Set to `1` behind HTTPS so session cookies are marked `Secure`. |
+| `AI_API_KEY` | Provider key (OpenAI/Anthropic/Gemini/Ollama). **Absent ⇒ AI is off everywhere** and the app behaves exactly as before. |
+| `AI_PROVIDER` / `AI_MODEL` / `AI_BASE_URL` | Which provider, model, and endpoint to call (each has a default; see **AI assistant**). |
+| `AI_TIMEOUT_MS` / `AI_RATE_LIMIT` / `AI_GUEST_RATE_LIMIT` / `AI_RATE_WINDOW_MS` / `AI_CACHE_TTL_MS` | Outbound timeout, per-window rate limits (staff / guest), and the insight-cache TTL. |
 
 ## Accounts & tenants
 
@@ -373,6 +376,64 @@ loads the full tenant snapshot, then renders only the scanned table — a demo
 convenience. A production deployment should serve guests a scoped projection
 (menu + that table's ticket) instead of the whole snapshot.
 
+The guest page (and the Telegram mini app, which reuses it) can also offer an
+**✨ Menu help** sheet — a menu-only concierge that recommends dishes and answers
+questions about ingredients, allergens, spice, dietary tags, and price, built on
+the same AI layer described below. It shows a short *Ask about the menu* intro,
+one-tap suggestion chips, and a friendly note when AI is off or busy, and it
+degrades to the plain menu whenever the server has no AI key.
+
+## AI assistant (optional)
+
+An optional, provider-agnostic layer (`server/ai.js` + the pure modules
+`src/lib/ai.js` and `src/lib/ai-providers.js`, called from the browser through
+`src/lib/ai-client.js`). It reads a **redacted, pre-computed digest** of the
+live shift and returns text — it is **read-only and never dispatches a reducer
+action**, and it is **off by default**: with no `AI_API_KEY` every `/api/ai/*`
+route is a clean 503 no-op and the app is byte-for-byte the same.
+
+- **Providers:** `openai` (default), `anthropic`, `gemini`, `ollama` — chosen
+  with `AI_PROVIDER`; each has a default `AI_MODEL`/endpoint, all overridable
+  (`AI_MODEL`, `AI_BASE_URL`). No SDKs — just `fetch`.
+- **Surfaces:** the **Ops Copilot** screen (`Insight → Ops Copilot`) for chat +
+  advisors + a shift briefing; the **Dashboard** AI cards (alert explainer,
+  menu advisor, prep forecast, shift briefing); and the guest/mini-app **Menu
+  help** concierge.
+- **Guest recommendations:** the `scope:'menu'` digest is a rich row — localized
+  dish names, category/sub-category, description, `dietaryTags`, `allergens`,
+  `spiceLevel`, the ingredient **names** only (never quantities or costs), and a
+  `popular` flag derived from real sales — so a guest question like "what's good
+  and gluten-free?" gets a grounded, named recommendation. Guests see no
+  operational data and `/api/ai/status` returns no server stats to them.
+- **Ops help:** the Ops Copilot also answers "how do I …" questions about the app
+  itself (it carries a static `appGuide` prompt that points to the right screen),
+  alongside the live-shift digest.
+- **Guardrails:** answers are grounded in the digest (the model never computes
+  money); guests are pinned to `scope:'menu'` so a public caller can never read
+  sales, stock, or staff; responses are cached per context hash; separate staff
+  and guest rate limits apply (guest buckets are per client IP).
+- **Telegram:** the shift briefing can be pushed to the bot (`POST
+  /api/ai/briefing` with `deliver:true`, using the same notifier/chats as the
+  rest of the pushes).
+- **Configure in-app:** an owner or super admin can set the provider, model,
+  base URL, and API key from **Settings → AI assistant**. It is stored per
+  restaurant in SQLite (the key is write-only and never sent back to the
+  browser) and overrides the env vars below; any field left blank falls back to
+  them. The routes (`GET`/`PUT /api/ai/config`, `POST /api/ai/config/test`) are
+  owner-only and take effect without a restart.
+
+| Variable | Purpose | Default |
+|---|---|---|
+| `AI_API_KEY` | Provider key; absent ⇒ AI disabled | — |
+| `AI_PROVIDER` | `openai` \| `anthropic` \| `gemini` \| `ollama` | `openai` |
+| `AI_MODEL` | Model id | provider default |
+| `AI_BASE_URL` | Override endpoint (self-host / proxy) | provider default |
+| `AI_TIMEOUT_MS` | Outbound timeout | `20000` |
+| `AI_RATE_LIMIT` | Requests per window (staff) | `30` |
+| `AI_GUEST_RATE_LIMIT` | Requests per window (guest) | `6` |
+| `AI_RATE_WINDOW_MS` | Rate-limit window | `60000` |
+| `AI_CACHE_TTL_MS` | Response cache TTL | `300000` |
+
 ## Multi-location
 
 Two demo stores — **Downtown** (16 tables) and **Riverside** (10 tables, softer
@@ -425,12 +486,13 @@ Express + SQLite (`better-sqlite3`) via action log + SSE when a server is presen
 | 3 | Tickets + delivery fulfillment | ✅ Done | Composer + required mods, 86 w/ substitute, 15s undo, split/pay/void; delivery queue, kitchen-ready handoff, delivered timestamps, type filter, v5 → v6 migration |
 | 4 | KDS fire/bump/86 | ✅ Done | Station columns + expo, live SLA timers, bump-all, 60s recall, shared 86 board |
 | 5 | Theoretical inventory on fire | ✅ Done | Stock exceptions, receive w/ plate-cost impact, count sheet w/ variance reasons, waste log |
-| 6 | Dashboard alerts | ✅ Done | KPIs, tappable alert rail, rush watch, sparkline, sellers/losers, SLA, floor snapshot |
+| 6 | Dashboard alerts | ✅ Done | KPIs, tappable alert rail, rush watch, sparkline, sellers/losers, SLA, floor snapshot — now fully on semantic tokens (`components/ui` primitives, sections under `src/screens/Dashboard/`), with spec §9.1 widgets and an empty "shift not started" state |
 | 7 | Recipe cost + matrix | ✅ Done | Recipe coster w/ snapshots, 86 write-through, menu matrix, ingredient shocks, in-place reprice |
 | 8 | Reports | ✅ Done | Sales/hour/category/day, service, voids audit, variance, P&L-lite — every report ends in an action |
 | 9 | Configuration, documents & catalog | ✅ Done | Settings sections (identity · money · templates · stock · POS · alerts · data), invoice/receipt/ticket/report designer + print, multi-currency, document registry, category tree, suppliers, live preview/print from Tickets & Reports |
 | 10 | Buy side, units & Telegram | ✅ Done | Purchase CRUD → stock with pack conversion, the signed movement ledger, sell/buy + P&L + top/bottom reports, units of measure, item photos, bot console + push notices + digest, and the Telegram mini app |
 | 11 | Accounts, roles & multi-tenant | ✅ Done | Owner accounts + owner-scoped users/roles, a super-admin host-owner console, per-owner isolation of every state table, read model, action log, and SSE stream (schema v3 migrates a legacy single-tenant file) |
+| 12 | AI ops copilot | ✅ Done | Provider-agnostic, read-only assistant (`/api/ai/*`) with the Ops Copilot screen; Dashboard advisors (alert explainer, menu advisor, prep forecast) + shift briefing cards; guest/mini-app menu concierge; Telegram briefing push. Off by default — no `AI_API_KEY`, no AI. (Smart-reorder draft on Purchases deferred.) |
 
 ## Key rules (from spec — enforced in code)
 

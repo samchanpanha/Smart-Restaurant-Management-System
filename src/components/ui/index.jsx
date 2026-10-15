@@ -6,6 +6,10 @@
 
 export { Button, IconButton, Badge, buttonVariants } from './Button'
 export { Card, SectionHeader, Toolbar, Divider, Skeleton, EmptyState, ErrorBanner } from './Card'
+export { Progress } from './Progress'
+export { Sparkline } from './Sparkline'
+export { BarChart } from './Chart'
+export { StatTile } from './StatTile'
 export { Modal, Sheet, Drawer } from './Overlay'
 export { Field, Input, Textarea, Select, Toggle, Stepper } from './Forms'
 export { Tabs } from './Tabs'

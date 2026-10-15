@@ -17,6 +17,13 @@
 //   POST /api/telegram/webhook  → Telegram update → bot reply (+ actions)
 //   POST /api/telegram/simulate → run a bot command without changing state
 //   GET  /api/telegram/status   → token/chat wiring and command list
+//   GET  /api/ai/status         → is AI configured, provider/model, limits
+//   POST /api/ai/chat           → grounded Q&A over the live shift (read-only)
+//   POST /api/ai/insight        → alert/menu/reorder/forecast suggestions
+//   POST /api/ai/briefing       → shift briefing (optionally pushed to Telegram)
+//   GET  /api/ai/config         → tenant AI provider config (owner-only, no key)
+//   PUT  /api/ai/config         → save tenant AI provider/key (owner-only)
+//   POST /api/ai/config/test    → live provider connectivity check (owner-only)
 //
 // Tenant resolution: a signed-in user is pinned to their own owner; a super
 // admin may name any owner via ?ownerId=; guests (QR + Telegram mini app)
@@ -31,15 +38,18 @@ import express from 'express'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { attachAuth, createAuthRouter, getOwnerById, getOwnerBySlug, listOwners, seedAuth } from './auth.js'
+import { attachAuth, createAuthRouter, getOwnerById, getOwnerBySlug, listOwners, seedAuth, userRole } from './auth.js'
 import { createTelegramRouter, sendTelegramMessage } from './telegram.js'
+import { createAiRouter } from './ai.js'
+import { createAiConfigRouter } from './ai-config.js'
 import { createNotifier, sendTelegramEvent } from './notify.js'
 import { replyKeyboard } from '../src/lib/telegram.js'
 import { STATE_VERSION, buildEmpire, migrateToEmpire, reducer } from '../src/lib/reducer.js'
 import { DOC_KINDS } from '../src/lib/settings.js'
 import {
-  db, DEFAULT_OWNER, actionsSince, commitAction, getCategories, getDocumentTotals, getDocuments, getInventory,
-  getMenuCatalog, getSettings, getSuppliers, loadSnapshot, logStats, saveSnapshot, syncMenuCatalog,
+  db, DEFAULT_OWNER, actionsSince, commitAction, getAiConfig, getCategories, getDocumentTotals, getDocuments,
+  getInventory, getMenuCatalog, getSettings, getSuppliers, loadSnapshot, logStats, saveSnapshot, setAiConfig,
+  syncMenuCatalog,
 } from './db.js'
 
 const PORT = Number(process.env.PORT || 3001)
@@ -656,6 +666,51 @@ const digestTimer = setInterval(() => {
   })
 }, 60_000)
 digestTimer.unref?.()
+
+// ─── AI assistant ───────────────────────────────────────────────
+// Provider-agnostic and read-only: the model reads a redacted digest and
+// returns text — it never dispatches a reducer action. No AI_API_KEY ⇒ every
+// route is a no-op. Tenant-scoped through the same resolveTenant middleware
+// the rest of the API uses; guests are pinned to the menu scope.
+const ai = createAiRouter({
+  getState: (tenantId) => runtimeFor(tenantId).state,
+  resolveTenant,
+  // A tenant may store its own provider/key (set from Settings); anything it
+  // leaves unset falls back to the AI_* environment defaults.
+  resolveConfig: (tenantId) => getAiConfig(tenantId),
+  onBriefing: async (text, { tenantId, locId }) => {
+    // Deliver with the *caller's* tenant settings, never the default tenant's.
+    const empire = runtimeFor(tenantId || DEFAULT_TENANT).state
+    const shop = empire.locations?.[locId] || empire.locations?.downtown || Object.values(empire.locations || {})[0]
+    const result = await notifier.deliver(text, shop?.settings)
+    return (result?.sent || 0) > 0
+  },
+})
+app.use(ai.router)
+
+// Only an owner (or a super admin, who may target any tenant) may read or
+// change a tenant's AI provider config.
+function requireAiAdmin(req, res, next) {
+  if (!req.auth) return res.status(401).json({ error: 'sign in required' })
+  if (req.auth.user.is_super_admin) return next()
+  if (userRole(req.auth.user)?.key === 'owner') return next()
+  return res.status(403).json({ error: 'owner access required' })
+}
+
+const aiConfig = createAiConfigRouter({
+  resolveTenant,
+  requireAdmin: requireAiAdmin,
+  getConfig: (ownerId) => getAiConfig(ownerId),
+  setConfig: (ownerId, config) => setAiConfig(ownerId, config),
+  probe: (tenantId, override) => ai.probe(tenantId, override),
+  env: {
+    provider: process.env.AI_PROVIDER,
+    model: process.env.AI_MODEL,
+    baseUrl: process.env.AI_BASE_URL,
+    apiKey: process.env.AI_API_KEY,
+  },
+})
+app.use(aiConfig.router)
 
 // ─── SSE fan-out ────────────────────────────────────────────────
 

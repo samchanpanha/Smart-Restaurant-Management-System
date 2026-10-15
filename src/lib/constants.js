@@ -159,13 +159,14 @@ export const SCREEN_ICONS = {
   users: 'users',
   roles: 'shield',
   owners: 'building',
+  assistant: 'sparkles',
 }
 
 export const ROLE_NAV = {
-  owner: ['dashboard', 'floor', 'tickets', 'kitchen', 'menu', 'catalog', 'inventory', 'movements', 'suppliers', 'purchases', 'reports', 'costing', 'users', 'roles', 'settings', 'system', 'telegram'],
+  owner: ['dashboard', 'floor', 'tickets', 'kitchen', 'menu', 'catalog', 'inventory', 'movements', 'suppliers', 'purchases', 'reports', 'costing', 'assistant', 'users', 'roles', 'settings', 'system', 'telegram'],
   server: ['floor', 'tickets'],
   kitchen: ['kitchen'],
-  host: ['floor', 'dashboard'],
+  host: ['floor', 'dashboard', 'assistant'],
 }
 
 // The one place that answers "which screens may this operator open?". A
@@ -206,6 +207,7 @@ export const NAV_SECTIONS = [
     items: [
       { id: 'reports', label: 'Reports', step: 8 },
       { id: 'costing', label: 'Food Cost & Profit', step: 7 },
+      { id: 'assistant', label: 'Ops Copilot', step: 8 },
     ],
   },
   {

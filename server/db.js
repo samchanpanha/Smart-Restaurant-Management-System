@@ -312,6 +312,34 @@ const setKv = db.prepare(`
   INSERT INTO kv (owner_id, k, v) VALUES (?, ?, ?)
   ON CONFLICT(owner_id, k) DO UPDATE SET v = excluded.v
 `)
+const delKv = db.prepare('DELETE FROM kv WHERE owner_id = ? AND k = ?')
+
+// The AI provider config lives out-of-band in kv — never in the reducer
+// state, because /api/state (with the API key in it) is also served to
+// guests. Only the privileged /api/ai/config routes ever read this back,
+// and they strip the key before responding.
+const AI_CONFIG_KEY = 'ai_config'
+
+export function getAiConfig(ownerId) {
+  const owner = ownerId || DEFAULT_OWNER
+  const row = getKv.get(owner, AI_CONFIG_KEY)
+  if (!row) return null
+  try {
+    const parsed = JSON.parse(row.v)
+    return parsed && typeof parsed === 'object' ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+export function setAiConfig(ownerId, config) {
+  const owner = ownerId || DEFAULT_OWNER
+  if (!config || typeof config !== 'object' || Object.keys(config).length === 0) {
+    delKv.run(owner, AI_CONFIG_KEY)
+    return
+  }
+  setKv.run(owner, AI_CONFIG_KEY, JSON.stringify(config))
+}
 const insertAction = db.prepare('INSERT INTO actions (owner_id, client_id, type, action, ts) VALUES (?, ?, ?, ?, ?)')
 const selectSince = db.prepare('SELECT seq, client_id AS clientId, action FROM actions WHERE owner_id = ? AND seq > ? ORDER BY seq ASC LIMIT ?')
 const countActions = db.prepare('SELECT COUNT(*) AS n, MAX(seq) AS max FROM actions WHERE owner_id = ?')

@@ -423,6 +423,13 @@ export function readAuth(req) {
   return readSession(req)
 }
 
+// The session user (req.auth.user) is the raw DB row, so it carries a
+// role_id rather than the role object. Callers that need the role's key or
+// screens (e.g. the owner-only AI config routes) resolve it here.
+export function userRole(user) {
+  return user ? roleView(q.roleById.get(user.role_id)) : null
+}
+
 export function getOwnerById(ownerId) {
   return ownerId ? q.ownerById.get(ownerId) || null : null
 }
