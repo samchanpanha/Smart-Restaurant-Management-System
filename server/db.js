@@ -315,6 +315,11 @@ const setKv = db.prepare(`
 const insertAction = db.prepare('INSERT INTO actions (owner_id, client_id, type, action, ts) VALUES (?, ?, ?, ?, ?)')
 const selectSince = db.prepare('SELECT seq, client_id AS clientId, action FROM actions WHERE owner_id = ? AND seq > ? ORDER BY seq ASC LIMIT ?')
 const countActions = db.prepare('SELECT COUNT(*) AS n, MAX(seq) AS max FROM actions WHERE owner_id = ?')
+// The action log is a replay buffer, not an audit archive: keep the newest
+// RETAIN_ACTIONS per tenant so the table (and replay payloads) stay bounded.
+// AUTOINCREMENT never reuses seq, so a client too far behind simply resyncs.
+const pruneActions = db.prepare('DELETE FROM actions WHERE owner_id = ? AND seq <= ?')
+const RETAIN_ACTIONS = 5000
 
 const selectCatalogChecksum = db.prepare('SELECT checksum FROM menu_catalog_meta WHERE owner_id = ? AND location_id = ?')
 const setCatalogChecksum = db.prepare(`
@@ -713,6 +718,7 @@ const syncMenuCatalogStandalone = db.transaction((ownerId, state) => {
 const commitActionTx = db.transaction((ownerId, clientId, actionType, actionJson, timestamp, stateJson, state) => {
   const info = insertAction.run(ownerId, clientId, actionType, actionJson, timestamp)
   const seq = Number(info.lastInsertRowid)
+  if (seq > RETAIN_ACTIONS) pruneActions.run(ownerId, seq - RETAIN_ACTIONS)
   setKv.run(ownerId, 'snapshot', stateJson)
   setKv.run(ownerId, 'snapshot_seq', String(seq))
   syncMenuCatalogTx(ownerId, state)

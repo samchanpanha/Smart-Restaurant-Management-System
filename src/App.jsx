@@ -1,32 +1,39 @@
+import { lazy, Suspense } from 'react'
 import AppShell from './components/AppShell'
 import { Icon } from './components/Icon'
-import { NAV_SECTIONS, ROLE_NAV } from './lib/constants'
+import { ScreenBoundary } from './components/ErrorBoundary'
+import { NAV_SECTIONS, allowedScreens } from './lib/constants'
 import { translateScreenLabel, useI18n } from './lib/i18n'
 import { RestoraProvider, useRestora } from './lib/store'
-import CatalogScreen from './screens/CatalogScreen'
 import ComingSoon from './screens/ComingSoon'
 import MiniAppScreen from './screens/MiniAppScreen'
-import TelegramScreen from './screens/TelegramScreen'
 import NewTabPicker from './components/NewTabPicker'
-import CostingScreen from './screens/CostingScreen'
-import DashboardScreen from './screens/DashboardScreen'
-import FloorScreen from './screens/FloorScreen'
 import GuestScreen from './screens/GuestScreen'
-import InventoryScreen from './screens/InventoryScreen'
-import KitchenScreen from './screens/KitchenScreen'
-import MenuScreen from './screens/MenuScreen'
-import MovementsScreen from './screens/MovementsScreen'
-import PurchasesScreen from './screens/PurchasesScreen'
-import ReportsScreen from './screens/ReportsScreen'
-import SettingsScreen from './screens/SettingsScreen'
-import SuppliersScreen from './screens/SuppliersScreen'
-import SystemScreen from './screens/SystemScreen'
-import TicketsScreen from './screens/TicketsScreen'
-import UsersScreen from './screens/UsersScreen'
-import RolesScreen from './screens/RolesScreen'
-import OwnersScreen from './screens/OwnersScreen'
 import AuthScreen from './screens/AuthScreen'
 import { AuthProvider, useAuth } from './lib/auth'
+
+// The shift-critical surfaces stay in the main bundle: they are what a
+// terminal opens first and must paint with no fallback flash. Everything
+// else is code-split and loads the first time its tab is opened.
+import DashboardScreen from './screens/DashboardScreen'
+import FloorScreen from './screens/FloorScreen'
+import TicketsScreen from './screens/TicketsScreen'
+import KitchenScreen from './screens/KitchenScreen'
+
+const SystemScreen = lazy(() => import('./screens/SystemScreen'))
+const InventoryScreen = lazy(() => import('./screens/InventoryScreen'))
+const MenuScreen = lazy(() => import('./screens/MenuScreen'))
+const CatalogScreen = lazy(() => import('./screens/CatalogScreen'))
+const SuppliersScreen = lazy(() => import('./screens/SuppliersScreen'))
+const PurchasesScreen = lazy(() => import('./screens/PurchasesScreen'))
+const MovementsScreen = lazy(() => import('./screens/MovementsScreen'))
+const SettingsScreen = lazy(() => import('./screens/SettingsScreen'))
+const CostingScreen = lazy(() => import('./screens/CostingScreen'))
+const ReportsScreen = lazy(() => import('./screens/ReportsScreen'))
+const TelegramScreen = lazy(() => import('./screens/TelegramScreen'))
+const UsersScreen = lazy(() => import('./screens/UsersScreen'))
+const RolesScreen = lazy(() => import('./screens/RolesScreen'))
+const OwnersScreen = lazy(() => import('./screens/OwnersScreen'))
 
 function guestTableId() {
   try {
@@ -94,33 +101,56 @@ function RestrictedScreen({ screen, role }) {
 }
 
 // Exported so tests can mount the real router inside the real shell.
+const SCREENS = {
+  system: SystemScreen,
+  dashboard: DashboardScreen,
+  floor: FloorScreen,
+  tickets: TicketsScreen,
+  kitchen: KitchenScreen,
+  inventory: InventoryScreen,
+  menu: MenuScreen,
+  catalog: CatalogScreen,
+  suppliers: SuppliersScreen,
+  purchases: PurchasesScreen,
+  movements: MovementsScreen,
+  settings: SettingsScreen,
+  costing: CostingScreen,
+  reports: ReportsScreen,
+  telegram: TelegramScreen,
+  users: UsersScreen,
+  roles: RolesScreen,
+  owners: OwnersScreen,
+}
+
+/** A brief hold while a lazily-loaded screen chunk arrives. */
+function ScreenLoading() {
+  return (
+    <div className="flex min-h-[50vh] items-center justify-center text-sm text-zinc-400" role="status">
+      Opening…
+    </div>
+  )
+}
+
 export function Router() {
   const { screen, role, activeTabId } = useRestora()
   const { screens } = useAuth()
-  const allowed = screens?.length ? screens : ROLE_NAV[role] || ROLE_NAV.owner
+  const allowed = allowedScreens(role, screens)
   const key = activeTabId || 'none'
   // A tab that has not picked a screen yet shows the picker.
-  if (!screen) return <NewTabPicker key={key} />
-  if (!allowed.includes(screen)) return <RestrictedScreen key={key} screen={screen} role={role} />
-  if (screen === 'system') return <SystemScreen key={key} />
-  if (screen === 'dashboard') return <DashboardScreen key={key} />
-  if (screen === 'floor') return <FloorScreen key={key} />
-  if (screen === 'tickets') return <TicketsScreen key={key} />
-  if (screen === 'kitchen') return <KitchenScreen key={key} />
-  if (screen === 'inventory') return <InventoryScreen key={key} />
-  if (screen === 'menu') return <MenuScreen key={key} />
-  if (screen === 'catalog') return <CatalogScreen key={key} />
-  if (screen === 'suppliers') return <SuppliersScreen key={key} />
-  if (screen === 'purchases') return <PurchasesScreen key={key} />
-  if (screen === 'movements') return <MovementsScreen key={key} />
-  if (screen === 'settings') return <SettingsScreen key={key} />
-  if (screen === 'costing') return <CostingScreen key={key} />
-  if (screen === 'reports') return <ReportsScreen key={key} />
-  if (screen === 'telegram') return <TelegramScreen key={key} />
-  if (screen === 'users') return <UsersScreen key={key} />
-  if (screen === 'roles') return <RolesScreen key={key} />
-  if (screen === 'owners') return <OwnersScreen key={key} />
-  return <ComingSoon key={key} screen={screen} />
+  let content
+  if (!screen) {
+    content = <NewTabPicker key={key} />
+  } else if (!allowed.includes(screen)) {
+    content = <RestrictedScreen key={key} screen={screen} role={role} />
+  } else {
+    const Screen = SCREENS[screen] || ComingSoon
+    content = (
+      <Suspense key={key} fallback={<ScreenLoading />}>
+        <Screen screen={screen} />
+      </Suspense>
+    )
+  }
+  return <ScreenBoundary>{content}</ScreenBoundary>
 }
 
 /** A quiet hold while the session cookie is being checked. */

@@ -5,7 +5,7 @@
 
 import { useMemo, useState } from 'react'
 import StatusPill from '../components/StatusPill'
-import { Field, btnPrimary, inputCls } from '../components/ui'
+import { DataTable, Field, btnPrimary, inputCls } from '../components/ui'
 import { translateInventoryName, useI18n } from '../lib/i18n'
 import { money, plateCostFor, stockStatusFor } from '../lib/models'
 import { useRestora } from '../lib/store'
@@ -41,6 +41,7 @@ function StockTab() {
   const [filter, setFilter] = useState('all')
   const [loc, setLoc] = useState('all')
   const [query, setQuery] = useState('')
+  const [selected, setSelected] = useState([])
   const locs = useMemo(() => [...new Set(state.inventory.map((item) => item.location))], [state.inventory])
 
   const rows = state.inventory
@@ -68,6 +69,22 @@ function StockTab() {
     ['low', inv.lowStock || 'Low stock'],
     ['out', inv.outOfStock || 'Out of stock'],
   ]
+
+  const allSelected = rows.length > 0 && selected.length === rows.length
+
+  function exportSelected() {
+    const chosen = state.inventory.filter((item) => selected.includes(item.id))
+    const header = ['Item', 'Location', 'On hand', 'Unit', 'Par', 'Last cost', 'Vendor', 'Status']
+    const lines = chosen.map((item) => [item.name, item.location, item.onHand, item.unit, item.par, item.lastCost, item.vendor, stockStatusFor(item, state.settings)])
+    const csv = [header, ...lines].map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(',')).join('\n')
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = 'restora-inventory-selection.csv'
+    anchor.click()
+    URL.revokeObjectURL(url)
+    setSelected([])
+  }
 
   function itemIcon(name) {
     const value = name.toLowerCase()
@@ -98,30 +115,91 @@ function StockTab() {
         </div>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[760px] border-collapse text-left">
-          <thead className="bg-zinc-50 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
-            <tr><th className="px-5 py-3">{inv.item || 'Item'}</th><th className="px-4 py-3">{inv.storage || 'Storage'}</th><th className="px-4 py-3">{inv.currentStock || 'Current stock'}</th><th className="px-4 py-3">{inv.parLevel || 'Par level'}</th><th className="px-4 py-3">{inv.status || 'Status'}</th><th className="px-4 py-3">{inv.lastCost || 'Last cost'}</th></tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-100">
-            {rows.map(({ sku, st }) => {
-              const negative = sku.onHand < 0
-              const dishes = dishesUsing(state, sku.id)
-              const localName = translateInventoryName(sku, lang)
-              return (
-                <tr key={sku.id} className="transition-colors hover:bg-orange-50/30">
-                  <td className="px-5 py-3.5"><div className="flex items-center gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-lg">{itemIcon(sku.name)}</span><span className="min-w-0"><span className="block text-sm font-semibold text-zinc-800">{localName}{lang !== 'en' && localName !== sku.name && <span className="ml-1 text-xs font-normal text-zinc-500">({sku.name})</span>}</span><span className="mt-0.5 block max-w-[260px] truncate text-[10px] text-zinc-500">{sku.vendor}{dishes.length ? ` · ${dishes.length} recipes` : ''}</span></span></div></td>
-                  <td className="px-4 py-3.5 text-xs capitalize text-zinc-500">{sku.location.replace('_', ' ')}</td>
-                  <td className="px-4 py-3.5"><span className={`tnum text-sm font-bold ${negative ? 'text-red-600' : 'text-zinc-800'}`}>{sku.onHand}</span><span className="ml-1 text-[10px] text-zinc-500">{sku.unit}</span></td>
-                  <td className="px-4 py-3.5 tnum text-sm text-zinc-700">{sku.par} <span className="text-[10px] text-zinc-400">{sku.unit}</span></td>
-                  <td className="px-4 py-3.5"><StatusPill tone={st === 'ok' ? 'ok' : st === 'low' ? 'warn' : 'bad'} size="sm">{st === 'ok' ? (inv.inStock || 'In stock') : st === 'low' ? (inv.lowStock || 'Low stock') : (inv.outOfStock || 'Out of stock')}</StatusPill>{negative && <span className="ml-1 text-[10px] font-semibold text-red-600">Recount</span>}</td>
-                  <td className="px-4 py-3.5 tnum text-xs font-semibold text-zinc-700">{money(sku.lastCost)} <span className="font-normal text-zinc-400">/ {sku.unit}</span></td>
-                </tr>
-              )
-            })}
-            {!rows.length && <tr><td colSpan="6" className="px-6 py-14 text-center text-sm text-zinc-500">Nothing matches this filter.</td></tr>}
-          </tbody>
-        </table>
+      <div className="flex flex-wrap items-center gap-3 border-b border-zinc-100 px-4 py-2.5">
+        <label className="flex items-center gap-2 text-xs font-medium text-zinc-600">
+          <input
+            type="checkbox" checked={allSelected} aria-label="Select all inventory items"
+            onChange={(event) => setSelected(event.target.checked ? rows.map((row) => row.sku.id) : [])}
+            className="h-4 w-4 accent-orange-500"
+          />
+          Select all
+        </label>
+        {selected.length > 0 && (
+          <>
+            <span className="text-xs font-semibold text-orange-700">{selected.length} selected</span>
+            <button type="button" onClick={exportSelected} className="min-h-8 rounded-lg border border-zinc-200 bg-white px-3 text-xs font-semibold text-zinc-700 hover:bg-zinc-50">Export selection</button>
+            <button type="button" onClick={() => setSelected([])} className="ml-auto text-xs font-semibold text-zinc-500 hover:text-zinc-800">Clear</button>
+          </>
+        )}
+      </div>
+
+      <div className="px-1 py-3">
+        <DataTable
+          columns={[
+            {
+              key: 'select',
+              header: '',
+              className: 'w-10',
+              render: ({ sku }) => (
+                <input
+                  type="checkbox" checked={selected.includes(sku.id)} aria-label={`Select ${sku.name}`}
+                  onChange={(event) => setSelected((current) => (event.target.checked ? [...current, sku.id] : current.filter((id) => id !== sku.id)))}
+                  className="h-4 w-4 accent-orange-500"
+                />
+              ),
+            },
+            {
+              key: 'item',
+              header: inv.item || 'Item',
+              primary: true,
+              render: ({ sku }) => {
+                const dishes = dishesUsing(state, sku.id)
+                const localName = translateInventoryName(sku, lang)
+                return (
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-lg">{itemIcon(sku.name)}</span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold text-zinc-800">{localName}{lang !== 'en' && localName !== sku.name && <span className="ml-1 text-xs font-normal text-zinc-500">({sku.name})</span>}</span>
+                      <span className="mt-0.5 block max-w-[260px] truncate text-[10px] text-zinc-500">{sku.vendor}{dishes.length ? ` · ${dishes.length} recipes` : ''}</span>
+                    </span>
+                  </div>
+                )
+              },
+            },
+            { key: 'storage', header: inv.storage || 'Storage', render: ({ sku }) => <span className="text-xs capitalize text-zinc-500">{sku.location.replace('_', ' ')}</span> },
+            {
+              key: 'onHand',
+              header: inv.currentStock || 'Current stock',
+              render: ({ sku }) => (
+                <span><span className={`tnum text-sm font-bold ${sku.onHand < 0 ? 'text-red-600' : 'text-zinc-800'}`}>{sku.onHand}</span><span className="ml-1 text-[10px] text-zinc-500">{sku.unit}</span></span>
+              ),
+            },
+            {
+              key: 'par',
+              header: inv.parLevel || 'Par level',
+              render: ({ sku }) => <span className="tnum text-sm text-zinc-700">{sku.par} <span className="text-[10px] text-zinc-400">{sku.unit}</span></span>,
+            },
+            {
+              key: 'status',
+              header: inv.status || 'Status',
+              render: ({ sku, st }) => (
+                <span>
+                  <StatusPill tone={st === 'ok' ? 'ok' : st === 'low' ? 'warn' : 'bad'} size="sm">{st === 'ok' ? (inv.inStock || 'In stock') : st === 'low' ? (inv.lowStock || 'Low stock') : (inv.outOfStock || 'Out of stock')}</StatusPill>
+                  {sku.onHand < 0 && <span className="ml-1 text-[10px] font-semibold text-red-600">Recount</span>}
+                </span>
+              ),
+            },
+            {
+              key: 'lastCost',
+              header: inv.lastCost || 'Last cost',
+              align: 'right',
+              render: ({ sku }) => <span className="tnum text-xs font-semibold text-zinc-700">{money(sku.lastCost)} <span className="font-normal text-zinc-400">/ {sku.unit}</span></span>,
+            },
+          ]}
+          rows={rows}
+          rowKey={(row) => row.sku.id}
+          empty={<div className="rounded-[var(--radius-xl)] border border-[var(--border)] px-6 py-14 text-center text-sm text-zinc-500">Nothing matches this filter.</div>}
+        />
       </div>
       <div className="flex items-center justify-between border-t border-zinc-100 px-5 py-3 text-[11px] text-zinc-500"><span>Showing {rows.length} of {state.inventory.length} inventory items</span><span>On-hand is theoretical · actions update live</span></div>
     </div>

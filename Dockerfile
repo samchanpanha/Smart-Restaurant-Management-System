@@ -7,6 +7,10 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ \
   && rm -rf /var/lib/apt/lists/*
 
+# Fetch native deps for the linux build platform (not the host macOS).
+ENV npm_config_platform=linux
+ENV npm_config_arch=x64
+
 COPY package.json package-lock.json ./
 RUN npm ci
 

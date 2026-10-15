@@ -142,8 +142,15 @@ test('Kitchen screen displays multiple images per item on tickets and in the dis
   const stripImages = burgerStrip.querySelectorAll('img')
   assert.ok(stripImages.length >= 4, `burger strip renders main image + 3 thumbnails (found ${stripImages.length})`)
 
+  // The photo gallery is collapsed by default so the board stays fast.
+  assert.equal(document.querySelector('[data-testid="kitchen-dish-gallery"]'), null, 'gallery is closed on first paint')
+  const galleryToggle = document.querySelector('[data-testid="kitchen-gallery-toggle"]')
+  assert.ok(galleryToggle, 'gallery toggle renders')
+  click(galleryToggle)
+  await settle()
+
   const gallery = document.querySelector('[data-testid="kitchen-dish-gallery"]')
-  assert.ok(gallery, 'dish gallery section is rendered on the Kitchen screen')
+  assert.ok(gallery, 'dish gallery section is rendered once opened')
   const galleryImgs = gallery.querySelectorAll('img')
   assert.ok(galleryImgs.length >= 39, `gallery renders 3 photos for each of the 13 dishes (found ${galleryImgs.length})`)
 

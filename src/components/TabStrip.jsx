@@ -4,9 +4,10 @@
 // live alert badge so the strip doubles as an at-a-glance ops board.
 
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
-import { CRITICAL_ALERTS, NAV_SECTIONS, ROLE_NAV, SCREEN_ICONS, screenForAlert } from '../lib/constants'
+import { CRITICAL_ALERTS, NAV_SECTIONS, SCREEN_ICONS, screenForAlert, allowedScreens } from '../lib/constants'
 import { translateScreenLabel, useI18n } from '../lib/i18n'
-import { LOCATIONS, getAlerts, useRestora } from '../lib/store'
+import { useAuth } from '../lib/auth'
+import { LOCATIONS, useRestora } from '../lib/store'
 import { Icon } from './Icon'
 
 const TAB_LABELS = Object.fromEntries(NAV_SECTIONS.flatMap((s) => s.items.map((i) => [i.id, i.label])))
@@ -28,11 +29,12 @@ function tabIcon(tab) {
 
 export default function TabStrip({ fallbackScreen }) {
   const {
-    role, state, tabs, activeTabId, activateTab, closeTab, openTab, openScreenInTab, reorderTab, renameTab,
+    role, alerts, tabs, activeTabId, activateTab, closeTab, openTab, openScreenInTab, reorderTab, renameTab,
     togglePinTab, duplicateTab, closeOtherTabs, closeRightTabs, reopenClosedTab, canReopenClosed,
   } = useRestora()
   const { lang, dict } = useI18n()
-  const allowed = ROLE_NAV[role] || ROLE_NAV.owner
+  const { screens } = useAuth()
+  const allowed = allowedScreens(role, screens)
   // Every tab of the workspace is shown, whatever the current role: a role
   // switch is a change of who is driving, not a reason to hide the road.
   // The role only gates which screens can be *opened* from here.
@@ -41,14 +43,14 @@ export default function TabStrip({ fallbackScreen }) {
 
   const badges = useMemo(() => {
     const counts = {}
-    for (const alert of getAlerts(state)) {
+    for (const alert of alerts) {
       const target = screenForAlert(alert)
       counts[target] = counts[target] || { count: 0, critical: false }
       counts[target].count += 1
       if (CRITICAL_ALERTS.has(alert.type)) counts[target].critical = true
     }
     return counts
-  }, [state])
+  }, [alerts])
 
   const listRef = useRef(null)
   const tabEls = useRef(new Map())

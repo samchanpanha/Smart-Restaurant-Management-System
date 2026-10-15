@@ -158,6 +158,15 @@ export const ROLE_NAV = {
   host: ['floor', 'dashboard'],
 }
 
+// The one place that answers "which screens may this operator open?". A
+// custom role carries an explicit screen list; otherwise the demo role map
+// decides. The sidebar, tab strip, router and search all read this so the
+// gate can never drift between them.
+export function allowedScreens(role, screens) {
+  if (Array.isArray(screens) && screens.length) return screens
+  return ROLE_NAV[role] || ROLE_NAV.owner
+}
+
 export const NAV_SECTIONS = [
   {
     id: 'live',

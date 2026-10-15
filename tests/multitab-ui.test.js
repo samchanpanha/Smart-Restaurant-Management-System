@@ -52,6 +52,14 @@ const { Router } = await server.ssrLoadModule('/src/App.jsx')
 const settle = async (ms = 40) => {
   await act(async () => { await new Promise((resolve) => dom.window.setTimeout(resolve, ms)) })
 }
+// Lazy screens resolve through the dev server; wait for the Suspense
+// fallback to clear rather than guessing how long a chunk takes to load.
+const flush = async () => {
+  for (let i = 0; i < 75; i += 1) {
+    await act(async () => { await new Promise((resolve) => dom.window.setTimeout(resolve, 0)) })
+    if (!dom.window.document.body.textContent.includes('Opening…')) return
+  }
+}
 const $$ = (selector) => [...document.querySelectorAll(selector)]
 const tabs = () => $$('.tab-list [role="tab"]')
 const labelOf = (tab) => (tab.textContent || '').replace(/×/g, '').trim()
@@ -101,6 +109,9 @@ async function freshApp() {
   }
   dom.window.localStorage.clear()
   dom.window.sessionStorage.clear()
+  // Reset the deep-link URL the store mirrors, so boot screens don't leak
+  // between tests that share this jsdom window.
+  dom.window.history.replaceState({}, '', '/')
   mount()
   await settle(60)
 }
@@ -142,7 +153,7 @@ test('the new tab offers the screens the role can open and honours the pick', as
   await settle()
   assert.ok(document.querySelector('[data-testid="new-tab-picker"]'), 'the picker is on screen')
   click(optionTo('Reports'))
-  await settle()
+  await flush()
   assert.equal(activeLabel(), 'Reports')
   assert.match(container.textContent, /Reports & Analytics/)
 })

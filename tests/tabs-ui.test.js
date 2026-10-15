@@ -54,7 +54,14 @@ const { default: AppShell } = await server.ssrLoadModule('/src/components/AppShe
 const { Router } = await server.ssrLoadModule('/src/App.jsx')
 const { NAV_SECTIONS, SCREEN_ICONS } = await server.ssrLoadModule('/src/lib/constants.js')
 
-const flush = async () => { await act(async () => { await Promise.resolve() }) }
+// A click may open a code-split screen, so drain macrotasks until the
+// Suspense fallback has cleared — the browser equivalent of "wait for paint".
+const flush = async () => {
+  for (let i = 0; i < 75; i += 1) {
+    await act(async () => { await new Promise((resolve) => dom.window.setTimeout(resolve, 0)) })
+    if (!dom.window.document.body.textContent.includes('Opening…')) return
+  }
+}
 // The provider boots asynchronously: /api/state fails here, which must land
 // the terminal in local-demo mode before any screen renders.
 const settled = async () => {
@@ -122,6 +129,9 @@ async function freshApp() {
   }
   dom.window.sessionStorage.clear()
   dom.window.localStorage.clear()
+  // The store mirrors the active screen into the URL for deep links; reset it
+  // so one test's screen never becomes the next test's boot screen.
+  dom.window.history.replaceState({}, '', '/')
   mount()
   await settled()
 }

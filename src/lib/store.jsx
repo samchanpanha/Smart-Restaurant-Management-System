@@ -8,10 +8,11 @@
 // staff terminals stay pinned (?loc= kiosk param or downtown).
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react'
+import { ClockProvider } from './clock'
 import { ROLE_NAV, TARGETS } from './constants'
 import { baseCurrencyConfig, setActiveCurrency } from './currency'
 import { uid } from './models'
-import { buildEmpire, migrateToEmpire, reducer } from './reducer'
+import { buildEmpire, getAlerts, migrateToEmpire, reducer } from './reducer'
 import { DOC_KINDS, documentNumber, templateFor } from './settings'
 import {
   MAX_TABS, activeWorkspaceTab, createWorkspace, normalizeWorkspace, tabIdForScreen,
@@ -249,6 +250,9 @@ export function RestoraProvider({ children, waitForServer = true }) {
     () => empire.locations[locId] || empire.locations.downtown,
     [empire, locId],
   )
+  // Alerts are derived once per state change and shared with the shell and
+  // tab strip, instead of every chrome component re-running the scan.
+  const alerts = useMemo(() => getAlerts(state), [state])
   const emperorRef = useRef(empire)
   emperorRef.current = empire
   const locShopRef = useCallback(
@@ -257,7 +261,16 @@ export function RestoraProvider({ children, waitForServer = true }) {
   )
 
   // link: { mode: 'local'|'server', status: 'starting'|'live'|'offline'|'local' }
-  const [link, setLink] = useState({ mode: 'local', status: 'starting' })
+  const [link, setLinkState] = useState({ mode: 'local', status: 'starting' })
+  // Every SSE ping and action reply reports the same { server, live } link.
+  // Collapsing equal transitions keeps the provider's context value stable,
+  // so live traffic does not re-render every consumer for no change.
+  const setLink = useCallback((next) => {
+    setLinkState((prev) => {
+      const value = typeof next === 'function' ? next(prev) : next
+      return value.mode === prev.mode && value.status === prev.status ? prev : value
+    })
+  }, [])
   const linkRef = useRef(link)
   linkRef.current = link
   const [notice, setNotice] = useState(null)
@@ -536,10 +549,24 @@ export function RestoraProvider({ children, waitForServer = true }) {
   )
 
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(empire))
-    } catch {
-      /* storage full/blocked — app still works in memory */
+    // The full empire is ~150KB of JSON; writing it on every action jankes a
+    // busy room. Coalesce writes, and flush once more if the page is hidden.
+    const persist = () => {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(empire))
+      } catch {
+        /* storage full/blocked — app still works in memory */
+      }
+    }
+    const timer = window.setTimeout(persist, 300)
+    const onHide = () => {
+      window.clearTimeout(timer)
+      persist()
+    }
+    window.addEventListener('pagehide', onHide)
+    return () => {
+      window.clearTimeout(timer)
+      window.removeEventListener('pagehide', onHide)
     }
   }, [empire])
 
@@ -550,6 +577,23 @@ export function RestoraProvider({ children, waitForServer = true }) {
       /* private mode — tabs simply reset on reload */
     }
   }, [workspace])
+
+  // Deep links: keep ?screen=&loc= in step with the active tab so an operator
+  // can bookmark or share the room they are looking at. Kiosk, guest and the
+  // Telegram mini app carry their own params and are left untouched.
+  useEffect(() => {
+    if (kiosk.role || kiosk.guest) return
+    try {
+      const url = new URL(window.location.href)
+      if (url.searchParams.get('tg') !== null) return
+      if (screen) url.searchParams.set('screen', screen)
+      else url.searchParams.delete('screen')
+      url.searchParams.set('loc', locId)
+      window.history.replaceState(null, '', url)
+    } catch {
+      /* history unavailable — sharing links is best-effort */
+    }
+  }, [screen, locId, kiosk.role, kiosk.guest])
 
   // Expire the 15s undo window without user action (local-only, this shop)
   const pendingUndo = state.pendingUndo
@@ -585,7 +629,7 @@ export function RestoraProvider({ children, waitForServer = true }) {
 
   const value = useMemo(
     () => ({
-      state, empire, dispatch, role, setRole, screen, setScreen,
+      state, empire, dispatch, role, setRole, screen, setScreen, alerts,
       tabs, activeTabId, openTab, openScreenInTab, activateTab, closeTab,
       reorderTab, renameTab, togglePinTab, duplicateTab, closeOtherTabs, closeRightTabs,
       reopenClosedTab, canReopenClosed: workspace.closed.length > 0, saveTabScroll,
@@ -594,7 +638,7 @@ export function RestoraProvider({ children, waitForServer = true }) {
       selectedOrderId, setSelectedOrderId, locId, setLocId, link, resync, notice,
       settings: state.settings, dispatchTo, dispatchEverywhere, issueDocument, templateForKind,
     }),
-    [state, empire, dispatch, role, screen, setScreen, tabs, activeTabId, openTab, openScreenInTab, activateTab, closeTab, reorderTab, renameTab, togglePinTab, duplicateTab, closeOtherTabs, closeRightTabs, reopenClosedTab, workspace.closed.length, saveTabScroll, activeCtx, setTabContext, selectedTableId, setSelectedTableId, selectedDishId, setSelectedDishId, selectedOrderId, setSelectedOrderId, locId, setLocId, link, resync, notice, dispatchTo, dispatchEverywhere, issueDocument, templateForKind],
+    [state, empire, dispatch, role, screen, setScreen, alerts, tabs, activeTabId, openTab, openScreenInTab, activateTab, closeTab, reorderTab, renameTab, togglePinTab, duplicateTab, closeOtherTabs, closeRightTabs, reopenClosedTab, workspace.closed.length, saveTabScroll, activeCtx, setTabContext, selectedTableId, setSelectedTableId, selectedDishId, setSelectedDishId, selectedOrderId, setSelectedOrderId, locId, setLocId, link, resync, notice, dispatchTo, dispatchEverywhere, issueDocument, templateForKind],
   )
 
   if (waitForServer && link.status === 'starting') {
@@ -608,7 +652,11 @@ export function RestoraProvider({ children, waitForServer = true }) {
     )
   }
 
-  return <RestoraContext.Provider value={value}>{children}</RestoraContext.Provider>
+  return (
+    <RestoraContext.Provider value={value}>
+      <ClockProvider>{children}</ClockProvider>
+    </RestoraContext.Provider>
+  )
 }
 
 export function useRestora() {
@@ -619,14 +667,8 @@ export function useRestora() {
 
 export const useStore = useRestora
 
-
-export function useNow(intervalMs = 1000) {
-  const [now, setNow] = useState(Date.now())
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), intervalMs)
-    return () => clearInterval(t)
-  }, [intervalMs])
-  return now
-}
+// The shared clock lives in its own module; re-exported so screens keep
+// importing `useNow` from the store.
+export { useNow } from './clock'
 
 export { marginBandFor } from './constants'

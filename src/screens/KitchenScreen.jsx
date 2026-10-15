@@ -6,7 +6,7 @@
 // Supports Khmer (default), English, and Chinese, plus multi-photo
 // visual references for every dish.
 
-import { useMemo, useState } from 'react'
+import { memo, useCallback, useMemo, useState } from 'react'
 import StatusPill from '../components/StatusPill'
 import { STATIONS, STATION_META, TARGETS } from '../lib/constants'
 import {
@@ -25,8 +25,57 @@ import { useNow, useRestora } from '../lib/store'
 
 const AGE_TONE = { 'on-time': 'ok', warning: 'warn', late: 'bad' }
 
-function ageOf(firedAt, now) {
+// ─── Ticking leaves ─────────────────────────────────────────────
+// The board is expensive (every fired line + dish photos). Only these small
+// components subscribe to the 1s clock, so a second ticking past repaints the
+// elapsed numbers — never the memoized ticket cards around them.
+
+function useAge(firedAt) {
+  const now = useNow(1000)
   return { secs: secondsBetween(firedAt, now), state: ticketAgeState(firedAt, now) }
+}
+
+function CardAge({ firedAt, dict }) {
+  const { secs, state } = useAge(firedAt)
+  return (
+    <div className="flex shrink-0 flex-col items-end gap-1">
+      <span className={`tnum text-lg font-bold leading-none ${state === 'late' ? 'text-red-300' : state === 'warning' ? 'text-amber-300' : 'text-zinc-100'}`}>
+        {formatElapsed(secs)}
+      </span>
+      <StatusPill tone={AGE_TONE[state]} size="sm">
+        {dict.ageLabel[state]}
+      </StatusPill>
+    </div>
+  )
+}
+
+function AgeRing({ firedAt }) {
+  const { state } = useAge(firedAt)
+  const ring = state === 'late'
+    ? 'border-red-500/60 ring-1 ring-red-500/40'
+    : state === 'warning'
+      ? 'border-amber-500/50'
+      : 'border-[var(--color-ink-700)]'
+  return <span aria-hidden className={`pointer-events-none absolute inset-0 rounded-xl border ${ring}`} />
+}
+
+function LineAge({ firedAt }) {
+  const { secs, state } = useAge(firedAt)
+  return (
+    <span className={`tnum shrink-0 text-xs ${state === 'late' ? 'font-bold text-red-300' : 'text-zinc-500'}`}>
+      {formatElapsed(secs)}
+    </span>
+  )
+}
+
+function NewBadge({ firedAt, dict }) {
+  const { secs } = useAge(firedAt)
+  if (secs >= 45) return null
+  return (
+    <span className="animate-status-in ml-1.5 rounded bg-sky-500/20 px-1.5 py-0.5 align-middle text-[10px] font-bold text-sky-300 ring-1 ring-inset ring-sky-500/40">
+      {dict.newBadge}
+    </span>
+  )
 }
 
 // ─── Item multi-photo strip ─────────────────────────────────────
@@ -218,10 +267,8 @@ function DishPhotoModal({ dish, initialIndex = 0, recipe, invById, lang, dict, o
 // ─── Ticket card ────────────────────────────────────────────────
 // One card = one order's fired lines for this column. Oldest first.
 
-function TicketCard({ order, tableName, server, lines, now, lang, dict, showImages, onInspectDish }) {
-  const { state, dispatch } = useRestora()
+const TicketCard = memo(function TicketCard({ order, tableName, server, lines, lang, dict, showImages, tables, dispatch, onInspectDish }) {
   const oldest = lines.reduce((a, b) => (new Date(a.firedAt) < new Date(b.firedAt) ? a : b))
-  const cardAge = ageOf(oldest.firedAt, now)
   const firedLines = lines.filter((l) => l.status === 'fired')
 
   function bumpAll() {
@@ -229,20 +276,13 @@ function TicketCard({ order, tableName, server, lines, now, lang, dict, showImag
   }
 
   const prevTable = order?.transferredFromTableId
-    ? state.tables?.find((t) => String(t.id) === String(order.transferredFromTableId))
+    ? tables?.find((t) => String(t.id) === String(order.transferredFromTableId))
     : null
   const prevTableName = prevTable ? translateTableName(prevTable.name, lang) : order?.transferredFromTableId
 
   return (
-    <article
-      className={`rounded-xl border bg-[var(--color-ink-900)] ${
-        cardAge.state === 'late'
-          ? 'border-red-500/60 ring-1 ring-red-500/40'
-          : cardAge.state === 'warning'
-            ? 'border-amber-500/50'
-            : 'border-[var(--color-ink-700)]'
-      }`}
-    >
+    <article className="relative rounded-xl border border-transparent bg-[var(--color-ink-900)]">
+      <AgeRing firedAt={oldest.firedAt} />
       <header className="flex items-center justify-between gap-2 border-b border-white/5 px-3 py-2">
         <div className="min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap truncate text-sm font-bold">
@@ -256,20 +296,11 @@ function TicketCard({ order, tableName, server, lines, now, lang, dict, showImag
           </div>
           <div className="text-[11px] text-zinc-500">{dict.firedAt(formatClock(oldest.firedAt))}</div>
         </div>
-        <div className="flex shrink-0 flex-col items-end gap-1">
-          <span className={`tnum text-lg font-bold leading-none ${cardAge.state === 'late' ? 'text-red-300' : cardAge.state === 'warning' ? 'text-amber-300' : 'text-zinc-100'}`}>
-            {formatElapsed(cardAge.secs)}
-          </span>
-          <StatusPill tone={AGE_TONE[cardAge.state]} size="sm">
-            {dict.ageLabel[cardAge.state]}
-          </StatusPill>
-        </div>
+        <CardAge firedAt={oldest.firedAt} dict={dict} />
       </header>
 
       <ul className="divide-y divide-white/5">
         {lines.map((l) => {
-          const a = ageOf(l.firedAt, now)
-          const isNew = a.secs < 45
           const localName = l.menuItem ? translateDishName(l.menuItem, lang) : l.name
           return (
             <li key={l.id} className="px-3 py-2.5">
@@ -285,11 +316,7 @@ function TicketCard({ order, tableName, server, lines, now, lang, dict, showImag
                         QR{l.guest ? ` · ${l.guest}` : ''}
                       </span>
                     )}
-                    {isNew && (
-                      <span className="animate-status-in ml-1.5 rounded bg-sky-500/20 px-1.5 py-0.5 align-middle text-[10px] font-bold text-sky-300 ring-1 ring-inset ring-sky-500/40">
-                        {dict.newBadge}
-                      </span>
-                    )}
+                    <NewBadge firedAt={l.firedAt} dict={dict} />
                     {(l.transferredFromTableId || order?.transferredFromTableId) && (
                       <span className="ml-1.5 rounded bg-amber-500/20 px-1.5 py-0.5 align-middle text-[10px] font-bold text-amber-300 ring-1 ring-inset ring-amber-500/40">
                         Moved
@@ -309,9 +336,7 @@ function TicketCard({ order, tableName, server, lines, now, lang, dict, showImag
                     {l.comped && <span className="font-semibold text-amber-300">{dict.compBadge}</span>}
                   </div>
                 </div>
-                <span className={`tnum shrink-0 text-xs ${a.state === 'late' ? 'font-bold text-red-300' : 'text-zinc-500'}`}>
-                  {formatElapsed(a.secs)}
-                </span>
+                <LineAge firedAt={l.firedAt} />
               </div>
 
               {showImages && l.menuItem && (
@@ -326,7 +351,7 @@ function TicketCard({ order, tableName, server, lines, now, lang, dict, showImag
               <button
                 type="button"
                 onClick={() => dispatch({ type: 'BUMP_ITEM', orderId: order.id, itemId: l.id })}
-                className="mt-2 min-h-[44px] w-full rounded-lg bg-emerald-500/90 text-sm font-bold text-black transition-colors hover:bg-emerald-400 active:scale-[0.99]"
+                className="mt-2 min-h-[48px] w-full rounded-lg bg-emerald-500/90 text-base font-bold text-black transition-colors hover:bg-emerald-400 active:scale-[0.99]"
               >
                 {dict.bumpItem(localName)}
               </button>
@@ -340,7 +365,7 @@ function TicketCard({ order, tableName, server, lines, now, lang, dict, showImag
           <button
             type="button"
             onClick={bumpAll}
-            className="min-h-[44px] w-full rounded-lg border border-emerald-500/50 text-sm font-bold text-emerald-300 hover:bg-emerald-500/10"
+            className="min-h-[52px] w-full rounded-lg border-2 border-emerald-500/60 text-base font-bold text-emerald-300 hover:bg-emerald-500/10"
           >
             {dict.bumpAll(firedLines.length)}
           </button>
@@ -348,7 +373,7 @@ function TicketCard({ order, tableName, server, lines, now, lang, dict, showImag
       )}
     </article>
   )
-}
+})
 
 // ─── 86 board ───────────────────────────────────────────────────
 
@@ -573,19 +598,166 @@ function KitchenDishGallery({ menu, recipes, lang, dict, onInspectDish }) {
   )
 }
 
+// ─── SLA strip ──────────────────────────────────────────────────
+
+function SlaStrip({ fired, bumpedToday, dict }) {
+  const now = useNow(1000)
+  const lateCount = fired.filter((r) => ticketAgeState(r.item.firedAt, now) === 'late').length
+  const avgAge = fired.length
+    ? Math.round(fired.reduce((s, r) => s + secondsBetween(r.item.firedAt, now), 0) / fired.length)
+    : 0
+  return (
+    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+      {[
+        { label: dict.firedNow, value: String(fired.length), tone: 'info' },
+        { label: dict.latePct(fired.length ? Math.round((lateCount / fired.length) * 100) : 0), value: String(lateCount), tone: lateCount ? 'bad' : 'ok' },
+        { label: dict.avgAge, value: formatElapsed(avgAge), tone: 'muted' },
+        { label: dict.bumpedToday, value: String(bumpedToday), tone: 'ok' },
+      ].map((s) => (
+        <div key={s.label} className="rounded-2xl border border-[var(--color-ink-700)] bg-[var(--color-ink-900)] px-4 py-3">
+          <div className="tnum text-2xl font-bold">{s.value}</div>
+          <div className="mt-0.5 text-[11px] font-semibold uppercase tracking-widest text-zinc-500">{s.label}</div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ─── Recall strip ───────────────────────────────────────────────
+
+function RecallStrip({ menuById, lang, dict, showImages }) {
+  const { state, dispatch } = useRestora()
+  const now = useNow(1000)
+  const recallable = useMemo(() => {
+    const rows = []
+    for (const order of state.orders) {
+      if (['paid', 'void'].includes(order.status)) continue
+      for (const item of order.items) {
+        const key = `${order.id}:${item.id}`
+        if (item.status === 'bump' && state.recalls[key] && state.recalls[key] > now) {
+          const menuItem = menuById[item.menuItemId] || null
+          rows.push({
+            order,
+            item,
+            menuItem,
+            name: menuItem ? translateDishName(menuItem, lang) : 'item',
+            left: Math.ceil((state.recalls[key] - now) / 1000),
+          })
+        }
+      }
+    }
+    return rows.sort((a, b) => a.left - b.left)
+  }, [state.orders, state.recalls, menuById, now, lang])
+
+  if (!recallable.length) return null
+  return (
+    <div className="animate-status-in rounded-2xl border border-sky-500/30 bg-sky-500/5 p-3">
+      <div className="text-[11px] font-bold uppercase tracking-widest text-sky-300">{dict.recallHeader}</div>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {recallable.map((r) => {
+          const imgs = getItemImages(r.menuItem)
+          return (
+            <button
+              key={`${r.order.id}:${r.item.id}`}
+              type="button"
+              onClick={() => dispatch({ type: 'RECALL_ITEM', orderId: r.order.id, itemId: r.item.id })}
+              className="flex min-h-[44px] items-center gap-2 rounded-lg bg-sky-500/15 px-3.5 text-sm font-semibold text-sky-200 ring-1 ring-inset ring-sky-500/40 hover:bg-sky-500/25"
+            >
+              {showImages && imgs[0] && <img src={imgs[0]} alt="" className="h-7 w-9 rounded object-cover" />}
+              <span>↩ {r.item.qty}× {r.name} · {r.left}s</span>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ─── Board ──────────────────────────────────────────────────────
+// Owns the 1s clock for late filtering and column headers. Cards are memoized
+// and receive only data props, so a tick repaints the board shell — not cards.
+
+function KitchenBoard({ fired, lateOnly, dict, lang, showImages, tables, dispatch, onInspectDish }) {
+  const now = useNow(1000)
+  const columns = useMemo(() => STATIONS.map((station) => {
+    const rows = station === 'expo' ? fired : fired.filter((r) => r.item.station === station)
+    const byOrder = new Map()
+    for (const r of rows) {
+      if (!byOrder.has(r.order.id)) {
+        byOrder.set(r.order.id, { order: r.order, tableName: r.tableName, server: r.server, lines: [] })
+      }
+      byOrder.get(r.order.id).lines.push({ ...r.item, name: r.name, menuItem: r.menuItem })
+    }
+    const cards = [...byOrder.values()]
+      .map((c) => ({ ...c, lines: c.lines.sort((a, b) => new Date(a.firedAt) - new Date(b.firedAt)) }))
+      .sort((a, b) => new Date(a.lines[0].firedAt) - new Date(b.lines[0].firedAt))
+    return { station, cards }
+  }), [fired])
+
+  return (
+    <div className="flex gap-3 overflow-x-auto pb-4" role="region" aria-label="Kitchen display columns">
+      {columns.map(({ station, cards }) => {
+        const visible = lateOnly
+          ? cards
+            .map((c) => ({ ...c, lines: c.lines.filter((l) => ticketAgeState(l.firedAt, now) === 'late') }))
+            .filter((c) => c.lines.length)
+          : cards
+        const count = visible.reduce((s, c) => s + c.lines.length, 0)
+        const hasLate = cards.some((c) => c.lines.some((l) => ticketAgeState(l.firedAt, now) === 'late'))
+        return (
+          <section key={station} className="w-[300px] min-w-[300px] flex-1" aria-label={`${STATION_META[station].label} station`}>
+            <div className={`mb-2 flex items-center justify-between rounded-xl px-3 py-2 ring-1 ring-inset ${hasLate ? 'bg-red-500/10 ring-red-500/40' : 'bg-[var(--color-ink-900)] ring-[var(--color-ink-700)]'}`}>
+              <h2 className="text-sm font-bold uppercase tracking-widest text-zinc-300">
+                {dict.stations[station] || STATION_META[station].label}
+                {station === 'expo' && <span className="ml-1.5 font-normal normal-case text-zinc-500">{dict.wholeTable}</span>}
+              </h2>
+              <span className={`tnum rounded-full px-2 py-0.5 text-xs font-bold ${hasLate ? 'bg-red-500/20 text-red-200' : 'bg-black/40 text-zinc-400'}`}>
+                {count}
+              </span>
+            </div>
+            <div className="max-h-[62vh] space-y-2.5 overflow-y-auto pr-0.5">
+              {visible.length === 0 && (
+                <div className="rounded-xl border border-dashed border-[var(--color-ink-600)] p-5 text-center text-sm text-zinc-600">
+                  {lateOnly ? dict.noLateTickets : dict.allClear}
+                </div>
+              )}
+              {visible.map((c) => (
+                <TicketCard
+                  key={`${station}-${c.order.id}`}
+                  order={c.order}
+                  tableName={c.tableName}
+                  server={c.server}
+                  lines={c.lines}
+                  lang={lang}
+                  dict={dict}
+                  showImages={showImages}
+                  tables={tables}
+                  dispatch={dispatch}
+                  onInspectDish={onInspectDish}
+                />
+              ))}
+            </div>
+          </section>
+        )
+      })}
+    </div>
+  )
+}
+
 // ─── Screen ─────────────────────────────────────────────────────
 
 export default function KitchenScreen() {
   const { state, dispatch } = useRestora()
-  const now = useNow(1000)
   const { lang, setLang: switchLanguage, kitchenDict: dict } = useI18n()
   const [lateOnly, setLateOnly] = useState(false)
   const offCount = state.menu.filter((m) => m.active !== false && !m.available).length
   const [boardOpen, setBoardOpen] = useState(offCount > 0)
-  const [galleryOpen, setGalleryOpen] = useState(true)
+  const [galleryOpen, setGalleryOpen] = useState(false)
   const [inspected, setInspected] = useState(null) // { dish, index }
 
   const showImages = state.settings?.food?.showImages !== false
+
+  const inspectDish = useCallback((dish, index = 0) => setInspected({ dish, index }), [])
 
   const menuById = useMemo(() => Object.fromEntries(state.menu.map((m) => [m.id, m])), [state.menu])
   const tableById = useMemo(() => Object.fromEntries(state.tables.map((t) => [t.id, t])), [state.tables])
@@ -612,62 +784,7 @@ export default function KitchenScreen() {
     return rows
   }, [state.orders, tableById, menuById])
 
-  const lateCount = fired.filter((r) => ticketAgeState(r.item.firedAt, now) === 'late').length
-  const avgAge = fired.length
-    ? Math.round(fired.reduce((s, r) => s + secondsBetween(r.item.firedAt, now), 0) / fired.length)
-    : 0
   const bumpedToday = state.orders.flatMap((o) => o.items).filter((i) => i.status === 'bump').length
-
-  // Columns: stations see own items; expo sees the whole table
-  const columns = useMemo(() => {
-    const match = lateOnly
-      ? (r) => ticketAgeState(r.item.firedAt, now) === 'late'
-      : () => true
-    return STATIONS.map((station) => {
-      const rows = fired.filter((r) =>
-        station === 'expo' ? match(r) : r.item.station === station && match(r),
-      )
-      // Group by order, oldest card first
-      const byOrder = new Map()
-      for (const r of rows) {
-        if (!byOrder.has(r.order.id)) {
-          byOrder.set(r.order.id, {
-            order: r.order,
-            tableName: r.tableName,
-            server: r.server,
-            lines: [],
-          })
-        }
-        byOrder.get(r.order.id).lines.push({ ...r.item, name: r.name, menuItem: r.menuItem })
-      }
-      const cards = [...byOrder.values()]
-        .map((c) => ({ ...c, lines: c.lines.sort((a, b) => new Date(a.firedAt) - new Date(b.firedAt)) }))
-        .sort((a, b) => new Date(a.lines[0].firedAt) - new Date(b.lines[0].firedAt))
-      return { station, cards, count: rows.length }
-    })
-  }, [fired, lateOnly, now])
-
-  // Recall strip: bumped within the 60s window
-  const recallable = useMemo(() => {
-    const rows = []
-    for (const order of state.orders) {
-      if (['paid', 'void'].includes(order.status)) continue
-      for (const item of order.items) {
-        const key = `${order.id}:${item.id}`
-        if (item.status === 'bump' && state.recalls[key] && state.recalls[key] > now) {
-          const menuItem = menuById[item.menuItemId] || null
-          rows.push({
-            order,
-            item,
-            menuItem,
-            name: menuItem ? translateDishName(menuItem, lang) : 'item',
-            left: Math.ceil((state.recalls[key] - now) / 1000),
-          })
-        }
-      }
-    }
-    return rows.sort((a, b) => a.left - b.left)
-  }, [state.orders, state.recalls, menuById, now, lang])
 
   const activeDishCount = state.menu.filter((m) => m.active !== false).length
 
@@ -753,95 +870,30 @@ export default function KitchenScreen() {
       </header>
 
       {/* SLA strip */}
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-        {[
-          { label: dict.firedNow, value: String(fired.length), tone: 'info' },
-          { label: dict.latePct(fired.length ? Math.round((lateCount / fired.length) * 100) : 0), value: String(lateCount), tone: lateCount ? 'bad' : 'ok' },
-          { label: dict.avgAge, value: formatElapsed(avgAge), tone: 'muted' },
-          { label: dict.bumpedToday, value: String(bumpedToday), tone: 'ok' },
-        ].map((s) => (
-          <div key={s.label} className="rounded-2xl border border-[var(--color-ink-700)] bg-[var(--color-ink-900)] px-4 py-3">
-            <div className="tnum text-2xl font-bold">{s.value}</div>
-            <div className="mt-0.5 text-[11px] font-semibold uppercase tracking-widest text-zinc-500">{s.label}</div>
-          </div>
-        ))}
-      </div>
+      <SlaStrip fired={fired} bumpedToday={bumpedToday} dict={dict} />
 
-      {recallable.length > 0 && (
-        <div className="animate-status-in rounded-2xl border border-sky-500/30 bg-sky-500/5 p-3">
-          <div className="text-[11px] font-bold uppercase tracking-widest text-sky-300">
-            {dict.recallHeader}
-          </div>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {recallable.map((r) => {
-              const imgs = getItemImages(r.menuItem)
-              return (
-                <button
-                  key={`${r.order.id}:${r.item.id}`}
-                  type="button"
-                  onClick={() => dispatch({ type: 'RECALL_ITEM', orderId: r.order.id, itemId: r.item.id })}
-                  className="flex min-h-[44px] items-center gap-2 rounded-lg bg-sky-500/15 px-3.5 text-sm font-semibold text-sky-200 ring-1 ring-inset ring-sky-500/40 hover:bg-sky-500/25"
-                >
-                  {showImages && imgs[0] && (
-                    <img src={imgs[0]} alt="" className="h-7 w-9 rounded object-cover" />
-                  )}
-                  <span>↩ {r.item.qty}× {r.name} · {r.left}s</span>
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      )}
+      <RecallStrip menuById={menuById} lang={lang} dict={dict} showImages={showImages} />
 
       {boardOpen && (
         <EightySixBoard
           lang={lang}
           dict={dict}
           showImages={showImages}
-          onInspectDish={(dish, index = 0) => setInspected({ dish, index })}
+          onInspectDish={inspectDish}
         />
       )}
 
       {/* Board */}
-      <div className="flex gap-3 overflow-x-auto pb-4" role="region" aria-label="Kitchen display columns">
-        {columns.map(({ station, cards, count }) => {
-          const hasLate = cards.some((c) => c.lines.some((l) => ticketAgeState(l.firedAt, now) === 'late'))
-          return (
-            <section key={station} className="w-[300px] min-w-[300px] flex-1" aria-label={`${STATION_META[station].label} station`}>
-              <div className={`mb-2 flex items-center justify-between rounded-xl px-3 py-2 ring-1 ring-inset ${hasLate ? 'bg-red-500/10 ring-red-500/40' : 'bg-[var(--color-ink-900)] ring-[var(--color-ink-700)]'}`}>
-                <h2 className="text-sm font-bold uppercase tracking-widest text-zinc-300">
-                  {dict.stations[station] || STATION_META[station].label}
-                  {station === 'expo' && <span className="ml-1.5 font-normal normal-case text-zinc-500">{dict.wholeTable}</span>}
-                </h2>
-                <span className={`tnum rounded-full px-2 py-0.5 text-xs font-bold ${hasLate ? 'bg-red-500/20 text-red-200' : 'bg-black/40 text-zinc-400'}`}>
-                  {count}
-                </span>
-              </div>
-              <div className="max-h-[62vh] space-y-2.5 overflow-y-auto pr-0.5">
-                {cards.length === 0 && (
-                  <div className="rounded-xl border border-dashed border-[var(--color-ink-600)] p-5 text-center text-sm text-zinc-600">
-                    {lateOnly ? dict.noLateTickets : dict.allClear}
-                  </div>
-                )}
-                {cards.map((c) => (
-                  <TicketCard
-                    key={`${station}-${c.order.id}`}
-                    order={c.order}
-                    tableName={c.tableName}
-                    server={c.server}
-                    lines={c.lines}
-                    now={now}
-                    lang={lang}
-                    dict={dict}
-                    showImages={showImages}
-                    onInspectDish={(dish, index = 0) => setInspected({ dish, index })}
-                  />
-                ))}
-              </div>
-            </section>
-          )
-        })}
-      </div>
+      <KitchenBoard
+        fired={fired}
+        lateOnly={lateOnly}
+        dict={dict}
+        lang={lang}
+        showImages={showImages}
+        tables={state.tables}
+        dispatch={dispatch}
+        onInspectDish={inspectDish}
+      />
 
       {/* Multi-photo dish gallery */}
       {showImages && galleryOpen && (
@@ -850,7 +902,7 @@ export default function KitchenScreen() {
           recipes={state.recipes}
           lang={lang}
           dict={dict}
-          onInspectDish={(dish, index = 0) => setInspected({ dish, index })}
+          onInspectDish={inspectDish}
         />
       )}
 

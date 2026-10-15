@@ -506,7 +506,7 @@ export default function MenuScreen() {
   const skuById = useMemo(() => Object.fromEntries(state.inventory.map((i) => [i.id, i])), [state.inventory])
   const cats = useMemo(() => ['All', ...new Set(catalogMenu.map((m) => m.category))], [catalogMenu])
 
-  const list = catalogMenu
+  const list = useMemo(() => catalogMenu
     .filter((m) => (cat === 'All' || m.category === cat))
     .filter((m) => {
       if (!query.trim()) return true
@@ -514,7 +514,8 @@ export default function MenuScreen() {
       return m.name.toLowerCase().includes(q) || translateDishName(m, lang).toLowerCase().includes(q)
     })
     .map((m) => ({ m, c: costingFor(m, state.recipes[m.id], skuById) }))
-    .sort((a, b) => a.c.contribution - b.c.contribution)
+    .sort((a, b) => a.c.contribution - b.c.contribution),
+  [catalogMenu, cat, query, lang, state.recipes, skuById])
 
   return (
     <div className="space-y-4">

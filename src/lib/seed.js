@@ -14,6 +14,14 @@ import {
 const now = () => Date.now()
 const minAgo = (m) => new Date(now() - m * 60000).toISOString()
 
+// Normalized floor plan (0–100 on both axes): one column per zone — Bar on the
+// left, Main through the middle, Patio down the right — matching the demo room.
+const TABLE_LAYOUT = {
+  t01: [17, 20], t02: [17, 41], t03: [17, 62], t04: [17, 83],
+  t05: [50, 14], t06: [50, 28], t07: [50, 42], t08: [50, 56], t09: [50, 70], t10: [50, 84],
+  t11: [83, 14], t12: [83, 28], t13: [83, 42], t14: [83, 56], t15: [83, 70], t16: [83, 84],
+}
+
 /**
  * File a small, realistic document registry onto a shop so the Documents
  * module (and every print/export path) has something to show on a fresh
@@ -472,7 +480,7 @@ export function buildSeed() {
     // Hero table from the spec: 4-top, seated 22 min
     T(14, 4, 'Patio', 'seated', { seatedAt: minAgo(22), partySize: 3 }),
     T(15, 2, 'Patio'), T(16, 6, 'Patio', 'dirty'),
-  ]
+  ].map((table) => (TABLE_LAYOUT[table.id] ? { ...table, posX: TABLE_LAYOUT[table.id][0], posY: TABLE_LAYOUT[table.id][1] } : table))
 
   // ─── Reservations + waitlist ───────────────────────────────────
   const reservations = [

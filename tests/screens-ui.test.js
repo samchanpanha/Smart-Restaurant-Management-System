@@ -77,6 +77,13 @@ const settle = async (ms = 40) => {
   await act(async () => { await new Promise((resolve) => dom.window.setTimeout(resolve, ms)) })
 }
 const text = () => document.body.textContent || ''
+// Lazy screens resolve through a Suspense fallback ("Opening…"). Poll until it
+// clears so a slow chunk (e.g. Reports, which lazy-loads its charts) can't flake.
+const flush = async () => {
+  for (let i = 0; i < 100 && text().includes('Opening…'); i++) {
+    await act(async () => { await new Promise((resolve) => dom.window.setTimeout(resolve, 0)) })
+  }
+}
 const $$ = (selector) => [...document.querySelectorAll(selector)]
 const panel = () => document.querySelector('[data-testid="screen-panel"]') || document.querySelector('main') || document.body
 
@@ -137,6 +144,7 @@ for (const section of NAV_SECTIONS) {
       await freshApp()
       clickNav(item.label)
       await settle()
+      await flush()
       const marker = MARKERS[item.id]
       if (marker) {
         assert.ok(
@@ -181,6 +189,7 @@ test('the report tabs read the ledger: sell/buy, P&L, top & bottom', async () =>
   await freshApp()
   clickNav('Reports')
   await settle()
+  await flush()
   const reportTab = (label) => $$('[aria-label="Reports"] [role="tab"]').find((tab) => (tab.textContent || '').includes(label))
   const rangeTab = (label) => $$('[aria-label="Date range"] [role="tab"]').find((tab) => (tab.textContent || '').includes(label))
 
@@ -299,6 +308,31 @@ test('a takeout order starts without a table and shows its customer', async () =
   assert.ok(text().includes('Takeout · Nita Sok'), `the ticket names the takeout customer — saw: ${text().slice(0, 240)}`)
 })
 
+test('the composer quick-add and keyboard fire commit a ticket', async () => {
+  await freshApp()
+  clickNav('Tickets')
+  await settle()
+
+  // Open the first active ticket — its composer is where add/fire happens.
+  const row = document.querySelector('ul button[aria-current]')
+  assert.ok(row, 'an active ticket is listed')
+  act(() => { row.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+
+  // Quick-add chip derived from order history.
+  assert.ok(document.querySelector('[data-testid="quick-add"]'), 'the quick-add strip renders in the composer')
+  const chip = document.querySelector('[data-testid="quick-add-chip"]')
+  assert.ok(chip, 'a quick-add chip is offered')
+  act(() => { chip.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+  assert.ok(text().includes('Held · not yet sent'), 'the quick-added line is held')
+
+  // F fires the held lines to the kitchen without touching the mouse.
+  act(() => { dom.window.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'f', bubbles: true })) })
+  await settle()
+  assert.ok(text().includes('In kitchen / served'), 'F fired the held line to the kitchen')
+})
+
 test('the floor manage mode adds a table', async () => {
   await freshApp()
   clickNav('Floor')
@@ -325,4 +359,106 @@ test('the floor manage mode adds a table', async () => {
   await settle()
 
   assert.ok(text().includes('Table 99'), 'the new table is listed on the floor')
+})
+
+test('settings saves one section without publishing edits made in another', async () => {
+  await freshApp()
+  clickNav('Settings')
+  await settle()
+
+  const sectionPanel = document.querySelector('[aria-label="Settings sections"]')?.parentElement
+  const nameInput = sectionPanel?.querySelector('input:not([type="checkbox"])')
+  assert.ok(nameInput, 'the business identity form is on screen')
+
+  setValue(nameInput, 'Test Kitchen')
+  await settle()
+
+  assert.ok(document.querySelector('[data-testid="section-dirty-business"]'), 'the business section is marked dirty')
+  assert.ok(document.querySelector('[data-testid="section-dirty-money"]') === null, 'an untouched section stays clean')
+  assert.ok(/unsaved edits/i.test(document.querySelector('[data-testid="section-save-status"]').textContent), 'the section footer warns about unsaved edits')
+
+  const saveBusiness = document.querySelector('[data-testid="save-section-business"]')
+  assert.ok(saveBusiness, 'the section save button exists')
+  assert.equal(saveBusiness.disabled, false, 'the section save button is enabled while dirty')
+  act(() => { saveBusiness.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+
+  assert.equal(document.querySelector('[data-testid="section-dirty-business"]'), null, 'saving clears the section marker')
+  assert.ok(panel().textContent.includes('Test Kitchen'), 'the saved name is published to the store')
+})
+
+test('the setup wizard steps through sections and publishes on finish', async () => {
+  await freshApp()
+  clickNav('Settings')
+  await settle()
+
+  const open = document.querySelector('[data-testid="open-setup-wizard"]')
+  assert.ok(open, 'the wizard entry point is offered')
+  act(() => { open.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+
+  const wizard = document.querySelector('[data-testid="setup-wizard"]')
+  assert.ok(wizard, 'the wizard opens')
+
+  const steps = [...wizard.querySelectorAll('ol button')]
+  assert.ok(steps.length >= 4, 'the wizard lists its steps')
+  assert.equal(steps[0].getAttribute('aria-current'), 'true', 'it starts on the first step')
+
+  const last = steps[steps.length - 1]
+  act(() => { last.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+
+  const finish = [...wizard.querySelectorAll('button')].find((entry) => entry.textContent.trim() === 'Finish setup')
+  assert.ok(finish, 'the last step offers Finish setup')
+  act(() => { finish.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+
+  assert.equal(document.querySelector('[data-testid="setup-wizard"]'), null, 'finishing closes the wizard')
+  assert.equal(panel().textContent.includes('Something went wrong'), false)
+})
+
+test('reports wrap in a shared shell and saved views capture and restore the range', async () => {
+  await freshApp()
+  dom.window.localStorage.removeItem('restora.reports.views.v1')
+  clickNav('Reports')
+  await settle()
+  await flush()
+
+  // The default (Sales) report renders through the shared ReportShell header.
+  assert.ok(panel().textContent.includes('Paid checks for the selected range'), 'the sales report shows its shell header')
+
+  const rangeTab = (label) => $$('[aria-label="Date range"] [role="tab"]').find((tab) => (tab.textContent || '').includes(label))
+
+  act(() => { rangeTab('7 days').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+
+  const saveBtn = document.querySelector('[data-testid="save-view"]')
+  assert.ok(saveBtn, 'the save-view control is offered')
+  act(() => { saveBtn.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+
+  const nameInput = document.querySelector('[aria-label="View name"]')
+  assert.ok(nameInput, 'naming the view')
+  setValue(nameInput, 'Week close')
+  act(() => { document.querySelector('[data-testid="save-view-confirm"]').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+
+  const picker = document.querySelector('select[aria-label="Saved views"]')
+  assert.ok(picker, 'the saved-views picker exists')
+  assert.ok([...picker.options].some((option) => option.value === 'Week close'), 'the view is listed')
+
+  // Move away from the saved state, then re-apply the view.
+  act(() => { rangeTab('Tonight').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+
+  const setter = Object.getOwnPropertyDescriptor(dom.window.HTMLSelectElement.prototype, 'value').set
+  setter.call(picker, 'Week close')
+  act(() => { picker.dispatchEvent(new dom.window.Event('change', { bubbles: true })) })
+  await settle()
+
+  assert.equal(rangeTab('7 days').getAttribute('aria-selected'), 'true', 'applying the view restores the range')
+
+  act(() => { document.querySelector('[data-testid="delete-view"]').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+  assert.ok([...document.querySelector('select[aria-label="Saved views"]').options].every((option) => option.value !== 'Week close'), 'the view is deleted')
 })

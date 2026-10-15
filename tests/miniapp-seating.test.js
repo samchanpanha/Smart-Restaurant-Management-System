@@ -561,3 +561,40 @@ test('APPROVE_TABLE_TRANSFER: atomically moves seated guest, orders, and active 
   assert.ok(mov, 'should record TABLE_TRANSFERRED movement event')
 })
 
+
+// Regression: a table the mini app self-seats (or a staff transfer) lands in
+// 'occupied', and GUEST_SEND used to no-op there — the order never reached
+// the Orders page or the kitchen board. The guest order must fire and the
+// table must flip to 'ordered' so both surfaces show it.
+test('GUEST_SEND from an occupied (mini-app seated) table fires and shows on Orders', () => {
+  const shop = freshDowntown()
+  const freeTable = shop.tables.find((t) => t.status === 'free')
+  const claimed = reducer(shop, {
+    type: 'MINIAPP_CLAIM_TABLE',
+    payload: { tableId: freeTable.id, guestName: 'Sokha', partySize: 3, sessionToken: 'sess' },
+  })
+  assert.equal(claimed.tables.find((t) => t.id === freeTable.id).status, 'occupied')
+
+  const menuItem = claimed.menu.find((m) => m.available && m.active !== false)
+  const fired = reducer(claimed, {
+    type: 'GUEST_SEND',
+    tableId: freeTable.id,
+    items: [{ menuItemId: menuItem.id, qty: 2 }],
+  })
+
+  const order = fired.orders.find((o) => o.tableId === freeTable.id)
+  assert.ok(order, 'guest order created')
+  assert.equal(order.status, 'sent')
+  assert.equal(order.items.length, 1)
+  assert.equal(order.items[0].status, 'fired')
+  assert.ok(order.items[0].firedAt, 'line is fired for the kitchen')
+  assert.equal(order.items[0].station, menuItem.station, 'line carries its station')
+  assert.ok(order.sentAt)
+
+  const table = fired.tables.find((t) => t.id === freeTable.id)
+  assert.equal(table.status, 'ordered')
+  assert.equal(table.currentCheckId, order.id)
+
+  // The Orders page "Active" tab matches exactly these statuses.
+  assert.ok(['open', 'sent', 'in_prep'].includes(order.status), 'ticket is on the Active tab')
+})

@@ -2,15 +2,15 @@
 // Warm orange / white operations UI with a charcoal navigation rail.
 // The Chrome-style tab strip lives in TabStrip.jsx above each screen.
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import StatusPill from './StatusPill'
 import TabStrip from './TabStrip'
 import LanguageSwitcher from './LanguageSwitcher'
 import { Icon } from './Icon'
-import { NAV_SECTIONS, ROLES, ROLE_NAV, SCREEN_ICONS, screenForAlert } from '../lib/constants'
+import { NAV_SECTIONS, ROLES, SCREEN_ICONS, allowedScreens, screenForAlert } from '../lib/constants'
 import { useAuth } from '../lib/auth'
 import { translateScreenLabel, useDomTranslator, useI18n } from '../lib/i18n'
-import { getAlerts, LOCATIONS, useNow, useRestora } from '../lib/store'
+import { LOCATIONS, useNow, useRestora } from '../lib/store'
 
 // One label per screen, everywhere: the sidebar, the tab strip and the
 // restricted-screen panel all read the same source, so a screen is never
@@ -27,7 +27,7 @@ function displayOrderId(id) {
 export default function AppShell({ children }) {
   const {
     state, dispatch, role, setRole, screen, setScreen, link, resync, notice, locId, setLocId,
-    openScreenInTab,
+    openScreenInTab, alerts,
     tabs, activeTabId, saveTabScroll, setSelectedTableId, setSelectedDishId, setSelectedOrderId,
   } = useRestora()
   const now = useNow(30000)
@@ -39,9 +39,8 @@ export default function AppShell({ children }) {
   const [noticeOpen, setNoticeOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const [locationOpen, setLocationOpen] = useState(false)
-  const allowed = screens?.length ? screens : ROLE_NAV[role] || ROLE_NAV.owner
+  const allowed = allowedScreens(role, screens)
   const fallbackScreen = allowed.includes('floor') ? 'floor' : allowed[0]
-  const alerts = useMemo(() => getAlerts(state), [state])
   const location = LOCATIONS.find((item) => item.id === locId) || LOCATIONS[0]
   const displayName = user?.name || (role === 'owner' ? 'Maya Chen' : ROLES[role]?.name || 'Restaurant team')
   const roleTitle = user?.role?.label || dict.roles?.[role] || (role === 'owner' ? 'Restaurant Manager' : ROLES[role]?.label?.split('·')[1]?.trim() || 'Team member')
@@ -49,29 +48,52 @@ export default function AppShell({ children }) {
   const dateLabel = new Date(now).toLocaleDateString(localeTag, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
   const timeLabel = new Date(now).toLocaleTimeString(localeTag, { hour: 'numeric', minute: '2-digit' })
 
+  // Build a flat search index once per data change, then filter it on each
+  // keystroke. Previously every keystroke re-scanned orders×tables; now the
+  // O(data) work happens only when the data actually moves.
+  const searchIndex = useMemo(() => {
+    const tableById = new Map(state.tables.map((table) => [table.id, table]))
+    const entries = []
+    if (allowed.includes('tickets')) {
+      for (const order of state.orders) {
+        const table = tableById.get(order.tableId)
+        const label = `Order ${displayOrderId(order.id)}`
+        entries.push({
+          haystack: `${label} ${table?.name || ''} ${order.status} ${order.type}`.toLowerCase(),
+          result: { id: `order-${order.id}`, title: label, detail: `${table?.name || order.type} · ${order.status}`, screen: 'tickets', tableId: order.tableId, orderId: order.id },
+        })
+      }
+    }
+    if (allowed.includes('floor')) {
+      for (const table of state.tables) {
+        entries.push({
+          haystack: `${table.name} ${table.zone} ${table.status}`.toLowerCase(),
+          result: { id: `table-${table.id}`, title: table.name, detail: `${table.zone} · ${table.status}`, screen: 'floor', tableId: table.id },
+        })
+      }
+    }
+    if (allowed.includes('menu')) {
+      for (const dish of state.menu) {
+        entries.push({
+          haystack: `${dish.name} ${dish.category}`.toLowerCase(),
+          result: { id: `menu-${dish.id}`, title: dish.name, detail: `${dish.category} · Menu item`, screen: 'menu', dishId: dish.id },
+        })
+      }
+    }
+    return entries
+  }, [allowed, state.menu, state.orders, state.tables])
+
+  // Keep typing responsive on a big ticket book: the query that drives the
+  // dropdown trails the raw input by a frame.
+  const deferredSearch = useDeferredValue(search)
   const searchResults = useMemo(() => {
-    const query = search.trim().toLowerCase()
+    const query = deferredSearch.trim().toLowerCase()
     if (!query) return []
-    const results = []
-    for (const order of state.orders) {
-      const table = state.tables.find((item) => item.id === order.tableId)
-      const label = `Order ${displayOrderId(order.id)}`
-      if (`${label} ${table?.name || ''} ${order.status} ${order.type}`.toLowerCase().includes(query)) {
-        results.push({ id: `order-${order.id}`, title: label, detail: `${table?.name || order.type} · ${order.status}`, screen: 'tickets', tableId: order.tableId, orderId: order.id })
-      }
-    }
-    for (const table of state.tables) {
-      if (`${table.name} ${table.zone} ${table.status}`.toLowerCase().includes(query)) {
-        results.push({ id: `table-${table.id}`, title: table.name, detail: `${table.zone} · ${table.status}`, screen: 'floor', tableId: table.id })
-      }
-    }
-    for (const dish of state.menu) {
-      if (`${dish.name} ${dish.category}`.toLowerCase().includes(query)) {
-        results.push({ id: `menu-${dish.id}`, title: dish.name, detail: `${dish.category} · Menu item`, screen: 'menu', dishId: dish.id })
-      }
-    }
-    return results.filter((result) => allowed.includes(result.screen)).slice(0, 7)
-  }, [allowed, search, state.menu, state.orders, state.tables])
+    return searchIndex
+      .filter((entry) => entry.haystack.includes(query))
+      .slice(0, 7)
+      .map((entry) => entry.result)
+  }, [searchIndex, deferredSearch])
 
   useEffect(() => {
     function closeMenusOnOutsideClick(event) {

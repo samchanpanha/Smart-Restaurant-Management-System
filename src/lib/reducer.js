@@ -290,6 +290,9 @@ function withShopDefaults(shop, locationLabel = 'Downtown') {
   return {
     ...shop, menu, inventory: linkedInventory, categories, suppliers, documents,
     purchases, movements, settings,
+    tables: normalizeTablePositions(shop.tables),
+    orders: capOrders(shop.orders) || [],
+    dismissedAlerts: (Array.isArray(shop.dismissedAlerts) ? shop.dismissedAlerts : []).slice(-MAX_DISMISSED_ALERTS),
   }
 }
 
@@ -309,6 +312,25 @@ function uniqueMenuName(menu, itemId, name) {
 // so the in/out report and the per-item history read one array.
 
 const MAX_MOVEMENTS = 4000
+
+// A shift never ends with an unbounded ticket list. Closed tickets are kept
+// for the night's reports; the oldest are dropped once the cap is reached so
+// the snapshot (and the SSE payload) stays a fixed size. Open tickets are
+// always kept — a table mid-service must never vanish.
+const MAX_ORDERS = 400
+const MAX_DISMISSED_ALERTS = 200
+
+function capOrders(orders) {
+  if (!Array.isArray(orders) || orders.length <= MAX_ORDERS) return orders
+  const openIds = new Set()
+  const closed = []
+  for (const order of orders) {
+    if (order && !['paid', 'void'].includes(order.status)) openIds.add(order.id)
+    else if (order) closed.push(order)
+  }
+  const keepClosed = new Set(closed.slice(-MAX_ORDERS).map((order) => order.id))
+  return orders.filter((order) => openIds.has(order?.id) || keepClosed.has(order?.id))
+}
 
 export const MOVEMENT_KINDS = [
   { id: 'buy', label: 'Purchase', direction: 'in', icon: 'cart' },
@@ -558,6 +580,54 @@ function sanitizeTableFields(raw, existing = {}) {
     zone: zone || existing.zone || 'Main',
     targetTurnMinutes,
   }
+}
+
+// ── Table layout ───────────────────────────────────────────
+// Every table carries a normalized floor position (0–100 on both axes) so
+// the Floor screen can draw a real plan and persist drags. Snapshots from
+// before layout existed (or a table added without a spot) get a deterministic
+// grid slot: one column per zone, tables stacked down each column.
+
+const clampPct = (value) => Math.max(0, Math.min(100, Math.round(Number(value) * 10) / 10))
+
+function hasPosition(table) {
+  return Number.isFinite(Number(table?.posX)) && Number.isFinite(Number(table?.posY))
+}
+
+function normalizeTablePositions(tables) {
+  if (!Array.isArray(tables) || !tables.length) return tables
+  const missing = tables.filter((table) => !hasPosition(table))
+  if (!missing.length) {
+    return tables.every((table) => table.posX === clampPct(table.posX) && table.posY === clampPct(table.posY))
+      ? tables
+      : tables.map((table) => (hasPosition(table)
+        ? { ...table, posX: clampPct(table.posX), posY: clampPct(table.posY) }
+        : table))
+  }
+  const zones = []
+  for (const table of tables) {
+    const zone = table.zone || 'Main'
+    if (!zones.includes(zone)) zones.push(zone)
+  }
+  const zoneIndex = new Map(zones.map((zone, index) => [zone, index]))
+  const zoneTotals = new Map()
+  for (const table of tables) {
+    const zone = table.zone || 'Main'
+    zoneTotals.set(zone, (zoneTotals.get(zone) || 0) + 1)
+  }
+  const zoneSeen = new Map()
+  const placed = tables.map((table) => {
+    if (hasPosition(table)) return { ...table, posX: clampPct(table.posX), posY: clampPct(table.posY) }
+    const zone = table.zone || 'Main'
+    const total = zoneTotals.get(zone) || 1
+    const seen = zoneSeen.get(zone) || 0
+    zoneSeen.set(zone, seen + 1)
+    const columns = Math.max(1, zones.length)
+    const posX = ((zoneIndex.get(zone) + 0.5) * (100 / columns))
+    const posY = total > 1 ? ((seen + 0.5) * (72 / total)) + 14 : 50
+    return { ...table, posX: clampPct(posX), posY: clampPct(posY) }
+  })
+  return placed
 }
 
 /** Keep table names unique so two tables never print the same label. */
@@ -834,7 +904,28 @@ function shopReducerBase(state, action) {
         seatedAt: null,
         partySize: null,
       }
-      return { ...state, tables: [...state.tables, table] }
+      return { ...state, tables: normalizeTablePositions([...state.tables, table]) }
+    }
+
+    case 'SET_TABLE_LAYOUT': {
+      // Accept one move ({ tableId, posX, posY }) or an array of them.
+      const moves = Array.isArray(action.moves)
+        ? action.moves
+        : [{ tableId: action.tableId, posX: action.posX, posY: action.posY }]
+      const byId = new Map()
+      for (const move of moves) {
+        if (!move?.tableId) continue
+        byId.set(move.tableId, { posX: clampPct(move.posX), posY: clampPct(move.posY) })
+      }
+      if (!byId.size) return state
+      let changed = false
+      const tables = state.tables.map((table) => {
+        const move = byId.get(table.id)
+        if (!move || (table.posX === move.posX && table.posY === move.posY)) return table
+        changed = true
+        return { ...table, posX: move.posX, posY: move.posY }
+      })
+      return changed ? { ...state, tables } : state
     }
 
     case 'UPDATE_TABLE': {
@@ -903,7 +994,7 @@ function shopReducerBase(state, action) {
         : state.tables.map((t) =>
           t.id === tableId && t.currentCheckId == null ? { ...t, currentCheckId: order.id } : t,
         )
-      return { ...state, orders: [...state.orders, order], tables }
+      return { ...state, orders: capOrders([...state.orders, order]), tables }
     }
 
     case 'SET_ORDER_DETAILS': {
@@ -1044,7 +1135,7 @@ function shopReducerBase(state, action) {
       // 86'd lines are skipped (the live menu hides them; this is the race guard).
       const { tableId, items = [] } = action
       const table = state.tables.find((t) => t.id === tableId)
-      if (!table || !['seated', 'ordered'].includes(table.status)) return state
+      if (!table || !['seated', 'ordered', 'occupied'].includes(table.status)) return state
       let order = state.orders.find(
         (o) => o.tableId === tableId && !['paid', 'void'].includes(o.status),
       )
@@ -1089,7 +1180,7 @@ function shopReducerBase(state, action) {
         note: `${newLines.reduce((sum, line) => sum + line.qty, 0)} line(s) from the QR menu`,
       }), { at: nowIso, by: 'guest' })
       const inventory = sale ? sale.inventory : state.inventory
-      if (table.status === 'seated') {
+      if (table.status === 'seated' || table.status === 'occupied') {
         tables = tables.map((t) =>
           t.id === tableId ? { ...t, status: 'ordered', currentCheckId: order.id } : t,
         )
@@ -2373,7 +2464,10 @@ function shopReducerBase(state, action) {
     case 'DISMISS_ALERT':
       return state.dismissedAlerts.includes(action.key)
         ? state
-        : { ...state, dismissedAlerts: [...state.dismissedAlerts, action.key] }
+        : {
+          ...state,
+          dismissedAlerts: [...state.dismissedAlerts, action.key].slice(-MAX_DISMISSED_ALERTS),
+        }
 
     default:
       return state
@@ -2399,7 +2493,7 @@ export function shopReducer(state, action) {
 // Every shop action travels wrapped: { type: 'LOC', locId, action: inner }.
 // RESET_ALL reseeds the whole empire; HYDRATE swaps it (bootstrap only).
 
-export const STATE_VERSION = 4
+export const STATE_VERSION = 5
 
 export function buildEmpire() {
   const downtown = buildSeed()
@@ -2417,8 +2511,8 @@ export function migrateToEmpire(old) {
   if (!old) return null
   if (old.locations && old.version >= 2 && old.version <= STATE_VERSION) {
     return {
-      version: STATE_VERSION,
       ...old,
+      version: STATE_VERSION,
       locations: Object.fromEntries(
         Object.entries(old.locations).map(([id, shop]) => [
           id,
