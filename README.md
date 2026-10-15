@@ -422,7 +422,7 @@ Express + SQLite (`better-sqlite3`) via action log + SSE when a server is presen
 |------|--------|--------|----------------|
 | 1 | Object model + status machines | ✅ Done | Tables, tickets, items, recipes, inventory, alerts; strict machines; seed data; role-aware shell |
 | 2 | Floor seat/dirty | ✅ Done | Live map by zone, tap-to-seat, over-cap confirm, reservations, waitlist + honest wait quotes |
-| 3 | Ticket compose/send/undo | ✅ Done | Composer + required mods, 86 w/ substitute, course fire, 15s undo, split/pay/void/comp |
+| 3 | Tickets + delivery fulfillment | ✅ Done | Composer + required mods, 86 w/ substitute, 15s undo, split/pay/void; delivery queue, kitchen-ready handoff, delivered timestamps, type filter, v5 → v6 migration |
 | 4 | KDS fire/bump/86 | ✅ Done | Station columns + expo, live SLA timers, bump-all, 60s recall, shared 86 board |
 | 5 | Theoretical inventory on fire | ✅ Done | Stock exceptions, receive w/ plate-cost impact, count sheet w/ variance reasons, waste log |
 | 6 | Dashboard alerts | ✅ Done | KPIs, tappable alert rail, rush watch, sparkline, sellers/losers, SLA, floor snapshot |

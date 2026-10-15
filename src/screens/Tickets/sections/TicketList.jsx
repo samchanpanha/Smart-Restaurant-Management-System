@@ -1,13 +1,13 @@
 import { useMemo } from 'react'
 import StatusPill from '../../../components/StatusPill'
 import { btnGhost, inputCls } from '../../../components/ui'
-import { TICKET_STATUS_META } from '../../../lib/constants'
+import { DELIVERY_STATUS_META, TICKET_STATUS_META } from '../../../lib/constants'
 import { translateTableName, translateTicketStatus, useI18n } from '../../../lib/i18n'
 import { minutesBetween, money, orderTotals } from '../../../lib/models'
 import { useNow, useRestora } from '../../../lib/store'
-import { TABS, serverName, orderLabel } from '../shared.js'
+import { ORDER_TYPE_LABEL, ORDER_TYPES, TABS, serverName, orderLabel } from '../shared.js'
 
-function TicketList({ tab, setTab, tableFilter, setTableFilter, serverFilter, setServerFilter, selectedId, onSelect, onNew }) {
+function TicketList({ tab, setTab, tableFilter, setTableFilter, serverFilter, setServerFilter, typeFilter, setTypeFilter, selectedId, onSelect, onNew }) {
   const { state } = useRestora()
   const { lang, dict } = useI18n()
   const tk = dict.tickets || {}
@@ -26,6 +26,7 @@ function TicketList({ tab, setTab, tableFilter, setTableFilter, serverFilter, se
     .filter((o) => activeTab.match(o.status))
     .filter((o) => !tableFilter || o.tableId === tableFilter)
     .filter((o) => !serverFilter || o.serverId === serverFilter)
+    .filter((o) => !typeFilter || o.type === typeFilter)
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
 
   const tablesWithTickets = useMemo(
@@ -74,6 +75,13 @@ function TicketList({ tab, setTab, tableFilter, setTableFilter, serverFilter, se
         </select>
       </div>
 
+      <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className={inputCls} aria-label="Filter by order type">
+        <option value="">All order types</option>
+        {ORDER_TYPES.map((type) => (
+          <option key={type.id} value={type.id}>{ORDER_TYPE_LABEL[type.id] || type.label}</option>
+        ))}
+      </select>
+
       <button type="button" onClick={onNew} className={btnGhost} aria-label="New check">
         + {tk.newOrder || 'New check'}
       </button>
@@ -106,6 +114,11 @@ function TicketList({ tab, setTab, tableFilter, setTableFilter, serverFilter, se
                     {o.transferredFromTableId && (
                       <StatusPill tone="info" size="sm">
                         🔄 Moved: {tableById[o.transferredFromTableId]?.name ? translateTableName(tableById[o.transferredFromTableId].name, lang) : o.transferredFromTableId}
+                      </StatusPill>
+                    )}
+                    {o.type === 'delivery' && (
+                      <StatusPill tone={DELIVERY_STATUS_META[o.deliveryStatus]?.tone || 'muted'} size="sm">
+                        {DELIVERY_STATUS_META[o.deliveryStatus]?.label || 'Untracked'}
                       </StatusPill>
                     )}
                   </div>

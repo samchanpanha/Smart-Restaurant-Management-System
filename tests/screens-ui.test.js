@@ -229,6 +229,11 @@ test('the report tabs read the ledger: sell/buy, P&L, top & bottom', async () =>
   await settle()
   assert.ok(text().includes('Nothing was received in this window'), 'tonight has no receipts')
   assert.ok(text().includes('Stock in / out'), 'the ledger legs still render')
+
+  act(() => { reportTab('Delivery').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+  assert.ok(text().includes('Delivery performance'), 'delivery analytics tab opens')
+  assert.ok(text().includes('On-time delivery'), 'delivery SLA breakdown renders')
 })
 
 test('the movements screen can open the count sheet', async () => {
@@ -306,6 +311,34 @@ test('a takeout order starts without a table and shows its customer', async () =
   await settle()
 
   assert.ok(text().includes('Takeout · Nita Sok'), `the ticket names the takeout customer — saw: ${text().slice(0, 240)}`)
+})
+
+test('a delivery check opens selected and appears in the delivery queue', async () => {
+  await freshApp()
+  clickNav('Tickets')
+  await settle()
+
+  act(() => { document.querySelector('[aria-label="New check"]').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+  const deliveryType = document.querySelector('[data-testid="order-type-delivery"]')
+  assert.ok(deliveryType, 'the delivery order type is available')
+  act(() => { deliveryType.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+
+  const nameInput = $$('input').find((input) => input.getAttribute('aria-label') === 'Customer name')
+  setValue(nameInput, 'Ava Chen')
+  act(() => { document.querySelector('[aria-label="Start check"]').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+
+  assert.ok(document.querySelector('[data-testid="delivery-fulfillment"]'), 'the new delivery opens in its workspace')
+  assert.equal(document.querySelector('[data-testid="delivery-fulfillment"]').dataset.deliveryStatus, 'queued')
+
+  const typeFilter = document.querySelector('[aria-label="Filter by order type"]')
+  assert.ok(typeFilter, 'the order-type filter is available')
+  typeFilter.value = 'delivery'
+  act(() => { typeFilter.dispatchEvent(new dom.window.Event('change', { bubbles: true })) })
+  await settle()
+  assert.ok($$('ul button').some((button) => button.textContent.includes('Ava Chen')), 'the delivery remains listed when filtered')
 })
 
 test('the composer quick-add and keyboard fire commit a ticket', async () => {

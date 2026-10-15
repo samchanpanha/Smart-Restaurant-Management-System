@@ -3,7 +3,7 @@
 // Express server. No React, no DOM — safe to import from Node.
 // The ticket stays the system of record on every terminal.
 
-import { STATIONS, TARGETS } from './constants.js'
+import { DELIVERY_STATUS_META, STATIONS, TARGETS } from './constants.js'
 import { itemPacks, packFactor, sanitizePackList, slugUnitId } from './units.js'
 import {
   applyAuto86,
@@ -254,6 +254,25 @@ function suppliersFromVendors(inventory, existing) {
   return out
 }
 
+const DELIVERY_ORDER_STATUSES = new Set(Object.keys(DELIVERY_STATUS_META))
+
+function normalizeDeliveryOrder(order) {
+  if (!order || order.type !== 'delivery' || DELIVERY_ORDER_STATUSES.has(order.deliveryStatus)) return order
+  const deliveryStatus = order.status === 'void' ? 'cancelled'
+    : order.status === 'ready' ? 'ready'
+      : ['sent', 'in_prep'].includes(order.status) ? 'preparing'
+        : order.status === 'open' ? 'queued' : 'untracked'
+  return {
+    ...order,
+    deliveryStatus,
+    deliveryStatusAt: null,
+    preparingAt: null,
+    readyAt: null,
+    outForDeliveryAt: null,
+    deliveredAt: null,
+  }
+}
+
 function withShopDefaults(shop, locationLabel = 'Downtown') {
   if (!shop) return shop
   const settings = sanitizeSettings(shop.settings, locationLabel)
@@ -287,11 +306,12 @@ function withShopDefaults(shop, locationLabel = 'Downtown') {
   const movements = (Array.isArray(shop.movements) ? shop.movements : [])
     .filter((movement) => movement && movement.itemId && Number.isFinite(Number(movement.qty)))
     .slice(-MAX_MOVEMENTS)
+  const orders = (capOrders(shop.orders) || []).map(normalizeDeliveryOrder)
   return {
     ...shop, menu, inventory: linkedInventory, categories, suppliers, documents,
     purchases, movements, settings,
     tables: normalizeTablePositions(shop.tables),
-    orders: capOrders(shop.orders) || [],
+    orders,
     dismissedAlerts: (Array.isArray(shop.dismissedAlerts) ? shop.dismissedAlerts : []).slice(-MAX_DISMISSED_ALERTS),
   }
 }
@@ -960,6 +980,7 @@ function shopReducerBase(state, action) {
       const { orderType = 'dine_in', customer = null, deliveryFee = 0, eta = null } = action
       const offTable = OFF_TABLE_TYPES.includes(orderType)
       const tableId = offTable ? null : action.tableId
+      const createdAt = new Date().toISOString()
       // Dine-in: one open check per table. Takeout/delivery: many can coexist.
       if (!offTable) {
         const existing = state.orders.find(
@@ -973,7 +994,7 @@ function shopReducerBase(state, action) {
         type: orderType,
         serverId: action.serverId || 'server',
         status: 'open',
-        createdAt: new Date().toISOString(),
+        createdAt,
         sentAt: null,
         paidAt: null,
         voidReason: null,
@@ -983,7 +1004,11 @@ function shopReducerBase(state, action) {
           ? {
             customer: sanitizeCustomer(customer),
             ...(orderType === 'delivery'
-              ? { deliveryFee: Math.max(0, roundMoney(Number(deliveryFee) || 0)) }
+              ? {
+                deliveryFee: Math.max(0, roundMoney(Number(deliveryFee) || 0)),
+                deliveryStatus: 'queued',
+                deliveryStatusAt: createdAt,
+              }
               : {}),
             eta: eta || null,
           }
@@ -1093,7 +1118,10 @@ function shopReducerBase(state, action) {
           }
         })
         const status = o.status === 'open' ? 'sent' : o.status === 'sent' ? 'in_prep' : o.status
-        return { ...o, items, status, sentAt: o.sentAt || nowIso }
+        const deliveryUpdate = o.type === 'delivery' && o.deliveryStatus === 'queued'
+          ? { deliveryStatus: 'preparing', deliveryStatusAt: nowIso, preparingAt: nowIso }
+          : {}
+        return { ...o, items, status, sentAt: o.sentAt || nowIso, ...deliveryUpdate }
       })
       const sale = applyStockLines(state, saleMovements(state, totalDec, {
         ref: orderId,
@@ -1205,13 +1233,17 @@ function shopReducerBase(state, action) {
       const pu = state.pendingUndo
       if (!pu || pu.orderId !== orderId || Date.now() > pu.expiresAt) return state
       const ids = new Set(pu.itemIds)
+      const undoneAt = new Date().toISOString()
       const orders = state.orders.map((o) => {
         if (o.id !== orderId) return o
         const items = o.items.map((i) =>
           ids.has(i.id) ? { ...i, status: 'held', firedAt: null, recipeSnapshot: null } : i,
         )
         const anyFired = items.some((i) => i.status === 'fired')
-        return { ...o, items, status: anyFired ? o.status : 'open', sentAt: anyFired ? o.sentAt : null }
+        const deliveryUpdate = o.type === 'delivery' && !anyFired && o.deliveryStatus === 'preparing'
+          ? { deliveryStatus: 'queued', deliveryStatusAt: undoneAt, preparingAt: null }
+          : {}
+        return { ...o, items, status: anyFired ? o.status : 'open', sentAt: anyFired ? o.sentAt : null, ...deliveryUpdate }
       })
       // The fire never happened: put the stock back and drop the sale rows
       // it wrote, so the in/out report never counts a sale that was undone.
@@ -1267,7 +1299,10 @@ function shopReducerBase(state, action) {
         let status = o.status
         if (items.length && items.every((i) => i.status === 'bump')) status = 'ready'
         else if (items.some((i) => i.status === 'fired')) status = o.status === 'sent' ? 'in_prep' : o.status
-        return { ...o, items, status }
+        const deliveryUpdate = o.type === 'delivery' && status === 'ready' && o.deliveryStatus === 'preparing'
+          ? { deliveryStatus: 'ready', deliveryStatusAt: nowIso, readyAt: nowIso }
+          : {}
+        return { ...o, items, status, ...deliveryUpdate }
       })
       const recalls = {
         ...state.recalls,
@@ -1280,12 +1315,16 @@ function shopReducerBase(state, action) {
       const { orderId, itemId } = action
       const key = `${orderId}:${itemId}`
       if (!state.recalls[key] || Date.now() > state.recalls[key]) return state
+      const nowIso = new Date().toISOString()
       const orders = state.orders.map((o) => {
         if (o.id !== orderId) return o
         const items = o.items.map((i) =>
           i.id === itemId && i.status === 'bump' ? { ...i, status: 'fired', bumpedAt: null } : i,
         )
-        return { ...o, items, status: 'in_prep' }
+        const deliveryUpdate = o.type === 'delivery' && o.deliveryStatus === 'ready'
+          ? { deliveryStatus: 'preparing', deliveryStatusAt: nowIso, readyAt: null }
+          : {}
+        return { ...o, items, status: 'in_prep', ...deliveryUpdate }
       })
       const recalls = { ...state.recalls }
       delete recalls[key]
@@ -1304,6 +1343,19 @@ function shopReducerBase(state, action) {
       const orders = state.orders.map((o) =>
         o.id === orderId && o.status === 'ready' ? { ...o, status: 'served' } : o,
       )
+      return { ...state, orders }
+    }
+
+    case 'SET_DELIVERY_STATUS': {
+      const { orderId, status } = action
+      const order = state.orders.find((entry) => entry.id === orderId)
+      const nextStatus = { ready: 'out_for_delivery', out_for_delivery: 'delivered' }[order?.deliveryStatus]
+      if (!order || order.type !== 'delivery' || order.status === 'void' || nextStatus !== status) return state
+      const nowIso = new Date().toISOString()
+      const timestampField = status === 'out_for_delivery' ? 'outForDeliveryAt' : 'deliveredAt'
+      const orders = state.orders.map((entry) => entry.id === orderId
+        ? { ...entry, deliveryStatus: status, deliveryStatusAt: nowIso, [timestampField]: nowIso }
+        : entry)
       return { ...state, orders }
     }
 
@@ -1360,9 +1412,15 @@ function shopReducerBase(state, action) {
       const { orderId, reason } = action
       const order = state.orders.find((o) => o.id === orderId)
       if (!order || ['paid', 'void'].includes(order.status)) return state
-      const orders = state.orders.map((o) =>
-        o.id === orderId ? { ...o, status: 'void', voidReason: reason || 'manager void' } : o,
-      )
+      const nowIso = new Date().toISOString()
+      const orders = state.orders.map((o) => o.id === orderId
+        ? {
+          ...o,
+          status: 'void',
+          voidReason: reason || 'manager void',
+          ...(o.type === 'delivery' ? { deliveryStatus: 'cancelled', deliveryStatusAt: nowIso } : {}),
+        }
+        : o)
       // Manager override: voided check sends the table back through bus flow
       const tables = state.tables.map((t) =>
         t.id === order.tableId ? { ...t, status: 'dirty', currentCheckId: null } : t,
@@ -2493,7 +2551,7 @@ export function shopReducer(state, action) {
 // Every shop action travels wrapped: { type: 'LOC', locId, action: inner }.
 // RESET_ALL reseeds the whole empire; HYDRATE swaps it (bootstrap only).
 
-export const STATE_VERSION = 5
+export const STATE_VERSION = 6
 
 export function buildEmpire() {
   const downtown = buildSeed()
@@ -2703,9 +2761,18 @@ export function getAlerts(state) {
 
 // ─── Derived: dashboard KPIs ──────────────────────────────────────
 
-export function getDashboard(state) {
+export function getDashboard(state, now = Date.now()) {
+  const todayStart = new Date(now)
+  todayStart.setHours(0, 0, 0, 0)
+  const tomorrowStart = new Date(todayStart)
+  tomorrowStart.setDate(tomorrowStart.getDate() + 1)
+  const isToday = (value) => {
+    const timestamp = new Date(value || 0).getTime()
+    return Number.isFinite(timestamp) && timestamp >= todayStart.getTime() && timestamp < tomorrowStart.getTime()
+  }
+  const todayOrders = state.orders.filter((order) => isToday(order.paidAt || order.createdAt))
   const menuById = Object.fromEntries(state.menu.map((m) => [m.id, m]))
-  const paid = state.orders.filter((o) => o.status === 'paid')
+  const paid = todayOrders.filter((o) => o.status === 'paid')
   const sales = paid.reduce((s, o) => s + (o.total ?? orderSubtotal(o, menuById)), 0)
   const covers = paid.reduce((s, o) => s + (o.covers ?? 2), 0)
   const avgCheck = paid.length ? sales / paid.length : 0
@@ -2715,7 +2782,7 @@ export function getDashboard(state) {
   // Rolling 7-day food cost from history + tonight's theoretical
   const invById = Object.fromEntries(state.inventory.map((i) => [i.id, i]))
   let tonightFood = 0
-  for (const o of state.orders) {
+  for (const o of todayOrders) {
     if (o.status === 'void') continue
     for (const it of o.items) {
       if (it.voided) continue
@@ -2724,7 +2791,7 @@ export function getDashboard(state) {
       tonightFood += plate * (it.qty || 0)
     }
   }
-  const tonightSales = state.orders
+  const tonightSales = todayOrders
     .filter((o) => o.status !== 'void')
     .reduce((s, o) => s + (o.total ?? orderSubtotal(o, menuById)), 0)
   const tonightCostPct = tonightSales ? tonightFood / tonightSales : 0
@@ -2732,14 +2799,14 @@ export function getDashboard(state) {
   const foodCost7d = [...hist, tonightCostPct].reduce((a, b) => a + b, 0) / (hist.length + 1)
 
   // Kitchen SLA: avg fire-to-bump of bumped items tonight
-  const bumped = state.orders.flatMap((o) => o.items).filter((i) => i.status === 'bump' && i.firedAt && i.bumpedAt)
+  const bumped = state.orders.flatMap((o) => o.items).filter((i) => i.status === 'bump' && i.firedAt && isToday(i.bumpedAt))
   const avgTicketMin = bumped.length
     ? bumped.reduce((s, i) => s + (new Date(i.bumpedAt) - new Date(i.firedAt)) / 60000, 0) / bumped.length
     : 0
 
   // Top sellers + bottom contribution
   const qtyByMenu = {}
-  for (const o of state.orders) {
+  for (const o of todayOrders) {
     if (o.status === 'void') continue
     for (const it of o.items) qtyByMenu[it.menuItemId] = (qtyByMenu[it.menuItemId] || 0) + it.qty
   }
@@ -2753,7 +2820,7 @@ export function getDashboard(state) {
   })
 
   return {
-    sales, covers, avgCheck, occupancy, foodCost7d, tonightCostPct,
+    sales, covers, avgCheck, checks: paid.length, occupancy, foodCost7d, tonightCostPct,
     avgTicketMin, topSellers: sellers.slice(0, 5),
     bottomContribution: [...withMargin].sort((a, b) => a.contribution - b.contribution).slice(0, 5),
     openTickets: state.orders.filter((o) => !['paid', 'void'].includes(o.status)).length,

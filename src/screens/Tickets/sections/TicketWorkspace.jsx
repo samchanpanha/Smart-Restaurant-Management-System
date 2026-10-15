@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import StatusPill from '../../../components/StatusPill'
-import { TICKET_STATUS_META } from '../../../lib/constants'
+import { DELIVERY_STATUS_META, TICKET_STATUS_META } from '../../../lib/constants'
 import { buildInvoiceDocument, buildReceiptDocument, buildTicketDocument, documentFileName, downloadHtml, printHtml, renderDocumentHtml } from '../../../lib/documents'
 import { translateTableName, useI18n } from '../../../lib/i18n'
 import { formatClock, minutesBetween, money, orderTotals } from '../../../lib/models'
@@ -218,6 +218,45 @@ function TicketWorkspace({ orderId, onError }) {
             </button>
           </div>
         )}
+
+        {order.type === 'delivery' && (() => {
+          const deliveryMeta = DELIVERY_STATUS_META[order.deliveryStatus] || DELIVERY_STATUS_META.untracked
+          return (
+            <section className="mt-3 rounded-xl border border-[var(--color-ink-600)] bg-[var(--color-ink-800)] p-3.5" data-testid="delivery-fulfillment" data-delivery-status={order.deliveryStatus || 'untracked'}>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-sm font-bold text-zinc-100">Delivery fulfillment</h3>
+                <StatusPill tone={deliveryMeta.tone} size="sm">{deliveryMeta.label}</StatusPill>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-400">
+                {order.preparingAt && <span>Preparing · {formatClock(order.preparingAt)}</span>}
+                {order.readyAt && <span>Ready · {formatClock(order.readyAt)}</span>}
+                {order.outForDeliveryAt && <span>Driver handoff · {formatClock(order.outForDeliveryAt)}</span>}
+                {order.deliveredAt && <span>Delivered · {formatClock(order.deliveredAt)}</span>}
+                {order.deliveryStatus === 'untracked' && <span>Fulfillment was not tracked for this order.</span>}
+              </div>
+              {order.deliveryStatus === 'ready' && (
+                <button
+                  type="button"
+                  onClick={() => dispatch({ type: 'SET_DELIVERY_STATUS', orderId: order.id, status: 'out_for_delivery' })}
+                  className="mt-3 min-h-[44px] w-full rounded-lg bg-sky-500 px-4 text-sm font-bold text-white hover:bg-sky-400"
+                  aria-label="Hand off delivery to driver"
+                >
+                  Hand off to driver
+                </button>
+              )}
+              {order.deliveryStatus === 'out_for_delivery' && (
+                <button
+                  type="button"
+                  onClick={() => dispatch({ type: 'SET_DELIVERY_STATUS', orderId: order.id, status: 'delivered' })}
+                  className="mt-3 min-h-[44px] w-full rounded-lg bg-emerald-500 px-4 text-sm font-bold text-black hover:bg-emerald-400"
+                  aria-label="Mark delivery delivered"
+                >
+                  Mark delivered
+                </button>
+              )}
+            </section>
+          )
+        })()}
       </div>
 
       {banner && (

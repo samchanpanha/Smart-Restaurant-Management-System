@@ -6,7 +6,7 @@
 
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { buildEmpire, reducer } from '../src/lib/reducer.js'
+import { buildEmpire, migrateToEmpire, reducer } from '../src/lib/reducer.js'
 import {
   buildInvoiceDocument, buildReportDocument, buildReceiptDocument, buildTicketDocument, renderDocumentHtml,
 } from '../src/lib/documents.js'
@@ -366,6 +366,80 @@ test('editing a delivery order updates the customer block and fee', () => {
   assert.equal(order.customer.name, 'New Name')
   assert.equal(order.customer.address, '9 Lane')
   assert.equal(order.deliveryFee, 4)
+})
+
+test('delivery fulfillment follows kitchen progress and validated handoffs', () => {
+  let empire = buildEmpire()
+  empire = act(empire, 'downtown', {
+    type: 'CREATE_ORDER', id: 'delivery_flow', orderType: 'delivery', customer: { name: 'Ava Chen' },
+  })
+  let order = shopOf(empire).orders.find((entry) => entry.id === 'delivery_flow')
+  assert.equal(order.deliveryStatus, 'queued')
+
+  const invalidHandoff = act(empire, 'downtown', { type: 'SET_DELIVERY_STATUS', orderId: order.id, status: 'delivered' })
+  assert.equal(invalidHandoff, empire, 'a queued delivery cannot skip kitchen and driver stages')
+
+  const menuItemId = shopOf(empire).menu.find((item) => item.available && item.active !== false).id
+  empire = act(empire, 'downtown', { type: 'ADD_ITEM', orderId: order.id, menuItemId })
+  empire = act(empire, 'downtown', { type: 'SEND_ORDER', orderId: order.id })
+  order = shopOf(empire).orders.find((entry) => entry.id === 'delivery_flow')
+  assert.equal(order.deliveryStatus, 'preparing')
+  assert.ok(order.preparingAt)
+
+  empire = act(empire, 'downtown', { type: 'UNDO_SEND', orderId: order.id })
+  order = shopOf(empire).orders.find((entry) => entry.id === 'delivery_flow')
+  assert.equal(order.deliveryStatus, 'queued')
+  empire = act(empire, 'downtown', { type: 'SEND_ORDER', orderId: order.id })
+
+  empire = act(empire, 'downtown', { type: 'BUMP_ITEM', orderId: order.id, itemId: order.items[0].id })
+  order = shopOf(empire).orders.find((entry) => entry.id === 'delivery_flow')
+  assert.equal(order.deliveryStatus, 'ready')
+  assert.ok(order.readyAt)
+
+  empire = act(empire, 'downtown', { type: 'RECALL_ITEM', orderId: order.id, itemId: order.items[0].id })
+  order = shopOf(empire).orders.find((entry) => entry.id === 'delivery_flow')
+  assert.equal(order.deliveryStatus, 'preparing')
+  assert.equal(order.readyAt, null)
+  empire = act(empire, 'downtown', { type: 'BUMP_ITEM', orderId: order.id, itemId: order.items[0].id })
+  order = shopOf(empire).orders.find((entry) => entry.id === 'delivery_flow')
+  assert.equal(order.deliveryStatus, 'ready')
+
+  empire = act(empire, 'downtown', { type: 'SET_DELIVERY_STATUS', orderId: order.id, status: 'out_for_delivery' })
+  order = shopOf(empire).orders.find((entry) => entry.id === 'delivery_flow')
+  assert.equal(order.deliveryStatus, 'out_for_delivery')
+  assert.ok(order.outForDeliveryAt)
+  empire = act(empire, 'downtown', { type: 'SET_DELIVERY_STATUS', orderId: order.id, status: 'delivered' })
+  order = shopOf(empire).orders.find((entry) => entry.id === 'delivery_flow')
+  assert.equal(order.deliveryStatus, 'delivered')
+  assert.ok(order.deliveredAt)
+
+  const repeated = act(empire, 'downtown', { type: 'SET_DELIVERY_STATUS', orderId: order.id, status: 'delivered' })
+  assert.equal(repeated, empire, 'completed delivery cannot transition again')
+})
+
+test('v5 migration leaves completed delivery history untracked', () => {
+  const empire = buildEmpire()
+  const snapshot = {
+    ...empire,
+    version: 5,
+    locations: {
+      ...empire.locations,
+      downtown: {
+        ...shopOf(empire),
+        orders: [
+          { id: 'legacy_paid', type: 'delivery', status: 'paid', createdAt: '2026-10-14T10:00:00.000Z', items: [] },
+          { id: 'legacy_prep', type: 'delivery', status: 'in_prep', createdAt: '2026-10-15T10:00:00.000Z', items: [] },
+        ],
+      },
+    },
+  }
+
+  const migrated = migrateToEmpire(snapshot)
+  const orders = shopOf(migrated).orders
+
+  assert.equal(migrated.version, 6)
+  assert.equal(orders.find((order) => order.id === 'legacy_paid').deliveryStatus, 'untracked')
+  assert.equal(orders.find((order) => order.id === 'legacy_prep').deliveryStatus, 'preparing')
 })
 
 // MiniAppScreen / GuestScreen "order for pickup": the guest has no table, so

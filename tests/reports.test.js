@@ -5,8 +5,8 @@
 
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { reducer, buildEmpire } from '../src/lib/reducer.js'
-import { buildReports, itemRankings, movementSummary, profitAndLoss, purchaseSummary, rangeBounds, salesSummary, stockFlow } from '../src/lib/reports.js'
+import { reducer, buildEmpire, getDashboard } from '../src/lib/reducer.js'
+import { buildReports, deliverySummary, itemRankings, movementSummary, profitAndLoss, purchaseSummary, rangeBounds, salesSummary, stockFlow } from '../src/lib/reports.js'
 import { orderCharges } from '../src/lib/models.js'
 
 const act = (empire, action, locId = 'downtown') => reducer(empire, { type: 'LOC', locId, action })
@@ -22,6 +22,39 @@ test('range bounds are honest windows', () => {
   assert.equal(week.days, 7)
   assert.equal(week.end - week.start, 7 * 24 * 60 * 60 * 1000 + 1)
   assert.equal(rangeBounds('nonsense', now).days, 1)
+})
+
+test('dashboard shift metrics include only orders from the local day', () => {
+  const shop = downtown(buildEmpire())
+  const yesterday = new Date(2026, 9, 14, 11, 0)
+  const today = new Date(2026, 9, 15, 11, 0)
+  const now = new Date(2026, 9, 15, 18, 0).getTime()
+  shop.orders = [
+    {
+      id: 'yesterday', status: 'paid', createdAt: yesterday.toISOString(), paidAt: yesterday.toISOString(),
+      total: 1000, covers: 6,
+      items: [{ menuItemId: 'm_burger', qty: 8, recipeSnapshot: { plateCost: 20 }, status: 'bump', firedAt: yesterday.toISOString(), bumpedAt: new Date(yesterday.getTime() + 10 * 60000).toISOString() }],
+    },
+    {
+      id: 'today', status: 'paid', createdAt: today.toISOString(), paidAt: today.toISOString(),
+      total: 80, covers: 2,
+      items: [{ menuItemId: 'm_burger', qty: 2, recipeSnapshot: { plateCost: 10 }, status: 'bump', firedAt: today.toISOString(), bumpedAt: new Date(today.getTime() + 20 * 60000).toISOString() }],
+    },
+    {
+      id: 'carryover', status: 'in_prep', createdAt: yesterday.toISOString(),
+      items: [{ menuItemId: 'm_burger', qty: 1, status: 'bump', firedAt: new Date(today.getTime() + 30 * 60000).toISOString(), bumpedAt: new Date(today.getTime() + 60 * 60000).toISOString() }],
+    },
+  ]
+
+  const dashboard = getDashboard(shop, now)
+
+  assert.equal(dashboard.sales, 80)
+  assert.equal(dashboard.covers, 2)
+  assert.equal(dashboard.checks, 1)
+  assert.equal(dashboard.avgCheck, 80)
+  assert.equal(dashboard.avgTicketMin, 25)
+  assert.equal(dashboard.tonightCostPct, 0.25)
+  assert.equal(dashboard.topSellers[0].qty, 2)
 })
 
 test('sales summary reconciles against the tickets it read', () => {
@@ -52,6 +85,40 @@ test('sales summary reconciles against the tickets it read', () => {
   assert.ok(reports.sales.lines.every((line) => line.menuItemId))
   const burger = reports.sales.lines.filter((line) => line.menuItemId === 'm_burger')
   assert.equal(burger.reduce((sum, line) => sum + line.qty, 0), 6)
+})
+
+test('delivery summary measures completed orders with ETA and elapsed stages', () => {
+  const shop = downtown(buildEmpire())
+  const now = new Date(2026, 9, 15, 18, 0).getTime()
+  const at = (minutesAgo) => new Date(now - minutesAgo * 60000).toISOString()
+  shop.orders = [
+    { type: 'delivery', deliveryStatus: 'delivered', deliveredAt: at(120), eta: at(110), outForDeliveryAt: at(150), readyAt: at(165) },
+    { type: 'delivery', deliveryStatus: 'delivered', deliveredAt: at(60), eta: at(65), outForDeliveryAt: at(105), readyAt: at(130) },
+    { type: 'delivery', deliveryStatus: 'delivered', deliveredAt: at(30), eta: null, outForDeliveryAt: at(50), readyAt: at(70) },
+    { type: 'delivery', deliveryStatus: 'cancelled', deliveryStatusAt: at(15) },
+    { type: 'delivery', deliveryStatus: 'delivered', deliveredAt: at(8 * 24 * 60), eta: at(8 * 24 * 60 - 10) },
+  ]
+
+  const delivery = deliverySummary(shop, rangeBounds('7d', now))
+
+  assert.equal(delivery.completed, 3)
+  assert.equal(delivery.cancelled, 1)
+  assert.equal(delivery.withEta, 2)
+  assert.equal(delivery.onTime, 1)
+  assert.equal(delivery.onTimeRate, 0.5)
+  assert.ok(near(delivery.avgDeliveryMinutes, 95 / 3))
+  assert.equal(delivery.avgReadyToHandoffMinutes, 20)
+})
+
+test('delivery summary leaves SLA and duration metrics empty without tracked data', () => {
+  const shop = downtown(buildEmpire())
+  const old = new Date('2020-01-01T12:00:00').getTime()
+  const delivery = deliverySummary(shop, { start: old, end: old + 1000 })
+  assert.equal(delivery.completed, 0)
+  assert.equal(delivery.cancelled, 0)
+  assert.equal(delivery.onTimeRate, null)
+  assert.equal(delivery.avgDeliveryMinutes, null)
+  assert.equal(delivery.avgReadyToHandoffMinutes, null)
 })
 
 test('an empty window reads as zeros instead of throwing', () => {
@@ -222,7 +289,7 @@ test('buildReports returns the same shape for every range', () => {
   for (const range of ['tonight', '7d', '30d']) {
     const reports = buildReports(shop, range)
     assert.equal(reports.bounds.id, range)
-    for (const key of ['sales', 'purchases', 'movements', 'pnl', 'rankings', 'flow']) {
+    for (const key of ['sales', 'delivery', 'purchases', 'movements', 'pnl', 'rankings', 'flow']) {
       assert.ok(reports[key], `${range} has ${key}`)
     }
     assert.ok(Array.isArray(reports.movements.byKind))

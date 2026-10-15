@@ -14,6 +14,7 @@ import { PnlReport } from './sections/PnlReport.jsx'
 import { SellBuyReport } from './sections/SellBuyReport.jsx'
 import { ProfitLossReport } from './sections/ProfitLossReport.jsx'
 import { TopLowReport } from './sections/TopLowReport.jsx'
+import { DeliveryReport } from './sections/DeliveryReport.jsx'
 
 function ReportsScreen() {
   const { state } = useRestora()
@@ -45,6 +46,7 @@ function ReportsScreen() {
     voids: rep.voidsTab || 'Voids & comps',
     variance: rep.varianceTab || 'Variance',
     pnl: rep.pnlTab || 'P&L-lite',
+    delivery: lang === 'km' ? 'ការដឹកជញ្ជូន' : lang === 'zh' ? '配送表现' : 'Delivery',
   }
 
   return (
@@ -118,6 +120,7 @@ function ReportsScreen() {
       {tab === 'voids' && <VoidsReport />}
       {tab === 'variance' && <VarianceReport />}
       {tab === 'pnl' && <PnlReport />}
+      {tab === 'delivery' && <DeliveryReport range={range} />}
     </div>
   )
 }

@@ -565,6 +565,6 @@ test('print renderer states the document currency conversion and repeats copies'
 })
 
 test('the store state version is the one the server and migrations expect', () => {
-  assert.equal(STATE_VERSION, 5)
-  assert.equal(buildEmpire().version, 5)
+  assert.equal(STATE_VERSION, 6)
+  assert.equal(buildEmpire().version, 6)
 })

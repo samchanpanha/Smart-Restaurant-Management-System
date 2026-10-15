@@ -9,6 +9,7 @@ const TABS = [
   { id: 'voids', label: 'Voids & comps' },
   { id: 'variance', label: 'Variance' },
   { id: 'pnl', label: 'P&L-lite' },
+  { id: 'delivery', label: 'Delivery performance' },
 ]
 
 const RANGES = [

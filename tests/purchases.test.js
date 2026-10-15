@@ -46,7 +46,7 @@ test('a stock unit is frozen once stock has moved, and free before that', () => 
 })
 
 test('state carries purchases and the movement ledger', () => {
-  assert.equal(STATE_VERSION, 5)
+  assert.equal(STATE_VERSION, 6)
   const shop = shopOf(buildEmpire())
   assert.equal(shop.purchases.length, 3)
   assert.ok(shop.movements.length >= 18)

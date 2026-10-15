@@ -157,8 +157,16 @@ migration, and the 5000-row action-log bound. `lint` clean · `test` 251/251 ·
     history, `data-testid="quick-add"`.
   - `TicketWorkspace`: keyboard `F` fires held lines, `S` marks ready served
     (ignored while typing / modal open) with on-screen hints; removed the unused
-    `onError` composer param.
-  - `screens-ui.test.js`: composer quick-add + keyboard-fire test.
+    `onError` composer param. Manual delivery orders now progress through
+    queued → preparing → ready → out for delivery → delivered; kitchen send,
+    bump, recall, and undo keep fulfillment state aligned. Tickets adds an
+    order-type filter and delivery handoff controls, and selects new off-table
+    checks by order id.
+  - `reducer.js`: `STATE_VERSION` 5 → 6; legacy open deliveries are normalized
+    from ticket status and completed deliveries remain untracked rather than
+    being assumed delivered.
+  - `screens-ui.test.js` / `screens-contract.test.js`: delivery queue selection,
+    filtering, validated handoffs, migration, undo, and recall coverage.
 
 **DoD:** floor drag persists + reloads; KDS 1s tick no longer repaints cards. ✅
 

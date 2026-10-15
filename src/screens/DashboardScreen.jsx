@@ -320,7 +320,11 @@ export default function DashboardScreen() {
   const greeting = new Date(now).getHours() < 12 ? copy.morning : new Date(now).getHours() < 17 ? copy.afternoon : copy.evening
   const alert = alerts[0]
   const recent = activityRows(state, lang, copy)
-  const availableActions = QUICK_ACTIONS.filter((action) => (ROLE_NAV[role] || ROLE_NAV.owner).includes(action.screen))
+  const quickOverviewScreens = ['floor', 'tickets', 'kitchen', 'inventory']
+  const availableActions = QUICK_ACTIONS.filter((action) => (
+    !quickOverviewScreens.includes(action.screen)
+    && (ROLE_NAV[role] || ROLE_NAV.owner).includes(action.screen)
+  ))
   const alertScreen = alert?.type === 'late_ticket' ? 'kitchen'
     : alert?.type === 'low_stock' ? 'inventory'
       : alert?.type === 'negative_margin' ? 'costing'
@@ -366,7 +370,7 @@ export default function DashboardScreen() {
         />
         <MetricCard icon="▤" label={copy.activeOrders} value={activeOrders} foot={activeOrders ? copy.inProgressNow : copy.noOpenOrders} tone="green" />
         <MetricCard icon="◷" label={copy.avgPrepTime} value={averagePrep} foot={dash.avgTicketMin ? copy.fireToBump : copy.noTimingsYet} tone="blue" />
-        <MetricCard icon="$" label={copy.todaysRevenue} value={money(dash.sales)} foot={copy.coversChecks(dash.covers, state.orders.filter((order) => order.status === 'paid').length)} tone="violet" />
+        <MetricCard icon="$" label={copy.todaysRevenue} value={money(dash.sales)} foot={copy.coversChecks(dash.covers, dash.checks)} tone="violet" />
         <MetricCard icon="!" label={copy.delayedOrders} value={delayedOrders} foot={delayedOrders ? copy.needsAttention : copy.kitchenOnTrack} tone={delayedOrders ? 'red' : 'green'} />
       </div>
 

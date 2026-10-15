@@ -73,6 +73,16 @@ export const TICKET_ITEM_META = {
   bump: { label: 'Bumped', tone: 'ok' },
 }
 
+export const DELIVERY_STATUS_META = {
+  queued: { label: 'Queued', tone: 'muted' },
+  preparing: { label: 'Preparing', tone: 'warn' },
+  ready: { label: 'Ready for driver', tone: 'ok' },
+  out_for_delivery: { label: 'Out for delivery', tone: 'info' },
+  delivered: { label: 'Delivered', tone: 'ok' },
+  cancelled: { label: 'Cancelled', tone: 'bad' },
+  untracked: { label: 'Untracked', tone: 'muted' },
+}
+
 export const STATIONS = ['grill', 'saute', 'pantry', 'dessert', 'expo']
 
 export const STATION_META = {

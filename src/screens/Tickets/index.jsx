@@ -13,9 +13,11 @@ function TicketsScreen() {
   const [tab, setTab] = useState('active')
   const [tableFilter, setTableFilter] = useState('')
   const [serverFilter, setServerFilter] = useState('')
+  const [typeFilter, setTypeFilter] = useState('')
   const [selectedId, setSelectedId] = useState(tabCtx.ticketOrder || null)
   const [newOpen, setNewOpen] = useState(false)
   const [pendingTable, setPendingTable] = useState(null)
+  const [pendingOrderId, setPendingOrderId] = useState(null)
   const [banner, setBanner] = useState(null)
 
   function flash(msg) {
@@ -66,6 +68,16 @@ function TicketsScreen() {
       setPendingTable(null)
     }
   }, [state.orders, pendingTable, selectOrder])
+
+  useEffect(() => {
+    if (!pendingOrderId) return
+    const created = state.orders.find((order) => order.id === pendingOrderId)
+    if (created) {
+      selectOrder(created.id)
+      setTab(TABS.find((item) => item.match(created.status))?.id || 'active')
+      setPendingOrderId(null)
+    }
+  }, [state.orders, pendingOrderId, selectOrder])
 
   // Keep selection valid as tickets pay/void
   useEffect(() => {
@@ -120,6 +132,8 @@ function TicketsScreen() {
           setTableFilter={setTableFilter}
           serverFilter={serverFilter}
           setServerFilter={setServerFilter}
+          typeFilter={typeFilter}
+          setTypeFilter={setTypeFilter}
           selectedId={selectedId}
           onSelect={selectOrder}
           onNew={() => setNewOpen(true)}
@@ -132,10 +146,10 @@ function TicketsScreen() {
       {newOpen && (
         <NewCheckModal
           onClose={() => setNewOpen(false)}
-          onCreated={(tableId) => {
+          onCreated={(orderId) => {
             setNewOpen(false)
-            setTableFilter('')
-            setPendingTable(tableId)
+            setTypeFilter('')
+            setPendingOrderId(orderId)
           }}
         />
       )}

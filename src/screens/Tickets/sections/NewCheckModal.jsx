@@ -56,6 +56,7 @@ function NewCheckModal({ onClose, onCreated }) {
           {ORDER_TYPES.map((t) => (
             <button
               key={t.id}
+              data-testid={`order-type-${t.id}`}
               type="button"
               onClick={() => { setOrderType(t.id); setError('') }}
               aria-pressed={orderType === t.id}

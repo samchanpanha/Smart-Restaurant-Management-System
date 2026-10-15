@@ -142,6 +142,40 @@ export function salesSummary(shop, bounds) {
   }
 }
 
+export function deliverySummary(shop, bounds) {
+  const completed = (shop.orders || []).filter((order) => (
+    order.type === 'delivery'
+    && order.deliveryStatus === 'delivered'
+    && inRange(order.deliveredAt, bounds)
+  ))
+  const cancelled = (shop.orders || []).filter((order) => (
+    order.type === 'delivery'
+    && order.deliveryStatus === 'cancelled'
+    && inRange(order.deliveryStatusAt, bounds)
+  ))
+  const withEta = completed.filter((order) => order.eta && Number.isFinite(new Date(order.eta).getTime()))
+  const onTime = withEta.filter((order) => new Date(order.deliveredAt).getTime() <= new Date(order.eta).getTime())
+  const minutesBetween = (later, earlier) => {
+    const end = new Date(later).getTime()
+    const start = new Date(earlier).getTime()
+    return Number.isFinite(end) && Number.isFinite(start) && end >= start ? (end - start) / 60000 : null
+  }
+  const average = (values) => {
+    const measured = values.filter((value) => value != null)
+    return measured.length ? measured.reduce((sum, value) => sum + value, 0) / measured.length : null
+  }
+
+  return {
+    completed: completed.length,
+    cancelled: cancelled.length,
+    withEta: withEta.length,
+    onTime: onTime.length,
+    onTimeRate: withEta.length ? onTime.length / withEta.length : null,
+    avgDeliveryMinutes: average(completed.map((order) => minutesBetween(order.deliveredAt, order.outForDeliveryAt))),
+    avgReadyToHandoffMinutes: average(completed.map((order) => minutesBetween(order.outForDeliveryAt, order.readyAt))),
+  }
+}
+
 // ─── Purchases ──────────────────────────────────────────────────────
 
 /**
@@ -493,12 +527,13 @@ export function itemRankings(shop, bounds, limit = 5) {
 export function buildReports(shop, range = 'tonight', now = Date.now()) {
   const bounds = rangeBounds(range, now)
   const sales = salesSummary(shop, bounds)
+  const delivery = deliverySummary(shop, bounds)
   const purchases = purchaseSummary(shop, bounds)
   const movements = movementSummary(shop, bounds)
   const pnl = profitAndLoss(shop, bounds)
   const rankings = itemRankings(shop, bounds)
   const flow = stockFlow(shop, bounds)
-  return { bounds, sales, purchases, movements, pnl, rankings, flow }
+  return { bounds, sales, delivery, purchases, movements, pnl, rankings, flow }
 }
 
 export { money }
