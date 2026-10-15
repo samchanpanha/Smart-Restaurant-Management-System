@@ -2,41 +2,70 @@
 // The people who can sign in to this restaurant. An owner creates staff,
 // gives each one a role, and can disable or remove them.
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Icon } from '../components/Icon'
 import { useAuth } from '../lib/auth'
 import { useI18n } from '../lib/i18n'
+import { apiFetch } from '../lib/api'
+
+// A 401 means the session is gone (expired, revoked, or the browser stopped
+// sending the cookie). Say so plainly and offer the way back in instead of
+// leaving a dead-end error on the screen.
+function describeFailure(status, message, us = {}) {
+  if (status === 401) {
+    return { message: us.sessionEnded || 'Your session ended — sign in again to keep managing this restaurant.', reauth: true }
+  }
+  if (status === 403) return { message: message || us.cannotManage || 'Your role cannot manage users.', reauth: false }
+  return { message: message || us.requestFailed || 'Request failed', reauth: false }
+}
 
 const cardCls = 'rounded-2xl border border-zinc-200/80 bg-white shadow-sm'
 const input = 'min-h-10 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 outline-none transition focus:border-orange-300 focus:ring-2 focus:ring-orange-100'
 const btnPrimary = 'min-h-10 rounded-xl bg-orange-500 px-4 text-sm font-bold text-white hover:bg-orange-600 disabled:opacity-50'
 
 async function getJson(route) {
-  const res = await fetch(route)
-  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Request failed')
-  return res.json()
+  const res = await apiFetch(route)
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    const failure = new Error(json.error || 'Request failed')
+    failure.status = res.status
+    throw failure
+  }
+  return json
 }
 
 async function send(method, route, body) {
-  const res = await fetch(route, {
+  const res = await apiFetch(route, {
     method,
     headers: body ? { 'Content-Type': 'application/json' } : undefined,
     body: body ? JSON.stringify(body) : undefined,
   })
-  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Request failed')
-  return res.json().catch(() => ({}))
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    const failure = new Error(json.error || 'Request failed')
+    failure.status = res.status
+    throw failure
+  }
+  return json
 }
 
 export default function UsersScreen() {
-  const { user: me } = useAuth()
+  const { user: me, refresh } = useAuth()
   const { lang, dict } = useI18n()
-  const us = dict.users || {}
+  const us = useMemo(() => dict.users || {}, [dict])
   const [users, setUsers] = useState([])
   const [roles, setRoles] = useState([])
   const [error, setError] = useState('')
+  const [needsSignIn, setNeedsSignIn] = useState(false)
   const [ready, setReady] = useState(false)
   const [draft, setDraft] = useState({ name: '', email: '', password: '', roleId: '' })
   const [busy, setBusy] = useState(false)
+
+  const fail = useCallback((failure) => {
+    const described = describeFailure(failure?.status, failure?.message, us)
+    setError(described.message)
+    setNeedsSignIn(Boolean(described.reauth))
+  }, [us])
 
   const load = useCallback(async () => {
     try {
@@ -44,12 +73,13 @@ export default function UsersScreen() {
       setUsers(userList.users || [])
       setRoles(roleList.roles || [])
       setError('')
+      setNeedsSignIn(false)
     } catch (failure) {
-      setError(failure.message)
+      fail(failure)
     } finally {
       setReady(true)
     }
-  }, [])
+  }, [fail])
 
   useEffect(() => { load() }, [load])
 
@@ -61,20 +91,24 @@ export default function UsersScreen() {
       setDraft({ name: '', email: '', password: '', roleId: '' })
       await load()
     } catch (failure) {
-      setError(failure.message)
+      fail(failure)
     } finally {
       setBusy(false)
     }
   }
 
   async function patch(id, body) {
-    try { await send('PATCH', `/api/users/${id}`, body); await load() } catch (failure) { setError(failure.message) }
+    try { await send('PATCH', `/api/users/${id}`, body); await load() } catch (failure) { fail(failure) }
   }
 
   async function remove(id) {
     if (typeof window !== 'undefined' && !window.confirm('Remove this user?')) return
-    try { await send('DELETE', `/api/users/${id}`); await load() } catch (failure) { setError(failure.message) }
+    try { await send('DELETE', `/api/users/${id}`); await load() } catch (failure) { fail(failure) }
   }
+
+  // A platform host owner sees every restaurant's staff in one list, so each
+  // row says where it belongs; a single-restaurant list stays quiet.
+  const restaurants = [...new Set(users.map((entry) => entry.ownerName).filter(Boolean))]
 
   return (
     <div className="mx-auto max-w-5xl space-y-5">
@@ -89,7 +123,27 @@ export default function UsersScreen() {
         </p>
       </header>
 
-      {error && <p role="alert" className="rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700 ring-1 ring-inset ring-red-200">{error}</p>}
+      {error && (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700 ring-1 ring-inset ring-red-200">
+          <span>{error}</span>
+          {needsSignIn && (
+            <button
+              type="button"
+              data-testid="users-signin-again"
+              onClick={async () => {
+                // Re-establish the session, then repaint the roster. If the
+                // session is really gone this lands on the sign-in screen.
+                setReady(false)
+                await refresh()
+                load()
+              }}
+              className="min-h-9 shrink-0 rounded-lg bg-red-600 px-3 text-xs font-bold text-white hover:bg-red-700"
+            >
+              {us.signInAgain || 'Sign in again'}
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="grid gap-5 lg:grid-cols-[1.6fr_1fr]">
         <section className={`${cardCls} overflow-hidden`}>
@@ -112,7 +166,10 @@ export default function UsersScreen() {
                       {entry.name}
                       {entry.id === me?.id && <span className="ml-2 text-2xs font-medium text-zinc-400">you</span>}
                     </span>
-                    <span className="block truncate text-xs text-zinc-500">{entry.email}</span>
+                    <span className="block truncate text-xs text-zinc-500">
+                      {entry.email}
+                      {restaurants.length > 1 && entry.ownerName ? ` · ${entry.ownerName}` : ''}
+                    </span>
                   </span>
                   <span className="text-xs font-medium text-zinc-600">{entry.role?.label || entry.roleId}</span>
                   <span className={`rounded-full px-2 py-0.5 text-2xs font-semibold ${entry.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>

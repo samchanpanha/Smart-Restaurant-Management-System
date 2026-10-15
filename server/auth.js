@@ -179,11 +179,54 @@ function parseCookies(header = '') {
   return out
 }
 
-function cookieHeader(token, maxAgeSeconds) {
-  const bits = [`${SESSION_COOKIE}=${encodeURIComponent(token)}`, 'Path=/', 'HttpOnly', 'SameSite=Lax']
+/**
+ * Is this request HTTPS? Behind a proxy (the dev server, a reverse proxy,
+ * Railway/Fly) `req.secure` is false unless trust proxy is on, so the
+ * forwarded proto is what actually tells the truth.
+ */
+function isSecureRequest(req) {
+  if (req.secure) return true
+  const proto = String(req.headers?.['x-forwarded-proto'] || '').split(',')[0].trim().toLowerCase()
+  return proto === 'https'
+}
+
+/**
+ * The session cookie. Over HTTPS it is `SameSite=None; Secure; Partitioned`
+ * so the workspace also works when it is embedded in an iframe (a terminal
+ * dashboard inside another app): a browser treats a subresource request from
+ * a cross-site frame as cross-site, so a Lax cookie is simply never sent —
+ * which used to surface as "sign in required" on Users/Roles while the
+ * workspace itself still loaded. Over plain HTTP (an offline restaurant LAN)
+ * `Secure` is impossible, so those keep Lax and rely on the bearer token.
+ */
+function cookieHeader(token, maxAgeSeconds, { secure = false } = {}) {
+  const bits = [`${SESSION_COOKIE}=${encodeURIComponent(token)}`, 'Path=/', 'HttpOnly']
+  if (secure) {
+    bits.push('SameSite=None', 'Secure', 'Partitioned')
+  } else {
+    bits.push('SameSite=Lax')
+  }
   if (typeof maxAgeSeconds === 'number') bits.push(`Max-Age=${maxAgeSeconds}`)
-  if (process.env.RESTORA_SECURE_COOKIES === '1') bits.push('Secure')
+  if (process.env.RESTORA_SECURE_COOKIES === '1' && !bits.includes('Secure')) bits.push('Secure')
   return bits.join('; ')
+}
+
+/**
+ * The session token for a request: the cookie when the browser sent one, and
+ * otherwise the same token as a bearer header. The header path is what keeps
+ * a signed-in terminal working where cookies are unavailable or blocked —
+ * `EventSource` cannot set headers, so the SSE route takes `?token=` too.
+ */
+function sessionTokenFrom(req) {
+  const cookies = parseCookies(req.headers?.cookie)
+  if (cookies[SESSION_COOKIE]) return cookies[SESSION_COOKIE]
+  const header = String(req.headers?.authorization || '')
+  const bearer = /^Bearer\s+(.+)$/i.exec(header)
+  if (bearer && bearer[1].trim()) return bearer[1].trim()
+  const alt = req.headers?.['x-restora-session']
+  if (typeof alt === 'string' && alt.trim()) return alt.trim()
+  const query = typeof req.query?.token === 'string' ? req.query.token.trim() : ''
+  return query
 }
 
 // ─── Prepared statements ─────────────────────────────────────────
@@ -209,6 +252,7 @@ const q = {
 
   userById: db.prepare('SELECT * FROM auth_users WHERE id = ?'),
   userByEmail: db.prepare('SELECT * FROM auth_users WHERE email = ? COLLATE NOCASE'),
+  superAdminCount: db.prepare('SELECT COUNT(*) AS n FROM auth_users WHERE is_super_admin = 1'),
   insertUser: db.prepare(`INSERT INTO auth_users
     (id, owner_id, email, name, password_hash, role_id, is_super_admin, status, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
@@ -256,6 +300,7 @@ function userView(row) {
   return {
     id: row.id,
     ownerId: row.owner_id,
+    ownerName: row.owner_id ? (q.ownerById.get(row.owner_id)?.name || '') : '',
     email: row.email,
     name: row.name,
     roleId: row.role_id,
@@ -394,8 +439,7 @@ export function seedDemoTenant(options = {}) {
 // ─── Router ──────────────────────────────────────────────────────
 
 function readSession(req) {
-  const cookies = parseCookies(req.headers.cookie)
-  const token = cookies[SESSION_COOKIE]
+  const token = sessionTokenFrom(req)
   if (!token) return null
   const session = q.sessionByToken.get(token)
   if (!session) return null
@@ -456,13 +500,36 @@ function uniqueSlug(base) {
   return slug
 }
 
-function createOwnerWithOwnerUser({ ownerName, name, email, password }) {
+/**
+ * `createOwnerWithOwnerUser` registers a restaurant plus its first account.
+ *
+ * `privileged` promotes that account to the platform's host owner (a super
+ * admin, i.e. every screen including the tenant console). Callers pass it
+ * only for the bootstrap case below.
+ */
+function createOwnerWithOwnerUser({ ownerName, name, email, password, privileged = false }) {
   const ownerId = uid('owner')
   const created = nowIso()
   q.insertOwner.run(ownerId, ownerName, uniqueSlug(ownerName), 'active', created)
   const userId = uid('user')
-  q.insertUser.run(userId, ownerId, email, name, hashPassword(password), ROLE_BY_KEY.owner.id, 0, 'active', created, created)
-  return { ownerId, userId }
+  const role = privileged ? ROLE_BY_KEY.super : ROLE_BY_KEY.owner
+  q.insertUser.run(userId, ownerId, email, name, hashPassword(password), role.id, privileged ? 1 : 0, 'active', created, created)
+  return { ownerId, userId, privileged }
+}
+
+/**
+ * Should the platform's *first* registration also host the owner?
+ *
+ * A fresh install has no way to reach the tenant console without setting
+ * SUPERADMIN_EMAIL/SUPERADMIN_PASSWORD, so the first account to register
+ * becomes the host owner (super admin, all screens) and still owns the
+ * restaurant it just created. Once a host owner exists — or when
+ * RESTORA_BOOTSTRAP_HOST_OWNER=0 — registrations are ordinary tenant owners
+ * again, so a public sign-up page can never hand out the console.
+ */
+export function shouldBootstrapHostOwner(env = process.env) {
+  if (String(env.RESTORA_BOOTSTRAP_HOST_OWNER ?? '1') === '0') return false
+  return q.superAdminCount.get().n === 0
 }
 
 export function createAuthRouter() {
@@ -502,12 +569,23 @@ export function createAuthRouter() {
     if (pass.length < MIN_PASSWORD) return badRequest(res, `password must be at least ${MIN_PASSWORD} characters`)
     if (q.userByEmail.get(cleanEmail)) return res.status(409).json({ error: 'that email is already registered' })
 
+    const privileged = shouldBootstrapHostOwner()
     const { ownerId, userId } = createOwnerWithOwnerUser({
-      ownerName: cleanOwner, name: cleanName, email: cleanEmail, password: pass,
+      ownerName: cleanOwner, name: cleanName, email: cleanEmail, password: pass, privileged,
     })
+    if (privileged) {
+      console.log(`[restora] ${cleanEmail} is the host owner (first account, all screens). `
+        + 'Set SUPERADMIN_EMAIL/SUPERADMIN_PASSWORD, or RESTORA_BOOTSTRAP_HOST_OWNER=0 to change this.')
+    }
     const session = startSession(userId)
-    res.setHeader('Set-Cookie', cookieHeader(session.token, session.maxAge))
-    return res.status(201).json({ user: publicUser(q.userById.get(userId), q.ownerById.get(ownerId)) })
+    res.setHeader('Set-Cookie', cookieHeader(session.token, session.maxAge, { secure: isSecureRequest(req) }))
+    return res.status(201).json({
+      // The token travels in the body as well as the cookie: a browser that
+      // cannot store or send the cookie (embedded frame, third-party cookie
+      // blocking) keeps this one and sends it as `Authorization: Bearer`.
+      token: session.token,
+      user: publicUser(q.userById.get(userId), q.ownerById.get(ownerId)),
+    })
   })
 
   routerApp.post('/api/auth/login', (req, res) => {
@@ -520,14 +598,19 @@ export function createAuthRouter() {
     }
     if (user.status !== 'active') return res.status(403).json({ error: 'this account is disabled' })
     const session = startSession(user.id)
-    res.setHeader('Set-Cookie', cookieHeader(session.token, session.maxAge))
-    return res.json({ user: publicUser(user, user.owner_id ? q.ownerById.get(user.owner_id) : null) })
+    res.setHeader('Set-Cookie', cookieHeader(session.token, session.maxAge, { secure: isSecureRequest(req) }))
+    return res.json({
+      token: session.token,
+      user: publicUser(user, user.owner_id ? q.ownerById.get(user.owner_id) : null),
+    })
   })
 
   routerApp.post('/api/auth/logout', (req, res) => {
-    const cookies = parseCookies(req.headers.cookie)
-    if (cookies[SESSION_COOKIE]) q.deleteSession.run(cookies[SESSION_COOKIE])
-    res.setHeader('Set-Cookie', cookieHeader('', 0))
+    // Drop the row behind the cookie *or* the bearer token, so signing out of
+    // an embedded terminal revokes the token it was given at sign-in.
+    const token = sessionTokenFrom(req)
+    if (token) q.deleteSession.run(token)
+    res.setHeader('Set-Cookie', cookieHeader('', 0, { secure: isSecureRequest(req) }))
     return res.json({ ok: true })
   })
 
@@ -540,14 +623,29 @@ export function createAuthRouter() {
 
   // ── Owner resolution ───────────────────────────────────────────
 
+  // The owner a super admin explicitly named, if any.
+  function namedOwnerId(req) {
+    if (!req.auth.user.is_super_admin) return ''
+    const raw = req.query.ownerId ?? req.body?.ownerId
+    return typeof raw === 'string' ? raw.trim() : ''
+  }
+
   // Which owner's records a request may touch. Super admin may name any
   // owner (or none, to mean "all owners"); everyone else is pinned.
   function targetOwnerId(req) {
-    if (req.auth.user.is_super_admin) {
-      const named = req.query.ownerId || req.body?.ownerId
-      return named ? String(named) : null
-    }
+    if (req.auth.user.is_super_admin) return namedOwnerId(req) || null
     return req.auth.user.owner_id
+  }
+
+  // Naming a restaurant that does not exist is a 404 everywhere, never an
+  // empty list — an unknown id is a mistake, not a second tenant.
+  function rejectUnknownOwner(req, res) {
+    const named = namedOwnerId(req)
+    if (named && !ownerExists(named)) {
+      res.status(404).json({ error: 'unknown restaurant' })
+      return true
+    }
+    return false
   }
 
   function ownerExists(ownerId) {
@@ -560,6 +658,25 @@ export function createAuthRouter() {
     if (!role) return null
     if (role.is_system) return role
     return role.owner_id === ownerId ? role : null
+  }
+
+  function isOwnerRow(user) {
+    return q.roleById.get(user.role_id)?.key === 'owner'
+  }
+
+  function ownerCountFor(ownerId, role) {
+    return (ownerId ? q.ownerUsers.all(ownerId) : q.allUsers.all())
+      .filter((user) => user.role_id === role.id && user.status === 'active').length
+  }
+
+  // A restaurant must always keep one account that can manage everything, and
+  // only an owner (or the platform) may touch another owner's account — a
+  // manager demoting the owner would otherwise lock the restaurant out of its
+  // own Users/Roles screens.
+  function canTouchOwnerAccount(actor, target) {
+    if (actor.is_super_admin || actor.id === target.id) return true
+    const held = roleView(q.roleById.get(actor.role_id))?.screens || []
+    return held.includes('*') || q.roleById.get(actor.role_id)?.key === 'owner'
   }
 
   // Nobody below the super admin may hand out a role broader than their own,
@@ -576,6 +693,7 @@ export function createAuthRouter() {
   // ── Roles ──────────────────────────────────────────────────────
 
   routerApp.get('/api/roles', requireAuth, can('roles'), (req, res) => {
+    if (rejectUnknownOwner(req, res)) return
     const ownerId = targetOwnerId(req)
     const system = q.systemRoles.all().map(roleView)
     if (req.auth.user.is_super_admin && !ownerId) return res.json({ roles: system })
@@ -629,6 +747,7 @@ export function createAuthRouter() {
   // ── Users ──────────────────────────────────────────────────────
 
   routerApp.get('/api/users', requireAuth, can('users'), (req, res) => {
+    if (rejectUnknownOwner(req, res)) return
     const ownerId = targetOwnerId(req)
     const rows = ownerId ? q.ownerUsers.all(ownerId) : q.allUsers.all()
     return res.json({ users: rows.map(userView) })
@@ -664,6 +783,11 @@ export function createAuthRouter() {
     if (!req.auth.user.is_super_admin && user.owner_id !== ownerId) {
       return res.status(403).json({ error: 'not your user' })
     }
+    // Staff can be managed by whoever holds the Users screen; an *owner*
+    // account is the exception — only an owner (or the platform) may touch it.
+    if (isOwnerRow(user) && !canTouchOwnerAccount(req.auth.user, user)) {
+      return res.status(403).json({ error: 'only an owner can change another owner\u2019s account' })
+    }
     const name = req.body?.name !== undefined ? String(req.body.name).trim() : user.name
     if (!name) return badRequest(res, 'name cannot be empty')
     let roleId = user.role_id
@@ -679,6 +803,13 @@ export function createAuthRouter() {
     const status = req.body?.status !== undefined ? String(req.body.status) : user.status
     if (!['active', 'disabled'].includes(status)) return badRequest(res, 'status must be active or disabled')
     if (user.id === req.auth.user.id && status === 'disabled') return badRequest(res, 'you cannot disable yourself')
+
+    // Never demote or disable the last owner who can still sign in.
+    const ownerRole = q.roleById.get(ROLE_BY_KEY.owner.id)
+    const losingOwnership = isOwnerRow(user) && (roleId !== user.role_id || status === 'disabled')
+    if (losingOwnership && ownerCountFor(user.owner_id, ownerRole) <= 1) {
+      return badRequest(res, 'a restaurant must keep one active owner')
+    }
     q.updateUser.run(name, roleId, status, nowIso(), user.id)
     if (req.body?.password) {
       const pass = String(req.body.password)
@@ -700,9 +831,8 @@ export function createAuthRouter() {
     // Keep at least one owner user per tenant.
     if (user.owner_id) {
       const role = q.roleById.get(user.role_id)
-      if (role && role.key === 'owner') {
-        const owners = q.ownerUsers.all(user.owner_id).filter((u) => u.role_id === role.id)
-        if (owners.length <= 1) return badRequest(res, 'a restaurant must keep at least one owner')
+      if (role && role.key === 'owner' && ownerCountFor(user.owner_id, role) <= 1) {
+        return badRequest(res, 'a restaurant must keep at least one owner')
       }
     }
     q.deleteUser.run(user.id)

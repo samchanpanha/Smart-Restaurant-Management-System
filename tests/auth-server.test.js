@@ -36,18 +36,20 @@ after(async () => {
   fs.rmSync(dataDir, { recursive: true, force: true })
 })
 
-async function api(method, route, { body, cookie } = {}) {
+async function api(method, route, { body, cookie, token, proto } = {}) {
   const res = await fetch(base + route, {
     method,
     headers: {
       ...(body ? { 'Content-Type': 'application/json' } : {}),
       ...(cookie ? { Cookie: cookie } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(proto ? { 'X-Forwarded-Proto': proto } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,
   })
   const setCookie = res.headers.get('set-cookie')
   const data = await res.json().catch(() => ({}))
-  return { status: res.status, data, cookie: setCookie ? setCookie.split(';')[0] : null }
+  return { status: res.status, data, cookie: setCookie ? setCookie.split(';')[0] : null, setCookie }
 }
 
 test('the super admin is seeded from the environment', async () => {
@@ -213,4 +215,236 @@ test('the screen vocabulary is the single source roles draw from', () => {
   assert.ok(ALL_SCREENS.includes('owners'))
   assert.ok(ALL_SCREENS.includes('users'))
   assert.ok(ALL_SCREENS.includes('roles'))
+})
+
+// ─── Sessions over a bearer token, not just a cookie ────────────────
+// The workspace can run where the session cookie is not sent back: embedded
+// in an iframe (a subresource request from a cross-site frame is cross-site,
+// so SameSite=Lax cookies are dropped), a browser with third-party cookies
+// blocked, or a deployment forcing Secure cookies over http. Those terminals
+// reported "sign in required" on Users/Roles while the workspace itself still
+// loaded. The token that comes back from sign-in is the answer.
+
+test('sign-in hands out a token that works without any cookie', async () => {
+  const login = await api('POST', '/api/auth/login', {
+    body: { email: 'nora@harbor.test', password: 'hunter2-long' },
+  })
+  assert.equal(login.status, 200)
+  assert.equal(typeof login.data.token, 'string')
+  assert.ok(login.data.token.length >= 32, 'a real session token, not a placeholder')
+
+  // Exactly what an embedded terminal does: no Cookie header at all.
+  const me = await api('GET', '/api/auth/me', { token: login.data.token })
+  assert.equal(me.data.user.email, 'nora@harbor.test')
+
+  const users = await api('GET', '/api/users', { token: login.data.token })
+  assert.equal(users.status, 200, 'the Users screen works without a cookie')
+  assert.ok(users.data.users.some((entry) => entry.email === 'nora@harbor.test'), 'the owner is listed')
+  assert.ok(users.data.users.every((entry) => entry.ownerId === me.data.user.owner.id), 'scoped to one restaurant')
+
+  const roles = await api('GET', '/api/roles', { token: login.data.token })
+  assert.equal(roles.status, 200)
+
+  // Registration signs a browser in the same way.
+  const fresh = await api('POST', '/api/auth/register', {
+    body: { ownerName: 'Token Cafe', name: 'Tina Token', email: 'tina@token.test', password: 'token-pass-1' },
+  })
+  assert.equal(fresh.status, 201)
+  const freshUsers = await api('GET', '/api/users', { token: fresh.data.token })
+  assert.equal(freshUsers.status, 200)
+  assert.equal(freshUsers.data.users[0].email, 'tina@token.test')
+})
+
+test('a bad token is refused and logout revokes a token session', async () => {
+  const denied = await api('GET', '/api/users', { token: 'not-a-real-token' })
+  assert.equal(denied.status, 401)
+  assert.equal(denied.data.error, 'sign in required')
+
+  const login = await api('POST', '/api/auth/login', {
+    body: { email: 'nora@harbor.test', password: 'hunter2-long' },
+  })
+  const token = login.data.token
+  assert.equal((await api('GET', '/api/users', { token })).status, 200)
+
+  const out = await api('POST', '/api/auth/logout', { token })
+  assert.equal(out.status, 200)
+  assert.equal((await api('GET', '/api/users', { token })).status, 401, 'the revoked token is dead')
+})
+
+test('the session cookie fits the transport it arrived on', async () => {
+  // Plain HTTP (an offline restaurant LAN): Secure is impossible, so Lax.
+  const plain = await api('POST', '/api/auth/login', {
+    body: { email: 'nora@harbor.test', password: 'hunter2-long' },
+  })
+  assert.match(plain.setCookie, /HttpOnly/)
+  assert.match(plain.setCookie, /SameSite=Lax/)
+  assert.ok(!/Secure/.test(plain.setCookie))
+
+  // HTTPS behind a proxy: None + Secure + Partitioned, which is what an
+  // embedded frame needs to be allowed to store the cookie at all.
+  const secure = await api('POST', '/api/auth/login', {
+    proto: 'https',
+    body: { email: 'nora@harbor.test', password: 'hunter2-long' },
+  })
+  assert.match(secure.setCookie, /SameSite=None/)
+  assert.match(secure.setCookie, /Secure/)
+  assert.match(secure.setCookie, /Partitioned/)
+
+  // And the cookie still authenticates on its own.
+  const me = await api('GET', '/api/auth/me', { cookie: secure.cookie })
+  assert.equal(me.data.user.email, 'nora@harbor.test')
+})
+
+test('a token session resolves to the same tenant as the cookie session', async () => {
+  // /api/state is not auth-gated, so a terminal whose cookie went missing used
+  // to read the *default* tenant silently (see tests/tenant-isolation.test.js
+  // for the tenant-scoped half). What matters here: the bearer path identifies
+  // the same restaurant the cookie path does, so the workspace cannot drift to
+  // somebody else's shop just because the cookie was dropped.
+  const owner = await api('POST', '/api/auth/login', {
+    body: { email: 'nora@harbor.test', password: 'hunter2-long' },
+  })
+  const viaCookie = await api('GET', '/api/auth/me', { cookie: owner.cookie })
+  const viaToken = await api('GET', '/api/auth/me', { token: owner.data.token })
+  assert.equal(viaToken.data.user.owner.id, viaCookie.data.user.owner.id)
+  assert.equal(viaToken.data.user.id, viaCookie.data.user.id)
+  assert.equal(viaToken.data.user.role.key, 'owner')
+  assert.ok(viaToken.data.user.screens.includes('users'), 'the owner keeps every owner screen')
+})
+
+// ─── Owner accounts are protected ───────────────────────────────────
+// The Users screen is where roles get handed out, so it is also where a
+// restaurant can be locked out of itself: a manager demoting the owner, or the
+// last owner being disabled, would leave nobody able to reopen Users/Roles.
+
+test('a manager cannot touch the owner account or leave the shop ownerless', async () => {
+  const owner = await api('POST', '/api/auth/login', {
+    body: { email: 'nora@harbor.test', password: 'hunter2-long' },
+  })
+  const me = await api('GET', '/api/auth/me', { cookie: owner.cookie })
+  const ownerUserId = me.data.user.id
+
+  // A fresh manager account, made by the owner.
+  const manager = await api('POST', '/api/users', {
+    cookie: owner.cookie,
+    body: { name: 'Mia Manager', email: 'mia@harbor.test', password: 'mia-pass-123', roleId: 'sys_manager' },
+  })
+  assert.equal(manager.status, 201)
+  const asManager = await api('POST', '/api/auth/login', {
+    body: { email: 'mia@harbor.test', password: 'mia-pass-123' },
+  })
+
+  // The manager may edit staff…
+  const staff = await api('POST', '/api/users', {
+    cookie: owner.cookie,
+    body: { name: 'Sam Two', email: 'sam2@harbor.test', password: 'sam2-pass-123', roleId: 'sys_server' },
+  })
+  const renamed = await api('PATCH', `/api/users/${staff.data.user.id}`, {
+    cookie: asManager.cookie,
+    body: { name: 'Sam Renamed' },
+  })
+  assert.equal(renamed.status, 200)
+
+  // …but not the owner, and not to a broader role either.
+  const demote = await api('PATCH', `/api/users/${ownerUserId}`, {
+    cookie: asManager.cookie,
+    body: { roleId: 'sys_server' },
+  })
+  assert.equal(demote.status, 403)
+
+  const disable = await api('PATCH', `/api/users/${ownerUserId}`, {
+    cookie: asManager.cookie,
+    body: { status: 'disabled' },
+  })
+  assert.equal(disable.status, 403)
+
+  const selfPromote = await api('PATCH', `/api/users/${manager.data.user.id}`, {
+    cookie: asManager.cookie,
+    body: { roleId: 'sys_owner' },
+  })
+  assert.equal(selfPromote.status, 403)
+})
+
+test('the last owner cannot be demoted, disabled, or deleted', async () => {
+  const owner = await api('POST', '/api/auth/login', {
+    body: { email: 'nora@harbor.test', password: 'hunter2-long' },
+  })
+  const me = await api('GET', '/api/auth/me', { cookie: owner.cookie })
+  const ownerId = me.data.user.id
+
+  const demote = await api('PATCH', `/api/users/${ownerId}`, {
+    cookie: owner.cookie,
+    body: { roleId: 'sys_manager' },
+  })
+  assert.equal(demote.status, 400)
+  assert.match(demote.data.error, /keep one active owner/)
+
+  const disable = await api('PATCH', `/api/users/${ownerId}`, {
+    cookie: owner.cookie,
+    body: { status: 'disabled' },
+  })
+  assert.equal(disable.status, 400)
+
+  const remove = await api('DELETE', `/api/users/${ownerId}`, { cookie: owner.cookie })
+  assert.equal(remove.status, 400, 'you cannot delete yourself')
+
+  // Hand ownership to a second person: now one of them may step down.
+  const second = await api('POST', '/api/users', {
+    cookie: owner.cookie,
+    body: { name: 'Ora Owner', email: 'ora@harbor.test', password: 'ora-pass-123', roleId: 'sys_owner' },
+  })
+  assert.equal(second.status, 201)
+  assert.equal(second.data.user.role.key, 'owner')
+
+  const asSecond = await api('POST', '/api/auth/login', {
+    body: { email: 'ora@harbor.test', password: 'ora-pass-123' },
+  })
+  const stepDown = await api('PATCH', `/api/users/${ownerId}`, {
+    cookie: asSecond.cookie,
+    body: { status: 'disabled' },
+  })
+  assert.equal(stepDown.status, 200)
+
+  // With one active owner left, that owner can no longer hand in the shop.
+  const lastOne = await api('PATCH', `/api/users/${second.data.user.id}`, {
+    cookie: asSecond.cookie,
+    body: { roleId: 'sys_manager' },
+  })
+  assert.equal(lastOne.status, 400)
+
+  // Restore the shop for the tests that follow.
+  const restored = await api('PATCH', `/api/users/${ownerId}`, {
+    cookie: asSecond.cookie,
+    body: { status: 'active' },
+  })
+  assert.equal(restored.status, 200)
+})
+
+test('each user row reports the restaurant it belongs to', async () => {
+  const owner = await api('POST', '/api/auth/login', {
+    body: { email: 'nora@harbor.test', password: 'hunter2-long' },
+  })
+  const list = await api('GET', '/api/users', { cookie: owner.cookie })
+  assert.equal(list.status, 200)
+  assert.ok(list.data.users.length >= 1)
+  assert.ok(list.data.users.every((user) => user.ownerName === 'Harbor Bistro'), 'the list names the restaurant')
+})
+
+test('naming a restaurant that does not exist is a 404 on the user routes too', async () => {
+  const admin = await api('POST', '/api/auth/login', {
+    body: { email: 'root@restora.test', password: 'super-secret-1' },
+  })
+  const ghost = await api('GET', '/api/users?ownerId=owner_ghost', { cookie: admin.cookie })
+  assert.equal(ghost.status, 404)
+  assert.equal(ghost.data.error, 'unknown restaurant')
+
+  const ghostRoles = await api('GET', '/api/roles?ownerId=owner_ghost', { cookie: admin.cookie })
+  assert.equal(ghostRoles.status, 404)
+
+  // A real one still resolves — and without an id the platform view is intact.
+  const list = await api('GET', '/api/admin/owners', { cookie: admin.cookie })
+  const real = list.data.owners[0]
+  const scoped = await api('GET', `/api/users?ownerId=${real.id}`, { cookie: admin.cookie })
+  assert.equal(scoped.status, 200)
+  assert.ok(scoped.data.users.every((user) => user.ownerId === real.id))
 })

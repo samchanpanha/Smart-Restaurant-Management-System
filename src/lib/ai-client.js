@@ -6,6 +6,8 @@
 // a short window — the same context produces the same answer, and model
 // calls cost money. Chat is never cached.
 
+import { apiFetch } from './api'
+
 const INSIGHT_TTL_MS = 60_000
 const insightCache = new Map()
 
@@ -26,7 +28,7 @@ function withOwner(path, params = {}) {
 }
 
 async function post(path, body, fetchImpl) {
-  const f = fetchImpl || globalThis.fetch
+  const f = fetchImpl || apiFetch
   if (typeof f !== 'function') return { ok: false, error: 'fetch unavailable' }
   try {
     const res = await f(path, {
@@ -44,7 +46,7 @@ async function post(path, body, fetchImpl) {
 
 /** Is AI configured on this server? Never throws. */
 export async function aiStatus(fetchImpl) {
-  const f = fetchImpl || globalThis.fetch
+  const f = fetchImpl || apiFetch
   if (typeof f !== 'function') return { configured: false }
   try {
     const res = await f(withOwner('/api/ai/status'))
@@ -80,7 +82,7 @@ export function aiBriefing({ phase = 'open', lang = 'en', locId = null, deliver 
 // The key is write-only: GET never returns it, only `hasKey`/`keySource`.
 
 async function request(path, { method = 'GET', body, fetchImpl } = {}) {
-  const f = fetchImpl || globalThis.fetch
+  const f = fetchImpl || apiFetch
   if (typeof f !== 'function') return { ok: false, error: 'fetch unavailable' }
   try {
     const res = await f(withOwner(path), {

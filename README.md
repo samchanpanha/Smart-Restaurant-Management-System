@@ -30,7 +30,8 @@ With the API running, extra environment (all optional — nothing breaks without
 | `TELEGRAM_WEBHOOK_SECRET` | Shared secret Telegram must echo back on every update. |
 | `RESTORA_PUBLIC_URL` | Public origin used for guest / mini-app links in replies. |
 | `RESTORA_DATA` | Where `restora.sqlite` lives (default `server/data/`). |
-| `SUPERADMIN_EMAIL` / `SUPERADMIN_PASSWORD` / `SUPERADMIN_NAME` | Seed (or promote) the platform super admin on boot. |
+| `SUPERADMIN_EMAIL` / `SUPERADMIN_PASSWORD` / `SUPERADMIN_NAME` | Seed (or promote) the platform super admin on boot. Optional: the first account to register becomes the host owner (see below). |
+| `RESTORA_BOOTSTRAP_HOST_OWNER` | `0` makes registration always create a plain restaurant owner. Default: whenever the platform has no super admin yet, the first registration hosts the owner. |
 | `RESTORA_TENANT` | Slug (or id) of the owner the Telegram bot serves; defaults to the first owner, else the legacy `default` tenant. |
 | `RESTORA_SECURE_COOKIES` | Set to `1` behind HTTPS so session cookies are marked `Secure`. |
 | `AI_API_KEY` | Provider key (OpenAI, Anthropic, Gemini, DeepSeek, Qwen, Groq, OpenRouter, Mistral, Cerebras, GLM, Kimi, Grok, Together, Perplexity, Ollama, LM Studio). **Absent ⇒ AI is off everywhere** and the app behaves exactly as before. |
@@ -44,10 +45,32 @@ With the API running, extra environment (all optional — nothing breaks without
 One server hosts many restaurants. Signing in is required for the terminal
 workspace; the guest QR app and the Telegram mini app stay open.
 
-- **Register** creates a host owner (its own restaurant) plus the first owner
-  user; **sign in** sets an httpOnly `restora_session` cookie (7 days).
-- Users and Roles are scoped to their owner. A manager sees only their own
-  team, and nobody below a super admin can grant a role broader than their own.
+- **Register** creates a restaurant plus its first account and signs it in:
+  **sign in** sets an httpOnly `restora_session` cookie (7 days) *and* returns
+  the same session token in the response body. The browser keeps that token
+  (`restora-session-token`) and sends it as `Authorization: Bearer` on every
+  `/api` call, because the cookie is not always sent back — an embedded iframe,
+  a browser with third-party cookies blocked, or `RESTORA_SECURE_COOKIES=1`
+  over plain http all drop it, and the old result was a workspace that looked
+  signed in while **Users**, **Roles**, and AI settings answered *sign in
+  required*. The cookie stays the normal path (it is HttpOnly and `SameSite=Lax`
+  on http, `SameSite=None; Secure; Partitioned` over https so it also works in
+  a frame); the token is the fallback, cleared on sign-out, and the SSE stream
+  carries it as `?token=` since `EventSource` cannot set headers.
+- **The first account to register becomes the host owner** (a super admin:
+  every screen, including the Host owners console) and still owns the
+  restaurant it registered. Without that, a fresh install could never reach the
+  console unless `SUPERADMIN_EMAIL`/`SUPERADMIN_PASSWORD` were set by hand.
+  Every later registration is an ordinary restaurant owner, whose role already
+  covers every owner screen except the console; set
+  `RESTORA_BOOTSTRAP_HOST_OWNER=0` to make even the first one unprivileged.
+- Users and Roles are scoped to their owner, and every owner screen works the
+  moment a restaurant registers: the standard roles (owner, manager, server,
+  kitchen, host) are assignable with no seeding step. A manager sees only their
+  own team, nobody below a super admin can grant a role broader than their own,
+  and an **owner account** can only be changed by another owner (or the
+  platform) — with the last active owner guarded, so nobody can demote, disable,
+  or delete a restaurant's way out of its own admin screens.
 - A **super admin** (`SUPERADMIN_EMAIL` / `SUPERADMIN_PASSWORD`) gets a Host
   owners console to add, suspend, or delete restaurants.
 - Every state table, read model, action log, and SSE stream is partitioned by

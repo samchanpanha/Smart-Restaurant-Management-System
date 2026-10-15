@@ -8,6 +8,7 @@
 // staff terminals stay pinned (?loc= kiosk param or downtown).
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react'
+import { apiFetch, withSessionToken } from './api'
 import { ClockProvider } from './clock'
 import { ROLE_NAV, TARGETS } from './constants'
 import { baseCurrencyConfig, setActiveCurrency } from './currency'
@@ -111,7 +112,7 @@ function loadWorkspace(kiosk) {
 }
 
 async function fetchState(signal) {
-  const res = await fetch(withOwner('/api/state'), { signal })
+  const res = await apiFetch(withOwner('/api/state'), { signal })
   if (!res.ok) throw new Error(`state ${res.status}`)
   const json = await res.json()
   const empire = migrateToEmpire(json?.state)
@@ -351,7 +352,9 @@ export function RestoraProvider({ children, waitForServer = true }) {
     window.clearTimeout(retryRef.current)
     let es
     try {
-      es = new EventSource(withOwner('/api/events', { since: seqRef.current }))
+      // EventSource cannot set headers, so the session token rides in the
+      // query string when there is one (the cookie is the normal path).
+      es = new EventSource(withSessionToken(withOwner('/api/events', { since: seqRef.current })))
     } catch {
       setLink((l) => ({ ...l, status: 'offline' }))
       retryRef.current = window.setTimeout(() => connectStream(), 3000)
@@ -444,7 +447,7 @@ export function RestoraProvider({ children, waitForServer = true }) {
       const tagged = { type: 'LOC', locId, action: { ...action, _lid: lid } }
       lidAt.current.set(lid, Date.now())
       rawDispatch(tagged)
-      fetch(withOwner('/api/actions'), {
+      apiFetch(withOwner('/api/actions'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: tagged, clientId }),
@@ -482,7 +485,7 @@ export function RestoraProvider({ children, waitForServer = true }) {
         if (!linked) return
         const lid = uid('l')
         lidAt.current.set(lid, Date.now())
-        fetch(withOwner('/api/actions'), {
+        apiFetch(withOwner('/api/actions'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: { ...action, _lid: lid }, clientId }),

@@ -1803,6 +1803,14 @@ function enrichLangDict(langCode, raw) {
     role: isKm ? 'ជ្រើសរើសតួនាទី…' : isZh ? '选择角色…' : 'Choose a role…',
     active: isKm ? 'សកម្ម' : isZh ? '启用' : 'active',
     disabled: isKm ? 'បានបិទ' : isZh ? '已禁用' : 'disabled',
+    signInAgain: isKm ? 'ចូលម្តងទៀត' : isZh ? '重新登录' : 'Sign in again',
+    sessionEnded: isKm
+      ? 'វគ្គប្រើប្រាស់បានបញ្ចប់ — សូមចូលម្តងទៀតដើម្បីបន្តគ្រប់គ្រងហាងនេះ។'
+      : isZh ? '登录状态已失效 — 请重新登录后继续管理该餐厅。' : 'Your session ended — sign in again to keep managing this restaurant.',
+    cannotManage: isKm
+      ? 'តួនាទីរបស់អ្នកមិនអាចគ្រប់គ្រងអ្នកប្រើប្រាស់បានទេ។'
+      : isZh ? '您的角色无法管理员工。' : 'Your role cannot manage users.',
+    requestFailed: isKm ? 'សំណើបានបរាជ័យ' : isZh ? '请求失败' : 'Request failed',
   }
   raw.rolesScreen = {
     ...raw.rolesScreen,

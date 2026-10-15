@@ -5,19 +5,20 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Icon } from '../components/Icon'
 import { useI18n } from '../lib/i18n'
+import { apiFetch } from '../lib/api'
 
 const cardCls = 'rounded-2xl border border-zinc-200/80 bg-white shadow-sm'
 const input = 'min-h-10 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 outline-none transition focus:border-orange-300 focus:ring-2 focus:ring-orange-100'
 const btnPrimary = 'min-h-10 rounded-xl bg-orange-500 px-4 text-sm font-bold text-white hover:bg-orange-600 disabled:opacity-50'
 
 async function getJson(route) {
-  const res = await fetch(route)
+  const res = await apiFetch(route)
   if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Request failed')
   return res.json()
 }
 
 async function send(method, route, body) {
-  const res = await fetch(route, {
+  const res = await apiFetch(route, {
     method,
     headers: body ? { 'Content-Type': 'application/json' } : undefined,
     body: body ? JSON.stringify(body) : undefined,

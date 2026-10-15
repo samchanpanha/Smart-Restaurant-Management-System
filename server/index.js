@@ -117,6 +117,10 @@ function resolveTenant(req, res, next) {
       if (wanted) {
         ownerId = wanted
         named = true
+      } else if (req.auth.user.owner_id) {
+        // A host owner (the first account, or anyone promoted) keeps its own
+        // restaurant as its workspace; ?ownerId=<id> still looks at another.
+        ownerId = req.auth.user.owner_id
       }
     } else {
       ownerId = req.auth.user.owner_id || DEFAULT_TENANT

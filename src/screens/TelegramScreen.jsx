@@ -18,6 +18,7 @@ import { runTelegramCommand, TELEGRAM_COMMANDS, commandsFor } from '../lib/teleg
 import { dailyDigest } from '../lib/telegram-digest'
 import { useRestora } from '../lib/store'
 import { useAuth } from '../lib/auth'
+import { apiFetch } from '../lib/api'
 
 const cardCls = 'rounded-2xl border border-zinc-200/80 bg-white shadow-sm'
 
@@ -79,7 +80,7 @@ export default function TelegramScreen() {
   useEffect(() => {
     if (link.status !== 'live') return undefined
     let alive = true
-    fetch('/api/telegram/status')
+    apiFetch('/api/telegram/status')
       .then((res) => (res.ok ? res.json() : null))
       .then((json) => { if (alive && json) setStatus(json) })
       .catch(() => { if (alive) setStatus(null) })
@@ -103,7 +104,7 @@ export default function TelegramScreen() {
     try {
       if (link.status === 'live') {
         // The server owns the authoritative book when the API is up.
-        const res = await fetch('/api/telegram/simulate', {
+        const res = await apiFetch('/api/telegram/simulate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text: command, role: botRole, locId, dryRun: !apply }),
@@ -158,7 +159,7 @@ export default function TelegramScreen() {
           ? 'Local preview — the API is offline, so nothing was sent.'
           : 'Local demo — the API is offline, so the digest stayed on this machine.')
       } else {
-        const res = await fetch('/api/telegram/digest', {
+        const res = await apiFetch('/api/telegram/digest', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ dryRun: dry }),

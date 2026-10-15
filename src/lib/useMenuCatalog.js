@@ -8,6 +8,7 @@
 // /api/menu requests — each of which re-reads SQLite — which is felt as a
 // mini app that "takes forever".
 import { useEffect, useMemo, useState } from 'react'
+import { apiFetch } from './api'
 
 const CACHE_TTL_MS = 30_000
 const DEBOUNCE_MS = 350
@@ -29,7 +30,7 @@ function loadCatalog(key, locationId, owner) {
   if (hit) return hit
   const search = new URLSearchParams({ loc: locationId })
   if (owner) search.set('owner', owner)
-  const promise = fetch(`/api/menu?${search.toString()}`)
+  const promise = apiFetch(`/api/menu?${search.toString()}`)
     .then((response) => {
       if (!response.ok) throw new Error(`menu catalog ${response.status}`)
       return response.json()
