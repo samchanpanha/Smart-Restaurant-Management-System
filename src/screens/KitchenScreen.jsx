@@ -695,7 +695,7 @@ function KitchenBoard({ fired, lateOnly, dict, lang, showImages, tables, dispatc
   }), [fired])
 
   return (
-    <div className="flex gap-3 overflow-x-auto pb-4" role="region" aria-label="Kitchen display columns">
+    <div className="kitchen-board flex gap-3 overflow-x-auto pb-4" role="region" aria-label="Kitchen display columns">
       {columns.map(({ station, cards }) => {
         const visible = lateOnly
           ? cards

@@ -54,13 +54,14 @@ test('a tenant config overrides the environment, field by field', () => {
 // ─── Config router (stubbed storage) ───────────────────────────────
 
 async function bootApp(opts = {}) {
-  const { canManage = true, env = {}, probe = null } = opts
+  const { canManage = true, env = {}, probe = null, listModels = null } = opts
   const state = { stored: opts.stored || null }
   const router = createAiConfigRouter({
     requireAdmin: (req, res, next) => (canManage ? next() : res.status(403).json({ error: 'owner access required' })),
     getConfig: () => state.stored,
     setConfig: (_ownerId, config) => { state.stored = config },
     probe: probe || null,
+    listModels: listModels || null,
     env,
   })
   const app = express()
@@ -179,6 +180,60 @@ test('the test route forwards an unsaved override to the probe', async () => {
     assert.equal(app.state.stored, null, 'testing does not persist')
   } finally {
     await app.close()
+  }
+})
+
+test('the models route proxies discovery and never returns a key', async () => {
+  const calls = []
+  const listModels = async (tenantId, override) => {
+    calls.push({ tenantId, override })
+    return { ok: true, provider: 'deepseek', via: 'backup-1', models: ['deepseek-chat', 'deepseek-reasoner'] }
+  }
+  const app = await bootApp({ listModels })
+  try {
+    const saved = await fetch(`${app.base}/api/ai/config`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider: 'deepseek', apiKey: 'sk-secret', keys: [{ label: 'backup', provider: 'qwen', apiKey: 'q-secret' }] }),
+    })
+    assert.equal(saved.status, 200)
+
+    const res = await fetch(`${app.base}/api/ai/config/models`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider: 'deepseek', keyId: 'backup-1' }),
+    })
+    assert.equal(res.status, 200)
+    const body = await res.json()
+    assert.deepEqual(body.models, ['deepseek-chat', 'deepseek-reasoner'])
+    assert.equal(calls[0].override.keyId, 'backup-1')
+    assert.ok(!JSON.stringify(body).includes('secret'), 'no key material in the reply')
+
+    // Discovery is read-only: the stored config is untouched.
+    const after = await fetch(`${app.base}/api/ai/config`).then((r) => r.json())
+    assert.equal(after.keyCount, 2)
+    assert.equal(after.provider, 'deepseek')
+  } finally {
+    await app.close()
+  }
+})
+
+test('the models route reports failure and 501 when unsupported', async () => {
+  const failing = await bootApp({ listModels: async () => ({ ok: false, error: 'invalid api key' }) })
+  try {
+    const res = await fetch(`${failing.base}/api/ai/config/models`, { method: 'POST' })
+    assert.equal(res.status, 502)
+    assert.equal((await res.json()).error, 'invalid api key')
+  } finally {
+    await failing.close()
+  }
+
+  const bare = await bootApp()
+  try {
+    const res = await fetch(`${bare.base}/api/ai/config/models`, { method: 'POST' })
+    assert.equal(res.status, 501)
+  } finally {
+    await bare.close()
   }
 })
 

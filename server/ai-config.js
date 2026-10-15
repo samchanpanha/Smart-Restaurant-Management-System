@@ -105,6 +105,7 @@ export function createAiConfigRouter({
   getConfig,
   setConfig,
   probe = null,
+  listModels = null,
   env = {},
 } = {}) {
   if (typeof getConfig !== 'function' || typeof setConfig !== 'function') {
@@ -185,6 +186,23 @@ export function createAiConfigRouter({
     if (typeof body.keyId === 'string' && body.keyId.trim()) override.keyId = body.keyId.trim().slice(0, 60)
 
     const result = await probe(req.tenantId, Object.keys(override).length ? override : null)
+    res.status(result.ok ? 200 : 502).json(result)
+  })
+
+  // Live model list for the picker. Never persists anything and never returns
+  // the key — it only proxies the provider's own catalogue through the stored
+  // (or an unsaved) credential.
+  router.post('/api/ai/config/models', tenantMw, requireAdmin, async (req, res) => {
+    if (typeof listModels !== 'function') return res.status(501).json({ ok: false, error: 'Model discovery is unavailable.' })
+    const body = req.body || {}
+    const override = {}
+    if (body.provider) override.provider = normalizeProvider(body.provider)
+    if (typeof body.model === 'string' && body.model.trim()) override.model = body.model.trim().slice(0, MAX_MODEL)
+    if (typeof body.baseUrl === 'string' && body.baseUrl.trim()) override.baseUrl = body.baseUrl.trim().slice(0, MAX_BASE_URL)
+    if (typeof body.apiKey === 'string' && body.apiKey.trim()) override.apiKey = body.apiKey.trim().slice(0, MAX_KEY)
+    if (typeof body.keyId === 'string' && body.keyId.trim()) override.keyId = body.keyId.trim().slice(0, 60)
+
+    const result = await listModels(req.tenantId, Object.keys(override).length ? override : null)
     res.status(result.ok ? 200 : 502).json(result)
   })
 

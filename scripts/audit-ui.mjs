@@ -53,7 +53,9 @@ export function auditFonts() {
     else if (!/\.woff2$/.test(src)) findings.push(finding('warn', 'fonts/format', `${src} is not woff2`, 'src/styles/fonts.css'))
   }
   // 2. …and every vendored file is declared (no dead weight in public/).
-  const vendored = exists('public/fonts') ? fs.readdirSync(path.join(root, 'public/fonts')) : []
+  const vendored = exists('public/fonts')
+    ? fs.readdirSync(path.join(root, 'public/fonts')).filter((file) => /\.(woff2?|ttf|otf)$/.test(file))
+    : []
   for (const file of vendored) {
     if (!srcs.some((src) => src.endsWith(file))) {
       findings.push(finding('error', 'fonts/unused-file', `public/fonts/${file} is never declared in a @font-face`))

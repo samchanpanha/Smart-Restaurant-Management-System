@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Icon } from '../../../components/Icon'
-import { aiGetConfig, aiSaveConfig, aiStatus, aiTestConfig } from '../../../lib/ai-client'
-import { Card, Field, inputCls } from '../primitives'
+import { aiGetConfig, aiListModels, aiSaveConfig, aiStatus, aiTestConfig } from '../../../lib/ai-client'
+import { Card, Field, inputCls, labelCls } from '../primitives'
 
 // Tenant AI provider config. Stored server-side (never in the synced state,
 // because guests can read /api/state). Owner / super admin only — the server
@@ -89,6 +89,8 @@ function AiSection() {
   const [keyTests, setKeyTests] = useState({})
   const [keysDirty, setKeysDirty] = useState(false)
   const [poolHealth, setPoolHealth] = useState([])
+  const [liveModels, setLiveModels] = useState([])
+  const [modelState, setModelState] = useState('')
 
   function apply(view) {
     if (!view || view.ok === false) return
@@ -189,6 +191,22 @@ function AiSection() {
     setNotice('Saved. Restora now falls back through these keys.')
   }
 
+  // Ask the provider what this key can reach — cheaper than guessing model ids
+  // that get renamed. Falls back to the catalogue's suggestions on any error.
+  async function loadModels() {
+    setModelState('loading')
+    const payload = { provider, baseUrl }
+    if (apiKey.trim()) payload.apiKey = apiKey.trim()
+    const res = await aiListModels(payload)
+    if (res.ok === false) {
+      setLiveModels([])
+      setModelState(`Could not list models: ${res.error || 'no reply'}`)
+      return
+    }
+    setLiveModels(res.models || [])
+    setModelState(`${res.models?.length || 0} models available from ${res.provider} — pick one from the list.`)
+  }
+
   async function runTest() {
     if (testing) return
     setTesting(true); setError(''); setNotice(''); setTest(null)
@@ -273,8 +291,24 @@ function AiSection() {
                   ))}
                 </select>
               </Field>
-              <Field label="Model" hint={selectedProvider ? `Default: ${selectedProvider.defaultModel}` : undefined}>
+              {/* Hand-rolled rather than <Field>: the "Load from provider"
+                  button would otherwise sit inside the <label> and steal its
+                  click. Same classes, same look. */}
+              <div>
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <span className={labelCls}>Model</span>
+                  <button
+                    type="button"
+                    disabled={modelState === 'loading'}
+                    onClick={loadModels}
+                    data-testid="ai-config-load-models"
+                    className="text-2xs font-semibold text-orange-600 hover:underline disabled:opacity-40"
+                  >
+                    {modelState === 'loading' ? 'Loading…' : 'Load from provider'}
+                  </button>
+                </div>
                 <input
+                  id="ai-model"
                   value={model}
                   onChange={(event) => setModel(event.target.value)}
                   maxLength={120}
@@ -284,9 +318,17 @@ function AiSection() {
                   data-testid="ai-config-model"
                 />
                 <datalist id="ai-model-suggestions">
-                  {(selectedProvider?.models || []).map((id) => <option key={id} value={id} />)}
+                  {(liveModels.length ? liveModels : (selectedProvider?.models || [])).map((id) => <option key={id} value={id} />)}
                 </datalist>
-              </Field>
+                {modelState && modelState !== 'loading' ? (
+                  <span className="mt-1 block text-2xs font-semibold text-zinc-600" data-testid="ai-config-model-state">{modelState}</span>
+                ) : (
+                  <span className="mt-1 block text-2xs text-zinc-500">
+                    {selectedProvider ? `Default: ${selectedProvider.defaultModel}` : 'Model id'}
+                  </span>
+                )}
+              </div>
+
               <Field label="Base URL" hint="Leave blank for the provider default. Use an http(s) URL to self-host or proxy.">
                 <input
                   value={baseUrl}

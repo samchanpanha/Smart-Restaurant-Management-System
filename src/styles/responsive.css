@@ -142,6 +142,22 @@ summary {
   }
 }
 
+/* The Kitchen board is a row of fixed-width station columns. On a phone that
+   row scrolls; snapping to a column stops a ticket from being left half
+   visible between two stations, and the column narrows to fit the screen. */
+@media (max-width: 640px) {
+  .kitchen-board {
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: 12px;
+  }
+
+  .kitchen-board > section {
+    scroll-snap-align: start;
+    width: min(300px, 84vw);
+    min-width: min(300px, 84vw);
+  }
+}
+
 /* ── 5. Charts ───────────────────────────────────────────────────────── */
 /* Recharts renders SVG with presentation attributes, which lose to any CSS
    rule — so the palette lives here and follows the surface scope (light

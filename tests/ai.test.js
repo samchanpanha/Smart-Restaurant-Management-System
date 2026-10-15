@@ -18,6 +18,8 @@ import {
   DEFAULT_PROVIDER,
   normalizeProvider,
   providerDefaults,
+  providerModelsRequest,
+  providerModelsResult,
   providerRequest,
   providerResult,
 } from '../src/lib/ai-providers.js'
@@ -285,5 +287,63 @@ test('a briefing can be pushed through the Telegram hook, even when cached', asy
     assert.equal(delivered.length, 2, 'a cached briefing still delivers')
   } finally {
     await app.close()
+  }
+})
+
+// ─── Model discovery ───────────────────────────────────────────────
+
+test('model discovery builds a GET per wire and reads each reply shape', () => {
+  const openai = providerModelsRequest({ provider: 'deepseek', apiKey: 'k' })
+  assert.match(openai.url, /deepseek\.com\/v1\/models$/)
+  assert.equal(openai.headers.Authorization, 'Bearer k')
+
+  const anthropic = providerModelsRequest({ provider: 'anthropic', baseUrl: 'https://x.test', apiKey: 'k' })
+  assert.equal(anthropic.url, 'https://x.test/v1/models?limit=100')
+  assert.equal(anthropic.headers['anthropic-version'], '2023-06-01')
+
+  const gemini = providerModelsRequest({ provider: 'gemini', baseUrl: 'https://x.test', apiKey: 'k' })
+  assert.equal(gemini.url, 'https://x.test/v1beta/models?key=k')
+
+  const ollama = providerModelsRequest({ provider: 'ollama' })
+  assert.equal(ollama.url, 'http://localhost:11434/api/tags')
+
+  assert.deepEqual(providerModelsResult({ provider: 'openai', json: { data: [{ id: 'b' }, { id: 'a' }, { id: 'a' }] } }).models, ['a', 'b'])
+  assert.deepEqual(providerModelsResult({ provider: 'anthropic', json: { models: ['claude-3-5-haiku-latest'] } }).models, ['claude-3-5-haiku-latest'])
+  assert.deepEqual(providerModelsResult({ provider: 'gemini', json: { models: [{ name: 'models/gemini-2.0-flash' }] } }).models, ['gemini-2.0-flash'])
+  assert.deepEqual(providerModelsResult({ provider: 'ollama', json: { models: [{ name: 'llama3.1:latest' }] } }).models, ['llama3.1:latest'])
+  assert.equal(providerModelsResult({ provider: 'openai', json: { error: { message: 'bad key' } } }).error, 'bad key')
+  assert.equal(providerModelsResult({ provider: 'openai', json: { data: [] } }).error, 'no models returned')
+})
+
+test('the router lists models for the active key without spending a completion', async () => {
+  const seen = []
+  const fetchImpl = async (url, opts) => {
+    seen.push({ url, method: opts?.method })
+    return { ok: true, status: 200, json: async () => ({ data: [{ id: 'qwen-plus' }, { id: 'qwen-max' }] }) }
+  }
+  const empire = buildEmpire()
+  const ai = createAiRouter({
+    getState: () => empire,
+    fetchImpl,
+    apiKey: 'q-key',
+    resolveConfig: () => ({ provider: 'qwen', apiKey: 'q-key' }),
+    resolveTenant: (req, _res, next) => { req.tenantId = 'default'; next() },
+  })
+  const app = express()
+  app.use(express.json())
+  app.use(ai.router)
+  const server = await new Promise((resolve) => { const s = app.listen(0, '127.0.0.1', () => resolve(s)) })
+  try {
+    const base = `http://127.0.0.1:${server.address().port}`
+    // The router is mounted inside the config router in production; here we call
+    // the discovery helper directly, which is what that route proxies.
+    const out = await ai.listModels('default')
+    assert.equal(out.ok, true)
+    assert.deepEqual(out.models, ['qwen-max', 'qwen-plus'])
+    assert.equal(seen[0].method, 'GET')
+    assert.match(seen[0].url, /dashscope.*\/compatible-mode\/v1\/models$/)
+    assert.ok(!JSON.stringify(out).includes('q-key'), 'the key never reaches the caller')
+  } finally {
+    await new Promise((resolve) => server.close(resolve))
   }
 })

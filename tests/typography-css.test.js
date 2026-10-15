@@ -38,7 +38,7 @@ test('the UI audit is clean: fonts, CSS, responsive, type scale', () => {
 test('every vendored font file is declared and every declared file is vendored', () => {
   const faces = read('src/styles/fonts.css')
   const declared = [...faces.matchAll(/url\('\/fonts\/([^']+)'\)/g)].map((match) => match[1]).sort()
-  const onDisk = fs.readdirSync(path.join(root, 'public/fonts')).sort()
+  const onDisk = fs.readdirSync(path.join(root, 'public/fonts')).filter((file) => /\.woff2?$/.test(file)).sort()
   assert.deepEqual(declared, onDisk)
   assert.ok(onDisk.every((file) => file.endsWith('.woff2')), 'woff2 only — no legacy formats to download')
   for (const file of onDisk) {

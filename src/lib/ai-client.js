@@ -110,3 +110,8 @@ export function aiSaveConfig(payload, fetchImpl) {
 export function aiTestConfig(payload, fetchImpl) {
   return request('/api/ai/config/test', { method: 'POST', body: payload || {}, fetchImpl })
 }
+
+/** The live model list for a provider/key (never persists, never returns a key). */
+export function aiListModels(payload, fetchImpl) {
+  return request('/api/ai/config/models', { method: 'POST', body: payload || {}, fetchImpl })
+}

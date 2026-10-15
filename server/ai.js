@@ -28,6 +28,8 @@ import {
   listProviders,
   normalizeProvider,
   providerDefaults,
+  providerModelsRequest,
+  providerModelsResult,
   providerNeedsKey,
   providerRequest,
   providerResult,
@@ -402,6 +404,32 @@ export function createAiRouter({
     return { ok: false, error: lastError || 'all attempts failed', tried, attempts: tried.length }
   }
 
+  /**
+   * Ask the provider which models this key can actually reach. Model ids are
+   * the one thing that changes under a deployment's feet, so the Settings
+   * screen offers a live list instead of a hard-coded guess.
+   */
+  async function listModels(tenantId, override = null) {
+    const cfg = configFor(tenantId, override)
+    const only = override?.keyId ? cfg.attempts.filter((attempt) => attempt.id === override.keyId) : null
+    const attempt = (only && only.length ? only : cfg.attempts)[0]
+    if (!attempt) return { ok: false, configured: false, error: 'No API key set.' }
+    if (typeof fetchImpl !== 'function') return { ok: false, error: 'fetch unavailable' }
+    const req = providerModelsRequest({ provider: attempt.provider, baseUrl: attempt.baseUrl, apiKey: attempt.apiKey })
+    try {
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), timeoutMs)
+      const res = await fetchImpl(req.url, { method: 'GET', headers: req.headers, signal: controller.signal })
+      clearTimeout(timer)
+      const json = await res.json().catch(() => ({}))
+      const { models, error } = providerModelsResult({ provider: attempt.provider, json })
+      if (!res.ok || error) return { ok: false, provider: attempt.provider, error: error || `HTTP ${res.status}` }
+      return { ok: true, provider: attempt.provider, via: attempt.id, models }
+    } catch (err) {
+      return { ok: false, provider: attempt.provider, error: err?.name === 'AbortError' ? `timed out after ${timeoutMs}ms` : (err?.message || 'request failed') }
+    }
+  }
+
   /** Kernel-safe view of the key pool for the settings screen (never a key). */
   function poolStatus(tenantId) {
     const cfg = configFor(tenantId)
@@ -635,5 +663,5 @@ export function createAiRouter({
     }
   }
 
-  return { router, stats, probe, configFor, poolStatus }
+  return { router, stats, probe, configFor, poolStatus, listModels }
 }

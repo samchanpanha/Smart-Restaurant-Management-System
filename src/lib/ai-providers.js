@@ -358,6 +358,51 @@ export function providerRequest({ provider, model, baseUrl, apiKey, system, mess
 }
 
 /**
+ * Build the (GET) request that lists the models a key can reach. Model ids
+ * change constantly across sixteen vendors, so the Settings screen can ask the
+ * provider instead of guessing. Same contract as providerRequest: no network,
+ * just { url, headers }.
+ */
+export function providerModelsRequest({ provider, baseUrl, apiKey } = {}) {
+  const key = normalizeProvider(provider)
+  const meta = PROVIDERS[key]
+  const base = trimSlash(baseUrl || meta.baseUrl)
+  if (meta.wire === 'anthropic') {
+    return { url: `${base}/v1/models?limit=100`, headers: { 'x-api-key': apiKey || '', 'anthropic-version': '2023-06-01' } }
+  }
+  if (meta.wire === 'gemini') {
+    return { url: `${base}/v1beta/models?key=${encodeURIComponent(apiKey || '')}`, headers: {} }
+  }
+  if (meta.wire === 'ollama') {
+    return { url: `${base}/api/tags`, headers: {} }
+  }
+  return { url: `${base}/models`, headers: { Authorization: `Bearer ${apiKey || ''}` } }
+}
+
+/**
+ * Read a model list out of a provider response body.
+ * Returns { models: string[], error } — sorted, de-duplicated, capped.
+ */
+export function providerModelsResult({ provider, json } = {}) {
+  const wire = PROVIDERS[normalizeProvider(provider)].wire
+  const body = json && typeof json === 'object' ? json : {}
+  const providerError = body.error?.message || body.error?.status || body.error || null
+  if (providerError && typeof providerError === 'string') return { models: [], error: providerError }
+
+  let ids = []
+  if (wire === 'gemini') {
+    ids = (body.models || []).map((entry) => String(entry?.name || '').replace(/^models\//, ''))
+  } else if (wire === 'ollama') {
+    ids = (body.models || []).map((entry) => String(entry?.name || entry?.model || ''))
+  } else {
+    const list = Array.isArray(body.data) ? body.data : (Array.isArray(body.models) ? body.models : [])
+    ids = list.map((entry) => (typeof entry === 'string' ? entry : String(entry?.id || entry?.name || '')))
+  }
+  const models = [...new Set(ids.map((id) => id.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b)).slice(0, 200)
+  return models.length ? { models, error: null } : { models: [], error: 'no models returned' }
+}
+
+/**
  * Read the assistant text (or an error) out of a provider response body.
  * Returns { text, error } — one of them is always set.
  */

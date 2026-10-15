@@ -455,9 +455,12 @@ route is a clean 503 no-op and the app is byte-for-byte the same.
   and never sent back to the browser) and overrides the env vars below; any
   field left blank falls back to them. The screen also lists the free and local
   options with a one-click *Use this* and a link to each vendor's key page, and
-  can **Test** the primary or any single backup key. The routes
-  (`GET`/`PUT /api/ai/config`, `POST /api/ai/config/test` with an optional
-  `keyId`) are owner-only and take effect without a restart.
+  can **Test** the primary or any single backup key. **Load from provider**
+  asks the vendor for its live model list through `POST /api/ai/config/models`
+  (`keyId` optional), so a renamed model id never has to be guessed — model
+  names churn faster than this README can. The routes (`GET`/`PUT
+  /api/ai/config`, `POST /api/ai/config/test` and `/models`) are owner-only,
+  return no key material, and take effect without a restart.
 
 | Variable | Purpose | Default |
 |---|---|---|

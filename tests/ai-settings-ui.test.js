@@ -64,6 +64,9 @@ globalThis.fetch = async (url, opts = {}) => {
   if (href.includes('/api/ai/config/test')) {
     return json({ ok: true, reply: 'OK', provider: 'qwen', model: 'qwen-plus', via: 'key-2' })
   }
+  if (href.includes('/api/ai/config/models')) {
+    return json({ ok: true, provider: 'deepseek', via: 'primary', models: ['deepseek-chat', 'deepseek-reasoner', 'deepseek-coder'] })
+  }
   if (href.includes('/api/ai/config')) {
     if (opts.method === 'PUT') {
       const body = JSON.parse(opts.body || '{}')
@@ -235,4 +238,22 @@ test('the language switch writes <html lang> for the type scale', async () => {
 
   act(() => { setAppLang('en') })
   await settle()
+})
+
+test('the model field can pull the provider\'s live model list', async () => {
+  const modelBefore = requests.filter((entry) => entry.href.includes('/api/ai/config/models')).length
+  const button = document.querySelector('[data-testid="ai-config-load-models"]')
+  assert.ok(button, 'the load button is rendered next to the model field')
+
+  click(button)
+  await settle(80)
+
+  const calls = requests.filter((entry) => entry.href.includes('/api/ai/config/models'))
+  assert.equal(calls.length, modelBefore + 1, 'one discovery request goes out')
+  assert.equal(calls.at(-1).method, 'POST')
+  assert.equal(calls.at(-1).body.provider, 'deepseek', 'the currently selected provider is asked')
+
+  assert.match(document.body.textContent, /3 models available from deepseek/)
+  const options = [...document.querySelectorAll('#ai-model-suggestions option')].map((node) => node.value)
+  assert.ok(options.includes('deepseek-reasoner'), 'the live list feeds the datalist')
 })

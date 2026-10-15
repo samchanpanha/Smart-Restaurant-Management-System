@@ -24,6 +24,7 @@
 //   GET  /api/ai/config         → tenant AI provider config (owner-only, no key)
 //   PUT  /api/ai/config         → save tenant AI provider/key (owner-only)
 //   POST /api/ai/config/test    → live provider connectivity check (owner-only)
+//   POST /api/ai/config/models  → the provider's live model list (owner-only)
 //
 // Tenant resolution: a signed-in user is pinned to their own owner; a super
 // admin may name any owner via ?ownerId=; guests (QR + Telegram mini app)
@@ -703,11 +704,13 @@ const aiConfig = createAiConfigRouter({
   getConfig: (ownerId) => getAiConfig(ownerId),
   setConfig: (ownerId, config) => setAiConfig(ownerId, config),
   probe: (tenantId, override) => ai.probe(tenantId, override),
+  listModels: (tenantId, override) => ai.listModels(tenantId, override),
   env: {
     provider: process.env.AI_PROVIDER,
     model: process.env.AI_MODEL,
     baseUrl: process.env.AI_BASE_URL,
     apiKey: process.env.AI_API_KEY,
+    keys: process.env.AI_KEYS,
   },
 })
 app.use(aiConfig.router)
