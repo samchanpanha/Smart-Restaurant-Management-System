@@ -109,7 +109,7 @@ export default function OwnersScreen() {
                     <span className="block truncate text-sm font-semibold text-zinc-800">{owner.name}</span>
                     <span className="block truncate text-xs text-zinc-500">{owner.slug} · {owner.userCount} user{owner.userCount === 1 ? '' : 's'}</span>
                   </span>
-                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${owner.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                  <span className={`rounded-full px-2 py-0.5 text-2xs font-semibold ${owner.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
                     {owner.status === 'active' ? (ow.active || 'active') : (ow.suspended || owner.status)}
                   </span>
                   <button

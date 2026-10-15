@@ -1,8 +1,28 @@
 @import "tailwindcss";
+@import "./styles/fonts.css";
+@import "./styles/typography.css";
+@import "./styles/responsive.css";
 
 @theme {
-  --font-sans: ui-sans-serif, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* Self-hosted first (public/fonts, see src/styles/fonts.css), then the OS
+     stacks: Khmer falls through to Noto Sans Khmer per glyph, and the CJK
+     families cover Chinese on every platform without shipping a 2 MB CJK
+     font. `system-ui` early means an offline terminal still uses its own
+     best face rather than a serif default. */
+  --font-sans: "Inter Variable", "Inter", "Noto Sans Khmer Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", "Noto Sans Khmer", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  /* Micro type — the dense consoles label everything at 10–11px. Declared as
+     tokens instead of `text-[11px]` so Khmer/Chinese can rescale them in one
+     place (src/styles/typography.css) and so the scale stays consistent. */
+  --text-2xs: 0.6875rem; /* 11px — labels, chips, dense cells */
+  --text-2xs--line-height: 1.5;
+  --text-3xs: 0.625rem; /* 10px — badges, secondary meta */
+  --text-3xs--line-height: 1.5;
+  --text-4xs: 0.5rem; /*  8px — counters inside ≥16px chips only */
+  --text-4xs--line-height: 1.25;
+  --text-kpi: 1.6875rem; /* 27px — the headline numeral on a KPI tile */
+  --text-kpi--line-height: 1;
 
   /* Restora operational surfaces */
   --color-ink-950: #0b0d12; /* app bg (Live) */
@@ -42,11 +62,13 @@
   --border: #dfe3e8;
   --border-strong: #d4d7dc;
 
-  /* Text */
+  /* Text — every tier meets WCAG AA (≥4.5:1) on --surface (#fff): the dense
+     console sets most meta text at 10–11px, where the old #77808b/#9aa1aa
+     ramp measured ~4.0:1 and ~2.5:1. Keep the ladder monotonically darker. */
   --text-strong: #1d2024;
   --text: #30343a;
-  --text-muted: #626a74;
-  --text-subtle: #77808b;
+  --text-muted: #5f6873; /* 5.6:1 */
+  --text-subtle: #667080; /* 5.0:1 on white, 4.6:1 on --surface-page */
   --text-on-accent: #ffffff;
 
   /* Accent */
@@ -145,9 +167,12 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Large numerals for KPIs + ticket timers */
+/* Large numerals for KPIs + ticket timers. The full definition (tabular +
+   lining figures, feature-settings fallback) lives in src/styles/typography.css
+   so the type behaviour stays in one file. */
 .tnum {
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: 'tnum' 1, 'lnum' 1;
   letter-spacing: -0.02em;
 }
 
@@ -165,9 +190,25 @@ body {
   border-radius: 8px;
 }
 
-/* Focus visibility for keyboard (office reports) */
+/* Focus visibility for keyboard (office reports).
+   The ring has to clear 3:1 against its own surface: brand-400 measured 2.1:1
+   on the white workspace, so the workspace uses a deeper orange and the dark
+   scopes (sidebar, live boards) keep a light one. */
+:root {
+  --focus-ring: #ffb066;
+}
+
+.restora-theme {
+  --focus-ring: #c2560f;
+}
+
+.restora-theme .app-sidebar,
+.surface-dark {
+  --focus-ring: #ffb066;
+}
+
 :focus-visible {
-  outline: 2px solid var(--color-brand-400);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -235,9 +276,14 @@ body {
 .restora-theme :is(.app-topbar, .app-tabs, .app-workspace) .text-zinc-100 { color: #1d2024; }
 .restora-theme :is(.app-topbar, .app-tabs, .app-workspace) .text-zinc-200 { color: #2d3137; }
 .restora-theme :is(.app-topbar, .app-tabs, .app-workspace) .text-zinc-300 { color: #454b53; }
-.restora-theme :is(.app-topbar, .app-tabs, .app-workspace) .text-zinc-400 { color: #626a74; }
-.restora-theme :is(.app-topbar, .app-tabs, .app-workspace) .text-zinc-500 { color: #77808b; }
-.restora-theme :is(.app-topbar, .app-tabs, .app-workspace) .text-zinc-600 { color: #626a74; }
+/* The zinc ladder is inverted for the light workspace (a higher step is a
+   *dimmer* tier in the dark UI, so it maps to a lighter grey here). Every step
+   clears AA against #fff, and 400→600 darkens monotonically — the old ramp had
+   400 and 600 identical and 500 lighter than both, which made de-emphasised
+   text the least readable thing on screen. */
+.restora-theme :is(.app-topbar, .app-tabs, .app-workspace) .text-zinc-400 { color: #667080; }
+.restora-theme :is(.app-topbar, .app-tabs, .app-workspace) .text-zinc-500 { color: #5f6873; }
+.restora-theme :is(.app-topbar, .app-tabs, .app-workspace) .text-zinc-600 { color: #565e69; }
 .restora-theme :is(.app-topbar, .app-tabs, .app-workspace) .text-zinc-700 { color: #4b5159; }
 .restora-theme :is(.app-topbar, .app-tabs, .app-workspace) .text-zinc-800 { color: #30343a; }
 
@@ -494,6 +540,34 @@ body {
 
   .restora-theme .app-page {
     padding-inline: 14px;
+  }
+}
+
+/* Phones (≤560px): the icon rail gives space back to the workspace, tap
+   targets stay ≥40px, and dense cards lose a step of padding rather than
+   spilling sideways. Live boards (Kitchen, Tickets) are the important case:
+   they are the screens someone actually holds in one hand. */
+@media (max-width: 560px) {
+  .restora-theme .app-sidebar {
+    width: 58px;
+  }
+
+  .restora-theme .app-sidebar nav button {
+    min-height: 42px;
+  }
+
+  .restora-theme .app-page {
+    padding: 14px 12px 28px;
+  }
+
+  .restora-theme .app-topbar {
+    gap: 8px;
+    padding-inline: 10px;
+  }
+
+  /* The status pill's label is the first thing to go when space is tight. */
+  .restora-theme .app-sidebar .status-pill-label {
+    display: none;
   }
 }
 

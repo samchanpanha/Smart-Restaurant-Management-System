@@ -271,7 +271,7 @@ function DocumentsSection({ draft, patch, state, locId, issueDocument }) {
               >
                 Download HTML
               </button>
-              <span className="self-center text-[11px] text-zinc-500">
+              <span className="self-center text-2xs text-zinc-500">
                 Filing stores the number in the document registry and increments the sequence — reprints reuse it.
               </span>
             </div>
@@ -307,7 +307,7 @@ function DocumentsSection({ draft, patch, state, locId, issueDocument }) {
                       </Field>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <label className="flex items-center gap-1.5 text-[11px] text-zinc-600">
+                      <label className="flex items-center gap-1.5 text-2xs text-zinc-600">
                         <input
                           type="checkbox" checked={draft.numbering[entry].includeYear}
                           onChange={(e) => patch({ numbering: { ...draft.numbering, [entry]: { ...draft.numbering[entry], includeYear: e.target.checked } } })}
@@ -315,7 +315,7 @@ function DocumentsSection({ draft, patch, state, locId, issueDocument }) {
                         />
                         Year
                       </label>
-                      <label className="flex items-center gap-1.5 text-[11px] text-zinc-600">
+                      <label className="flex items-center gap-1.5 text-2xs text-zinc-600">
                         <input
                           type="checkbox" checked={draft.numbering[entry].includeLocation}
                           onChange={(e) => patch({ numbering: { ...draft.numbering, [entry]: { ...draft.numbering[entry], includeLocation: e.target.checked } } })}
@@ -324,7 +324,7 @@ function DocumentsSection({ draft, patch, state, locId, issueDocument }) {
                         Store code
                       </label>
                     </div>
-                    <div className="tnum rounded-lg bg-zinc-50 px-2 py-1.5 text-[11px] text-zinc-600">
+                    <div className="tnum rounded-lg bg-zinc-50 px-2 py-1.5 text-2xs text-zinc-600">
                       {documentNumber(draft, entry, draft.numbering[entry].next)}
                     </div>
                   </div>

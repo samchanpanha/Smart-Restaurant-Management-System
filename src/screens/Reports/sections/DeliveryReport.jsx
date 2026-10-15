@@ -27,7 +27,7 @@ function DeliveryReport({ range }) {
         ].map((metric) => (
           <Card key={metric.label} title={metric.label}>
             <div className="tnum text-2xl font-bold text-zinc-100">{metric.value}</div>
-            {metric.detail && <div className="mt-1 text-[11px] text-zinc-500">{metric.detail}</div>}
+            {metric.detail && <div className="mt-1 text-2xs text-zinc-500">{metric.detail}</div>}
           </Card>
         ))}
       </div>

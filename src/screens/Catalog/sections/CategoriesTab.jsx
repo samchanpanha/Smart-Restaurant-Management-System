@@ -61,7 +61,7 @@ function CategoriesTab({ banner }) {
                       <span className="truncate text-sm font-bold text-zinc-800">{root.name}</span>
                       {!root.active && <StatusPill tone="muted" size="sm">Hidden</StatusPill>}
                     </div>
-                    <div className="mt-0.5 text-[11px] text-zinc-500">
+                    <div className="mt-0.5 text-2xs text-zinc-500">
                       {STATION_META[root.station]?.label || root.station} · {itemCount(root)} item{itemCount(root) === 1 ? '' : 's'}
                       {root.children.length ? ` · ${root.children.length} sub-categor${root.children.length === 1 ? 'y' : 'ies'}` : ''}
                       {root.description ? ` · ${root.description}` : ''}
@@ -89,7 +89,7 @@ function CategoriesTab({ banner }) {
                           <span className="truncate font-semibold">{child.name}</span>
                           {!child.active && <StatusPill tone="muted" size="sm">Hidden</StatusPill>}
                         </div>
-                        <div className="mt-0.5 pl-5 text-[11px] text-zinc-500">
+                        <div className="mt-0.5 pl-5 text-2xs text-zinc-500">
                           {STATION_META[child.station]?.label || child.station} · {itemCount(child)} item{itemCount(child) === 1 ? '' : 's'}
                         </div>
                       </div>

@@ -237,13 +237,13 @@ function Coster({ dishId, onDone }) {
           />
         </Field>
         <div>
-          <div className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-zinc-500">{mn.plateCost || 'Plate cost'}</div>
+          <div className="mb-1 text-2xs font-semibold uppercase tracking-widest text-zinc-500">{mn.plateCost || 'Plate cost'}</div>
           <div className="tnum rounded-lg bg-black/30 px-3 py-2.5 text-lg font-bold ring-1 ring-inset ring-[var(--color-ink-700)]">
             {money(live.plate)}
           </div>
         </div>
         <div>
-          <div className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-zinc-500">{mn.contribution || 'Contribution'}</div>
+          <div className="mb-1 text-2xs font-semibold uppercase tracking-widest text-zinc-500">{mn.contribution || 'Contribution'}</div>
           <div className="tnum rounded-lg bg-black/30 px-3 py-2.5 text-lg font-bold ring-1 ring-inset ring-[var(--color-ink-700)]">
             {(live.contribution * 100).toFixed(1)}%
           </div>
@@ -315,7 +315,7 @@ function Coster({ dishId, onDone }) {
           />
         </Field>
       </div>
-      <div className="-mt-2 text-[11px] leading-relaxed text-amber-200/80">
+      <div className="-mt-2 text-2xs leading-relaxed text-amber-200/80">
         Demo allergen labels must be checked against your kitchen&apos;s recipes and cross-contact practices before use.
       </div>
 
@@ -371,7 +371,7 @@ function Coster({ dishId, onDone }) {
                   </Field>
                 </div>
                 <div className="col-span-3 sm:col-span-2">
-                  <div className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-zinc-500">Line</div>
+                  <div className="mb-1 text-2xs font-semibold uppercase tracking-widest text-zinc-500">Line</div>
                   <div className="tnum min-h-[44px] rounded-lg bg-black/30 px-2 py-2.5 text-sm font-bold ring-1 ring-inset ring-[var(--color-ink-700)]">
                     {money(line)}
                   </div>
@@ -521,7 +521,7 @@ export default function MenuScreen() {
     <div className="space-y-4">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <div className="text-[11px] font-semibold uppercase tracking-widest text-amber-300">
+          <div className="text-2xs font-semibold uppercase tracking-widest text-amber-300">
             {mn.kicker || 'Control · step 7 · owner: Maya'}
           </div>
           <h1 className="mt-1 text-3xl font-bold tracking-tight">
@@ -581,7 +581,7 @@ export default function MenuScreen() {
                       <span className="tnum text-sm font-bold text-amber-300">{money(m.price)}</span>
                     </div>
                     <div className="mt-1.5 flex items-center justify-between gap-2">
-                      <span className="tnum text-[11px] text-zinc-500">{mn.plateCost || 'plate'} {money(c.plate)}</span>
+                      <span className="tnum text-2xs text-zinc-500">{mn.plateCost || 'plate'} {money(c.plate)}</span>
                       <span className="flex gap-1">
                         {!m.available && <StatusPill tone="bad" size="sm">86</StatusPill>}
                         {m.active === false && <StatusPill tone="muted" size="sm">Hidden</StatusPill>}

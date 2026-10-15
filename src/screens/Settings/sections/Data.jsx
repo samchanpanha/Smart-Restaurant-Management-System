@@ -57,7 +57,7 @@ function DataSection({ state, draft, dispatch, empire, locId, link, resync }) {
                       {document.meta?.voided ? 'Voided' : DOC_KIND_META[document.kind]?.label}
                     </StatusPill>
                   </div>
-                  <div className="mt-0.5 text-[11px] text-zinc-500">
+                  <div className="mt-0.5 text-2xs text-zinc-500">
                     {new Date(document.issuedAt).toLocaleString()} · {document.currency.code}
                     {document.totals?.grandTotal ? ` · ${formatMoney(document.totals.grandTotal, document.currency)}` : ''}
                     {document.reference ? ` · ${document.reference}` : ''}
@@ -110,7 +110,7 @@ function DataSection({ state, draft, dispatch, empire, locId, link, resync }) {
           )}
         </div>
         {importError && <p className="mt-2 text-sm text-red-600">{importError}</p>}
-        <p className="mt-3 text-[11px] leading-relaxed text-zinc-500">
+        <p className="mt-3 text-2xs leading-relaxed text-zinc-500">
           Import restores this terminal only — a linked server keeps the authoritative snapshot. SQLite at{' '}
           <code className="rounded bg-zinc-100 px-1">server/data/restora.sqlite</code> stays the source of truth for
           connected terminals ({locId} is open here).
@@ -145,7 +145,7 @@ function DataSection({ state, draft, dispatch, empire, locId, link, resync }) {
             Reset all settings
           </button>
         </div>
-        <p className="mt-3 text-[11px] text-zinc-500">
+        <p className="mt-3 text-2xs text-zinc-500">
           Defaults come from <code className="rounded bg-zinc-100 px-1">src/lib/settings.js</code> — the same object the
           SQLite projection and migrations use, so seed data and live stores never drift apart.
         </p>

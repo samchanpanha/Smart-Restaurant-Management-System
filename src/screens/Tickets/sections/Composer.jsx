@@ -128,7 +128,7 @@ function Composer({ order }) {
         <>
           {(quickAdds.favorites.length > 0 || quickAdds.recent.length > 0) && (
             <div className="mt-3" data-testid="quick-add">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+              <div className="text-3xs font-bold uppercase tracking-widest text-zinc-500">
                 {tk.quickAdd || 'Quick add'}
               </div>
               <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -199,7 +199,7 @@ function Composer({ order }) {
                     Suggest {translateDishName(sub, lang)} →
                   </button>
                 ) : (
-                  <div className="mt-2 text-[11px] text-zinc-600">No substitute mapped</div>
+                  <div className="mt-2 text-2xs text-zinc-600">No substitute mapped</div>
                 )}
               </div>
             )
@@ -215,7 +215,7 @@ function Composer({ order }) {
               <div className="mt-1 flex items-center justify-between">
                 <span className="tnum text-sm font-bold text-amber-300">{money(m.price)}</span>
                 {(m.modifiers || []).some((g) => g.required) && (
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">mods*</span>
+                  <span className="text-3xs font-semibold uppercase tracking-wide text-zinc-500">mods*</span>
                 )}
               </div>
             </button>

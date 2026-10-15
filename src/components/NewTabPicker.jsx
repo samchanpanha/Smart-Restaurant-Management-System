@@ -46,7 +46,7 @@ export default function NewTabPicker() {
             if (!items.length) return null
             return (
               <div key={section.id}>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                <div className="text-3xs font-bold uppercase tracking-wider text-zinc-400">
                   {translateSectionLabel(section.label, lang)}
                 </div>
                 <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -69,7 +69,7 @@ export default function NewTabPicker() {
                             {translatedLabel}
                             {translatedLabel !== item.label && <span className="sr-only"> {item.label}</span>}
                           </span>
-                          <span className="mt-0.5 block text-[11px] text-zinc-500">
+                          <span className="mt-0.5 block text-2xs text-zinc-500">
                             {already
                               ? (lang === 'km'
                                 ? 'បានបើករួចហើយ — ចុចទៅកាន់ផ្ទាំងនោះ'
@@ -90,11 +90,11 @@ export default function NewTabPicker() {
         </div>
 
         <p className="mt-6 border-t border-zinc-100 pt-4 text-xs text-zinc-500">
-          Tip: <kbd className="rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-[10px] font-semibold">Ctrl</kbd>/
-          <kbd className="rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-[10px] font-semibold">⌘</kbd>+click a
+          Tip: <kbd className="rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-3xs font-semibold">Ctrl</kbd>/
+          <kbd className="rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-3xs font-semibold">⌘</kbd>+click a
           sidebar item to open it in a new tab, middle-click for a background tab, and
-          <kbd className="ml-1 rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-[10px] font-semibold">Alt</kbd>+
-          <kbd className="rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-[10px] font-semibold">T</kbd> for
+          <kbd className="ml-1 rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-3xs font-semibold">Alt</kbd>+
+          <kbd className="rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-3xs font-semibold">T</kbd> for
           another new tab.
         </p>
       </div>

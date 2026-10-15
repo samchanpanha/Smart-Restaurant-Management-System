@@ -60,7 +60,7 @@ function MoneySection({ draft, patch, dispatch, settings, state, locationLabel }
           >
             Re-base rates on {draft.baseCurrency}
           </button>
-          <span className="text-[11px] text-zinc-500">
+          <span className="text-2xs text-zinc-500">
             Current base: {settings.baseCurrency} · {locationLabel}
           </span>
         </div>
@@ -93,9 +93,9 @@ function MoneySection({ draft, patch, dispatch, settings, state, locationLabel }
           </div>
         ) : null}
       >
-        <div className="overflow-x-auto">
+        <div className="table-scroll">
           <table className="w-full min-w-[720px] text-left text-sm">
-            <thead className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+            <thead className="text-3xs font-bold uppercase tracking-wider text-zinc-500">
               <tr>
                 <th className="px-2 py-2">Currency</th>
                 <th className="px-2 py-2">Symbol</th>
@@ -237,7 +237,7 @@ function MoneySection({ draft, patch, dispatch, settings, state, locationLabel }
           </Field>
         </div>
         {state.turnHistory?.length > 0 && (
-          <p className="mt-3 text-[11px] text-zinc-500">
+          <p className="mt-3 text-2xs text-zinc-500">
             Tonight&apos;s observed turns average{' '}
             {Math.round(state.turnHistory.reduce((sum, turn) => sum + turn.minutes, 0) / state.turnHistory.length)} minutes.
           </p>
@@ -322,7 +322,7 @@ function RescaleCard({ dispatch, state, locationLabel }) {
             >
               Revalue catalog…
             </button>
-            <span className="text-[11px] text-zinc-500">{and(state.menu.length)} menu prices · {and(state.inventory.length)} stock items · cannot be undone except by reset or import</span>
+            <span className="text-2xs text-zinc-500">{and(state.menu.length)} menu prices · {and(state.inventory.length)} stock items · cannot be undone except by reset or import</span>
           </>
         )}
       </div>

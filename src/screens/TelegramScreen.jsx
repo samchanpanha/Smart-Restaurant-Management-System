@@ -209,17 +209,17 @@ export default function TelegramScreen() {
               <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-orange-500/10 text-xs font-bold text-orange-600">1</span>
               <span>
                 Talk to <span className="font-semibold">@BotFather</span> in Telegram, create a bot, and copy its token
-                into <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-[11px]">TELEGRAM_BOT_TOKEN</code>.
+                into <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-2xs">TELEGRAM_BOT_TOKEN</code>.
               </span>
             </li>
             <li className="flex gap-3">
               <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-orange-500/10 text-xs font-bold text-orange-600">2</span>
               <span>
                 Point Telegram at the webhook:
-                <div className="mt-1.5 break-all rounded-lg bg-zinc-50 px-3 py-2 font-mono text-[11px] text-zinc-600">
+                <div className="mt-1.5 break-all rounded-lg bg-zinc-50 px-3 py-2 font-mono text-2xs text-zinc-600">
                   https://api.telegram.org/bot&lt;token&gt;/setWebhook?url={webhookUrl}
                 </div>
-                <span className="mt-1 block text-[11px] text-zinc-500">
+                <span className="mt-1 block text-2xs text-zinc-500">
                   Add <code className="rounded bg-zinc-100 px-1 py-0.5">TELEGRAM_WEBHOOK_SECRET</code> and Telegram will
                   echo it back on every update.
                 </span>
@@ -229,7 +229,7 @@ export default function TelegramScreen() {
               <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-orange-500/10 text-xs font-bold text-orange-600">3</span>
               <span>
                 Map chats to a role with{' '}
-                <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-[11px]">TELEGRAM_CHAT_ROLES=12345:manager,67890:staff</code>.
+                <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-2xs">TELEGRAM_CHAT_ROLES=12345:manager,67890:staff</code>.
                 Unmapped chats get staff access: look-ups only.
               </span>
             </li>
@@ -237,11 +237,11 @@ export default function TelegramScreen() {
           <div className="mt-4 grid gap-2 text-xs text-zinc-600 sm:grid-cols-2">
             <div className="rounded-xl bg-zinc-50 px-3 py-2">
               <div className="font-semibold text-zinc-700">Webhook path</div>
-              <div className="mt-0.5 break-all font-mono text-[11px]">{webhookUrl}</div>
+              <div className="mt-0.5 break-all font-mono text-2xs">{webhookUrl}</div>
             </div>
             <div className="rounded-xl bg-zinc-50 px-3 py-2">
               <div className="font-semibold text-zinc-700">Updates seen</div>
-              <div className="mt-0.5 font-mono text-[11px]">
+              <div className="mt-0.5 font-mono text-2xs">
                 {stats ? `${stats.updates} updates · ${stats.commands} commands · ${stats.actions} actions · ${stats.skipped} undelivered` : 'API offline — the console below still answers locally'}
               </div>
             </div>
@@ -284,12 +284,12 @@ export default function TelegramScreen() {
                   <code className="text-xs font-bold text-zinc-800">
                     {entry.command}{entry.args ? ` ${entry.args}` : ''}
                   </code>
-                  <div className="mt-0.5 text-[11px] text-zinc-500">{entry.blurb}</div>
+                  <div className="mt-0.5 text-2xs text-zinc-500">{entry.blurb}</div>
                 </div>
                 <button
                   type="button"
                   onClick={() => run(entry.command + (entry.args ? ' ' : ''))}
-                  className="shrink-0 rounded-lg border border-zinc-200 px-2 py-1 text-[11px] font-semibold text-zinc-600 hover:border-orange-300 hover:text-orange-700"
+                  className="shrink-0 rounded-lg border border-zinc-200 px-2 py-1 text-2xs font-semibold text-zinc-600 hover:border-orange-300 hover:text-orange-700"
                 >
                   Try
                 </button>
@@ -327,12 +327,12 @@ export default function TelegramScreen() {
                 />
                 <span className="min-w-0">
                   <span className="block text-xs font-semibold text-zinc-800">{label}</span>
-                  <span className="mt-0.5 block text-[11px] text-zinc-500">{blurb}</span>
+                  <span className="mt-0.5 block text-2xs text-zinc-500">{blurb}</span>
                 </span>
               </label>
             ))}
             <div className="flex flex-wrap items-center gap-3 rounded-xl bg-zinc-50 px-3 py-2">
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500" htmlFor="tg-digest-hour">
+              <label className="text-2xs font-semibold uppercase tracking-wider text-zinc-500" htmlFor="tg-digest-hour">
                 Digest hour
               </label>
               <select
@@ -345,13 +345,13 @@ export default function TelegramScreen() {
                   <option key={hour} value={hour}>{String(hour).padStart(2, '0')}:00</option>
                 ))}
               </select>
-              <span className="text-[11px] text-zinc-500">One digest per day, once this hour has passed.</span>
+              <span className="text-2xs text-zinc-500">One digest per day, once this hour has passed.</span>
             </div>
           </div>
 
           <div className="space-y-3">
             <div className="rounded-xl border border-zinc-200 px-3 py-2">
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500" htmlFor="tg-chat">
+              <label className="text-2xs font-semibold uppercase tracking-wider text-zinc-500" htmlFor="tg-chat">
                 Chat to report to
               </label>
               <input
@@ -361,42 +361,42 @@ export default function TelegramScreen() {
                 placeholder="-1001234567890"
                 className={`${inputCls} mt-1 font-mono text-xs`}
               />
-              <p className="mt-1 text-[11px] text-zinc-500">
+              <p className="mt-1 text-2xs text-zinc-500">
                 Any chat that messages the bot is remembered automatically — send it <code className="rounded bg-zinc-100 px-1">/start</code> once.
               </p>
               {push?.lastText ? (
                 <div className="mt-2 rounded-lg bg-zinc-50 px-2.5 py-2">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+                  <div className="text-3xs font-bold uppercase tracking-wider text-zinc-500">
                     Last push · {push.lastTargets?.join(', ') || 'no targets'}
                   </div>
-                  <pre className="mt-1 whitespace-pre-wrap font-sans text-[11px] text-zinc-600">{push.lastText}</pre>
+                  <pre className="mt-1 whitespace-pre-wrap font-sans text-2xs text-zinc-600">{push.lastText}</pre>
                 </div>
               ) : null}
             </div>
 
             <div className="rounded-xl bg-zinc-50 px-3 py-2.5">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Close-of-day digest</div>
+                <div className="text-2xs font-bold uppercase tracking-wider text-zinc-500">Close-of-day digest</div>
                 <div className="flex gap-2">
-                  <button type="button" onClick={() => digestRun(true)} className={`${btnGhost} px-2.5 py-1 text-[11px]`}>
+                  <button type="button" onClick={() => digestRun(true)} className={`${btnGhost} px-2.5 py-1 text-2xs`}>
                     Preview
                   </button>
                   <button
                     type="button"
                     onClick={() => digestRun(false)}
                     disabled={digestBusy}
-                    className={`${btnPrimary} px-2.5 py-1 text-[11px]`}
+                    className={`${btnPrimary} px-2.5 py-1 text-2xs`}
                   >
                     <Icon name="send" size={13} /> Send now
                   </button>
                 </div>
               </div>
               {digest ? (
-                <pre data-testid="digest-preview" className="mt-2 whitespace-pre-wrap font-sans text-[11px] text-zinc-700">{digest.text}</pre>
+                <pre data-testid="digest-preview" className="mt-2 whitespace-pre-wrap font-sans text-2xs text-zinc-700">{digest.text}</pre>
               ) : (
-                <p className="mt-1 text-[11px] text-zinc-500">Preview what tonight looked like, then send it to the chats above.</p>
+                <p className="mt-1 text-2xs text-zinc-500">Preview what tonight looked like, then send it to the chats above.</p>
               )}
-              {digestNote ? <p className="mt-1.5 text-[11px] text-zinc-500">{digestNote}</p> : null}
+              {digestNote ? <p className="mt-1.5 text-2xs text-zinc-500">{digestNote}</p> : null}
             </div>
           </div>
         </div>
@@ -438,7 +438,7 @@ export default function TelegramScreen() {
               >
                 <pre className="whitespace-pre-wrap font-sans">{row.text}</pre>
                 {row.actions && (
-                  <div className="mt-2 border-t border-zinc-100 pt-1.5 text-[11px] text-zinc-500">
+                  <div className="mt-2 border-t border-zinc-100 pt-1.5 text-2xs text-zinc-500">
                     {row.applied ? 'Applied: ' : 'Would apply: '}
                     {row.actions.map((action) => action.type).join(', ')}
                   </div>
@@ -469,7 +469,7 @@ export default function TelegramScreen() {
               key={shortcut}
               type="button"
               onClick={() => run(shortcut)}
-              className="rounded-full border border-zinc-200 px-2.5 py-1 text-[11px] font-semibold text-zinc-600 hover:border-orange-300 hover:text-orange-700"
+              className="rounded-full border border-zinc-200 px-2.5 py-1 text-2xs font-semibold text-zinc-600 hover:border-orange-300 hover:text-orange-700"
             >
               {shortcut}
             </button>
@@ -488,7 +488,7 @@ export default function TelegramScreen() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <label className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500" htmlFor="tg-table">Table</label>
+            <label className="text-2xs font-semibold uppercase tracking-wider text-zinc-500" htmlFor="tg-table">Table</label>
             <select
               id="tg-table"
               value={tableId}
@@ -509,11 +509,11 @@ export default function TelegramScreen() {
 
         <div className="mt-4 grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
           <div className="rounded-2xl bg-white p-4 text-center ring-1 ring-zinc-200">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Restora · mini app</div>
+            <div className="text-3xs font-bold uppercase tracking-widest text-zinc-500">Restora · mini app</div>
             <div className="mx-auto mt-3 w-fit rounded-xl border-4 border-zinc-900 p-2">
               <QRCodeSVG value={miniAppUrl} size={168} level="M" />
             </div>
-            <div className="mt-3 break-all font-mono text-[10px] text-zinc-400">{miniAppUrl}</div>
+            <div className="mt-3 break-all font-mono text-3xs text-zinc-400">{miniAppUrl}</div>
             <div className="mt-3 flex flex-wrap justify-center gap-2">
               <a href={miniAppUrl} target="_blank" rel="noreferrer" className={btnGhost}>
                 Open mini app ↗{lang !== 'en' && <span className="sr-only"> Open mini app</span>}
@@ -523,7 +523,7 @@ export default function TelegramScreen() {
 
           <div className="space-y-3">
             <div className="overflow-hidden rounded-2xl border border-zinc-200">
-              <div className="flex items-center justify-between border-b border-zinc-200 bg-zinc-50 px-3 py-2 text-[11px] font-semibold text-zinc-600">
+              <div className="flex items-center justify-between border-b border-zinc-200 bg-zinc-50 px-3 py-2 text-2xs font-semibold text-zinc-600">
                 <span>Live preview · {miniAppUrl.replace(origin, '')}</span>
                 <a href={miniAppUrl} target="_blank" rel="noreferrer" className="text-orange-600 hover:underline">reload ↗</a>
               </div>
@@ -536,12 +536,12 @@ export default function TelegramScreen() {
             <div className="grid gap-2 sm:grid-cols-2">
               {WEBAPP_APIS.map(([api, blurb]) => (
                 <div key={api} className="rounded-xl bg-zinc-50 px-3 py-2">
-                  <div className="font-mono text-[11px] font-semibold text-zinc-700">{api}</div>
-                  <div className="mt-0.5 text-[11px] text-zinc-500">{blurb}</div>
+                  <div className="font-mono text-2xs font-semibold text-zinc-700">{api}</div>
+                  <div className="mt-0.5 text-2xs text-zinc-500">{blurb}</div>
                 </div>
               ))}
             </div>
-            <p className="text-[11px] text-zinc-500">
+            <p className="text-2xs text-zinc-500">
               Outside Telegram the mini app still runs as an ordinary web page — the Telegram APIs are feature-detected,
               so a plain browser shows the same menu without the platform chrome.
             </p>

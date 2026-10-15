@@ -25,7 +25,7 @@ export default function BranchOverview({ copy, locations, locId, onPick }) {
               <span>
                 <span className="block text-[var(--fs-body)] font-bold text-[var(--text)]">
                   {item.short}
-                  {active && <span className="ml-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--accent)]">{copy.selected}</span>}
+                  {active && <span className="ml-2 text-3xs font-semibold uppercase tracking-wide text-[var(--accent)]">{copy.selected}</span>}
                 </span>
                 <span className="mt-1 block text-[var(--fs-label)] text-[var(--text-muted)]">
                   {copy.coversOccupied(item.dash.covers, Math.round(item.dash.occupancy * 100))}

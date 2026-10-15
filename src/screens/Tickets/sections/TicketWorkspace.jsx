@@ -266,7 +266,7 @@ function TicketWorkspace({ orderId, onError }) {
       )}
 
       <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-[var(--color-ink-700)] bg-[var(--color-ink-900)] px-4 py-3">
-        <span className="text-[11px] font-semibold uppercase tracking-widest text-zinc-500">Documents</span>
+        <span className="text-2xs font-semibold uppercase tracking-widest text-zinc-500">Documents</span>
         <button
           type="button"
           onClick={() => printDocument('receipt', { file: order.status === 'paid' })}
@@ -283,7 +283,7 @@ function TicketWorkspace({ orderId, onError }) {
         <button type="button" onClick={() => downloadDocument('invoice')} className="min-h-[36px] rounded-lg border border-[var(--color-ink-600)] px-3 text-xs font-semibold text-zinc-200 hover:bg-white/5">
           Download
         </button>
-        <span className="ml-auto text-[11px] text-zinc-500">
+        <span className="ml-auto text-2xs text-zinc-500">
           Template set in Settings → Documents {link.status === 'live' ? `· ${locId}` : '· offline terminal'}
         </span>
       </div>
@@ -313,7 +313,7 @@ function TicketWorkspace({ orderId, onError }) {
               Send {heldByCourse.length > 1 ? 'all held' : `${heldByCourse[0]?.label || ''} `}({held.reduce((s, l) => s + l.qty, 0)}) → kitchen
             </button>
           </div>
-          <p className="mt-2 text-[11px] text-zinc-500">Sending is the commit — 15s undo, then the kitchen owns it. Stock drops on fire. <span className="text-zinc-400">Shortcut: press F.</span></p>
+          <p className="mt-2 text-2xs text-zinc-500">Sending is the commit — 15s undo, then the kitchen owns it. Stock drops on fire. <span className="text-zinc-400">Shortcut: press F.</span></p>
         </div>
       )}
 

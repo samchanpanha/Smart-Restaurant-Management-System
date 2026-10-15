@@ -65,7 +65,7 @@ function ServiceReport() {
                 <span className="font-bold text-zinc-100">{s.name}</span>
                 <span className="tnum font-bold">{money(s.sales)}</span>
               </div>
-              <div className="mt-1 flex flex-wrap gap-1.5 text-[11px]">
+              <div className="mt-1 flex flex-wrap gap-1.5 text-2xs">
                 <StatusPill tone="muted" size="sm">{s.checks} checks</StatusPill>
                 <StatusPill tone="muted" size="sm">avg {money(s.avg)}</StatusPill>
                 <StatusPill tone={s.comps ? 'warn' : 'muted'} size="sm">{s.comps} comps</StatusPill>
@@ -92,7 +92,7 @@ function ServiceReport() {
             </li>
           ))}
         </ul>
-        <p className="mt-2 text-[11px] text-zinc-500">
+        <p className="mt-2 text-2xs text-zinc-500">
           Average turn tonight: <strong className="tnum text-zinc-300">{avgTurn}m</strong> (drives host wait quotes).
           {liveSlow.length > 0 && (
             <> Slowest live: {liveSlow.map((s) => `${s.t.name} ${s.mins}m`).join(' · ')}.</>

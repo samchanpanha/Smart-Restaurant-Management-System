@@ -168,7 +168,7 @@ function OrderStatusStepper({ order }) {
             >
               {done ? '✓' : i + 1}
             </span>
-            <span className={`text-[10px] font-bold leading-tight ${done ? 'text-stone-600' : 'text-stone-400'}`}>{label}</span>
+            <span className={`text-3xs font-bold leading-tight ${done ? 'text-stone-600' : 'text-stone-400'}`}>{label}</span>
           </li>
         )
       })}
@@ -200,7 +200,7 @@ function DishModal({ item, onAdd, onClose, showImages = true }) {
         <div className="tnum mt-2 text-lg font-extrabold text-amber-700">{money(item.price)}</div>
         {!!item.dietaryTags?.length && (
           <div className="mt-2 flex flex-wrap gap-1.5">
-            {item.dietaryTags.map((tag) => <span key={tag} className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-800">{tag}</span>)}
+            {item.dietaryTags.map((tag) => <span key={tag} className="rounded-full bg-emerald-50 px-2.5 py-1 text-2xs font-bold text-emerald-800">{tag}</span>)}
           </div>
         )}
         {!!item.allergens?.length && (
@@ -314,7 +314,7 @@ function PaySheet({ order, onClose, onPaid }) {
         >
           Pay {money(t.total + tip)}
         </button>
-        <p className="mt-2 text-center text-[11px] text-stone-400">Demo checkout — no card is charged.</p>
+        <p className="mt-2 text-center text-2xs text-stone-400">Demo checkout — no card is charged.</p>
     </Sheet>
   )
 }
@@ -427,7 +427,7 @@ export default function GuestScreen({ tableId, allowPickup = false, onSelfSeat =
   const guestPhotos = state.settings?.food?.imagesOnGuestMenu !== false
 
   const shell = (inner) => (
-    <div className="min-h-screen bg-[var(--guest-bg)] text-stone-900">
+    <div className="guest-shell bg-[var(--guest-bg)] text-stone-900">
       <div className="mx-auto max-w-md px-4 pb-[calc(8rem+env(safe-area-inset-bottom))] pt-6">{inner}</div>
     </div>
   )
@@ -502,7 +502,7 @@ export default function GuestScreen({ tableId, allowPickup = false, onSelfSeat =
               </button>
             )}
             {allowPickup && (
-              <p className="text-[11px] leading-relaxed text-stone-400">
+              <p className="text-2xs leading-relaxed text-stone-400">
                 {openTables.length
                   ? 'Or tap a free table above to sit down.'
                   : 'No tables are free right now — you can still order for pickup.'}
@@ -551,7 +551,7 @@ export default function GuestScreen({ tableId, allowPickup = false, onSelfSeat =
   })()
 
   return (
-    <div className="min-h-screen bg-[var(--guest-bg)] text-stone-900">
+    <div className="guest-shell bg-[var(--guest-bg)] text-stone-900">
       <div className="mx-auto max-w-md px-4 pb-[calc(9rem+env(safe-area-inset-bottom))] pt-5">
         <div className="mb-3 flex justify-end">
           <LanguageSwitcher compact testIdPrefix="guest-lang" />
@@ -573,7 +573,7 @@ export default function GuestScreen({ tableId, allowPickup = false, onSelfSeat =
             </h1>
             {liveStatus && (
               <span
-                className="mt-1 inline-block rounded-full bg-amber-500/15 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-amber-800"
+                className="mt-1 inline-block rounded-full bg-amber-500/15 px-2.5 py-0.5 text-2xs font-bold uppercase tracking-wider text-amber-800"
                 role="status"
               >
                 {liveStatus}
@@ -679,11 +679,11 @@ export default function GuestScreen({ tableId, allowPickup = false, onSelfSeat =
                     </div>
                     {!!m.dietaryTags?.length && (
                       <div className="mt-2 flex flex-wrap gap-1.5">
-                        {m.dietaryTags.map((tag) => <span key={tag} className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-800">{tag}</span>)}
+                        {m.dietaryTags.map((tag) => <span key={tag} className="rounded-full bg-emerald-50 px-2 py-0.5 text-3xs font-bold text-emerald-800">{tag}</span>)}
                       </div>
                     )}
                     {!!m.allergens?.length && (
-                      <div className="mt-1.5 text-[10px] font-semibold text-amber-800">Allergen notes · {m.allergens.join(', ')}</div>
+                      <div className="mt-1.5 text-3xs font-semibold text-amber-800">Allergen notes · {m.allergens.join(', ')}</div>
                     )}
                   </button>
                 </li>
@@ -694,7 +694,7 @@ export default function GuestScreen({ tableId, allowPickup = false, onSelfSeat =
                 </li>
               )}
             </ul>
-            <p className="mt-3 text-center text-[11px] text-stone-400">
+            <p className="mt-3 text-center text-2xs text-stone-400">
               Dishes the kitchen 86&apos;s disappear from this menu instantly.
             </p>
           </>
@@ -856,7 +856,7 @@ export default function GuestScreen({ tableId, allowPickup = false, onSelfSeat =
             >
               Send to kitchen · {money(cartTotal)}
             </button>
-            <p className="mt-2 text-center text-[11px] text-stone-400">Fires straight to the KDS — same as your server sending it.</p>
+            <p className="mt-2 text-center text-2xs text-stone-400">Fires straight to the KDS — same as your server sending it.</p>
           </Sheet>
         )}
 
@@ -891,7 +891,7 @@ export default function GuestScreen({ tableId, allowPickup = false, onSelfSeat =
                         }`}
                       >
                         <div className="font-bold text-stone-900">{translateTableName(t.name, lang)}</div>
-                        <div className="text-[11px] text-stone-500">{t.seats} seats · {t.zone}</div>
+                        <div className="text-2xs text-stone-500">{t.seats} seats · {t.zone}</div>
                       </button>
                     ))}
                   </div>

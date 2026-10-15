@@ -72,7 +72,7 @@ function NewBadge({ firedAt, dict }) {
   const { secs } = useAge(firedAt)
   if (secs >= 45) return null
   return (
-    <span className="animate-status-in ml-1.5 rounded bg-sky-500/20 px-1.5 py-0.5 align-middle text-[10px] font-bold text-sky-300 ring-1 ring-inset ring-sky-500/40">
+    <span className="animate-status-in ml-1.5 rounded bg-sky-500/20 px-1.5 py-0.5 align-middle text-3xs font-bold text-sky-300 ring-1 ring-inset ring-sky-500/40">
       {dict.newBadge}
     </span>
   )
@@ -108,7 +108,7 @@ function ItemPhotoStrip({ menuItem, dishName, dict, onInspect, compact = false }
             onError={(event) => { event.currentTarget.hidden = true }}
             className="h-full w-full object-cover transition-transform group-hover:scale-105"
           />
-          <span className="absolute bottom-0.5 right-0.5 rounded bg-black/65 px-1 py-0.2 text-[9px] font-bold text-white">
+          <span className="absolute bottom-0.5 right-0.5 rounded bg-black/65 px-1 py-0.5 text-3xs font-bold text-white">
             {activeIdx + 1}/{images.length}
           </span>
         </button>
@@ -221,7 +221,7 @@ function DishPhotoModal({ dish, initialIndex = 0, recipe, invById, lang, dict, o
                 }`}
               >
                 <img src={src} alt="" className="h-20 w-full rounded-lg object-cover" />
-                <div className="mt-1 truncate text-[11px] font-semibold text-zinc-200">
+                <div className="mt-1 truncate text-2xs font-semibold text-zinc-200">
                   {viewLabels[i] || `#${i + 1}`}
                 </div>
               </button>
@@ -233,7 +233,7 @@ function DishPhotoModal({ dish, initialIndex = 0, recipe, invById, lang, dict, o
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <div className="rounded-xl border border-[var(--color-ink-700)] bg-[var(--color-ink-850)] p-3">
-            <div className="text-[11px] font-bold uppercase tracking-widest text-zinc-400">
+            <div className="text-2xs font-bold uppercase tracking-widest text-zinc-400">
               {dict.prepNotes}
             </div>
             <div className="mt-1 text-sm font-semibold text-zinc-100">
@@ -241,7 +241,7 @@ function DishPhotoModal({ dish, initialIndex = 0, recipe, invById, lang, dict, o
             </div>
           </div>
           <div className="rounded-xl border border-[var(--color-ink-700)] bg-[var(--color-ink-850)] p-3">
-            <div className="text-[11px] font-bold uppercase tracking-widest text-zinc-400">
+            <div className="text-2xs font-bold uppercase tracking-widest text-zinc-400">
               {dict.ingredientsLabel}
             </div>
             <ul className="mt-1 space-y-1 text-xs text-zinc-300">
@@ -289,12 +289,12 @@ const TicketCard = memo(function TicketCard({ order, tableName, server, lines, l
             <span>{translateTableName(tableName, lang)}</span>
             <span className="font-normal text-zinc-500">· {server}</span>
             {order?.transferredFromTableId && (
-              <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-bold text-amber-300 ring-1 ring-inset ring-amber-500/40">
+              <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-3xs font-bold text-amber-300 ring-1 ring-inset ring-amber-500/40">
                 Moved: {prevTableName} ➔ {translateTableName(tableName, lang)}
               </span>
             )}
           </div>
-          <div className="text-[11px] text-zinc-500">{dict.firedAt(formatClock(oldest.firedAt))}</div>
+          <div className="text-2xs text-zinc-500">{dict.firedAt(formatClock(oldest.firedAt))}</div>
         </div>
         <CardAge firedAt={oldest.firedAt} dict={dict} />
       </header>
@@ -312,18 +312,18 @@ const TicketCard = memo(function TicketCard({ order, tableName, server, lines, l
                       <span className="sr-only"> ({l.name})</span>
                     )}
                     {l.by === 'guest' && (
-                      <span className="ml-1.5 rounded bg-violet-500/20 px-1.5 py-0.5 align-middle text-[10px] font-bold text-violet-300 ring-1 ring-inset ring-violet-500/40">
+                      <span className="ml-1.5 rounded bg-violet-500/20 px-1.5 py-0.5 align-middle text-3xs font-bold text-violet-300 ring-1 ring-inset ring-violet-500/40">
                         QR{l.guest ? ` · ${l.guest}` : ''}
                       </span>
                     )}
                     <NewBadge firedAt={l.firedAt} dict={dict} />
                     {(l.transferredFromTableId || order?.transferredFromTableId) && (
-                      <span className="ml-1.5 rounded bg-amber-500/20 px-1.5 py-0.5 align-middle text-[10px] font-bold text-amber-300 ring-1 ring-inset ring-amber-500/40">
+                      <span className="ml-1.5 rounded bg-amber-500/20 px-1.5 py-0.5 align-middle text-3xs font-bold text-amber-300 ring-1 ring-inset ring-amber-500/40">
                         Moved
                       </span>
                     )}
                   </div>
-                  <div className="mt-0.5 flex flex-wrap items-center gap-1 text-[11px] text-zinc-400">
+                  <div className="mt-0.5 flex flex-wrap items-center gap-1 text-2xs text-zinc-400">
                     <span className="rounded bg-black/40 px-1.5 py-0.5 font-semibold uppercase tracking-wide">
                       {translateCourse(l.course, lang)}
                     </span>
@@ -418,7 +418,7 @@ function EightySixBoard({ lang, dict, showImages, onInspectDish }) {
                     )}
                     <div className="min-w-0">
                       <div className="truncate text-sm font-semibold text-zinc-100">{localName}</div>
-                      <div className="text-[11px] text-zinc-500">
+                      <div className="text-2xs text-zinc-500">
                         {subDish ? dict.floorSuggests(subName) : dict.noSubstitute}
                       </div>
                     </div>
@@ -473,7 +473,7 @@ function EightySixBoard({ lang, dict, showImages, onInspectDish }) {
                 )}
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-semibold text-zinc-200">{localName}</div>
-                  <div className="text-[11px] text-zinc-500">{dict.tapTo86}</div>
+                  <div className="text-2xs text-zinc-500">{dict.tapTo86}</div>
                 </div>
               </button>
             )
@@ -573,7 +573,7 @@ function KitchenDishGallery({ menu, recipes, lang, dict, onInspectDish }) {
                         onError={(event) => { event.currentTarget.hidden = true }}
                         className="h-16 w-full object-cover transition-transform group-hover:scale-105"
                       />
-                      <span className="block truncate bg-black/60 px-1 py-0.5 text-center text-[9px] font-semibold text-white">
+                      <span className="block truncate bg-black/60 px-1 py-0.5 text-center text-3xs font-semibold text-white">
                         {viewLabels[idx] || `#${idx + 1}`}
                       </span>
                     </button>
@@ -581,7 +581,7 @@ function KitchenDishGallery({ menu, recipes, lang, dict, onInspectDish }) {
                 </div>
               </div>
 
-              <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-white/5 pt-2 text-[11px] text-zinc-500">
+              <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-white/5 pt-2 text-2xs text-zinc-500">
                 <span className="truncate">
                   {dict.stations[dish.station] || STATION_META[dish.station]?.label || dish.station}
                   {prepNotes ? ` · ${prepNotes}` : ''}
@@ -616,7 +616,7 @@ function SlaStrip({ fired, bumpedToday, dict }) {
       ].map((s) => (
         <div key={s.label} className="rounded-2xl border border-[var(--color-ink-700)] bg-[var(--color-ink-900)] px-4 py-3">
           <div className="tnum text-2xl font-bold">{s.value}</div>
-          <div className="mt-0.5 text-[11px] font-semibold uppercase tracking-widest text-zinc-500">{s.label}</div>
+          <div className="mt-0.5 text-2xs font-semibold uppercase tracking-widest text-zinc-500">{s.label}</div>
         </div>
       ))}
     </div>
@@ -652,7 +652,7 @@ function RecallStrip({ menuById, lang, dict, showImages }) {
   if (!recallable.length) return null
   return (
     <div className="animate-status-in rounded-2xl border border-sky-500/30 bg-sky-500/5 p-3">
-      <div className="text-[11px] font-bold uppercase tracking-widest text-sky-300">{dict.recallHeader}</div>
+      <div className="text-2xs font-bold uppercase tracking-widest text-sky-300">{dict.recallHeader}</div>
       <div className="mt-2 flex flex-wrap gap-2">
         {recallable.map((r) => {
           const imgs = getItemImages(r.menuItem)

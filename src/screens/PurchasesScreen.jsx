@@ -24,7 +24,7 @@ import { purchaseSummary, rangeBounds } from '../lib/reports'
 import { useRestora } from '../lib/store'
 
 const cardCls = 'rounded-2xl border border-zinc-200/80 bg-white shadow-sm'
-const thCls = 'px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-zinc-500'
+const thCls = 'px-3 py-2 text-left text-2xs font-semibold uppercase tracking-wide text-zinc-500'
 const tdCls = 'px-3 py-2.5 text-sm text-zinc-700'
 const FILTERS = [
   { id: 'open', label: 'Open', statuses: ['draft', 'ordered'] },
@@ -205,7 +205,7 @@ function PurchaseModal({ purchase, defaultSupplierId, onClose, onSave }) {
                       ))}
                     </select>
                     {item && (
-                      <div className="mt-1 flex items-center gap-2 text-[11px] text-zinc-500">
+                      <div className="mt-1 flex items-center gap-2 text-2xs text-zinc-500">
                         <span>on hand {item.onHand} {item.unit}</span>
                         <span>· par {item.par}</span>
                         {status && status.tone !== 'ok' && <StatusPill tone={status.tone} size="sm">{status.label}</StatusPill>}
@@ -240,7 +240,7 @@ function PurchaseModal({ purchase, defaultSupplierId, onClose, onSave }) {
                       </select>
                     </div>
                     {item && (Number(line.packSize) || packFactor(item, line.unit)) > 1 && (
-                      <div className="mt-1 text-[11px] text-zinc-500">
+                      <div className="mt-1 text-2xs text-zinc-500">
                         {line.qty || 0} {line.unit} → {describeQty(item, (Number(line.qty) || 0) * (Number(line.packSize) || packFactor(item, line.unit)), state.settings)} of stock
                       </div>
                     )}
@@ -250,7 +250,7 @@ function PurchaseModal({ purchase, defaultSupplierId, onClose, onSave }) {
                       aria-label={`Unit cost for ${line.name || 'line'}`}
                       onChange={(e) => patchLine(line.id, { unitCost: e.target.value === '' ? '' : Number(e.target.value) })} />
                     {item && (Number(line.packSize) || 1) > 1 && (
-                      <div className="mt-1 text-[11px] text-zinc-500">
+                      <div className="mt-1 text-2xs text-zinc-500">
                         {money(basePrice(Number(line.unitCost) || 0, Number(line.packSize) || 1), state.settings.currency)} per {item.unit}
                       </div>
                     )}
@@ -357,7 +357,7 @@ function ReceiveModal({ purchase, onClose, onReceive }) {
                 <tr key={line.id}>
                   <td className={tdCls}>
                     <div className="font-medium text-zinc-800">{line.name || item?.name}</div>
-                    <div className="text-[11px] text-zinc-500">
+                    <div className="text-2xs text-zinc-500">
                       ordered {line.qty} {line.unit || item?.unit || ''} · already in {line.receivedQty || 0}
                       {item && (Number(line.packSize) || packFactor(item, line.unit)) > 1
                         ? ` · lands as ${describeQty(item, (Number(line.qty) || 0) * (Number(line.packSize) || packFactor(item, line.unit)), state.settings)}`
@@ -375,7 +375,7 @@ function ReceiveModal({ purchase, onClose, onReceive }) {
                     />
                     <button
                       type="button"
-                      className="mt-1 text-[11px] font-semibold text-teal-700 hover:underline"
+                      className="mt-1 text-2xs font-semibold text-teal-700 hover:underline"
                       onClick={() => setLines((current) => current.map((entry) => (entry.id === line.id ? { ...entry, qty: due } : entry)))}
                     >
                       All {due}
@@ -539,22 +539,22 @@ export default function PurchasesScreen() {
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div className={`${cardCls} px-4 py-3`}>
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{pur.ordered || 'On order'}{lang !== 'en' && <span className="sr-only"> On order</span>}</div>
+          <div className="text-2xs font-semibold uppercase tracking-wide text-zinc-500">{pur.ordered || 'On order'}{lang !== 'en' && <span className="sr-only"> On order</span>}</div>
           <div className="mt-1 text-2xl font-semibold text-zinc-900">{money(stats.openValue, settings.currency)}</div>
           <div className="text-xs text-zinc-500">{stats.openOrders.length} open order(s)</div>
         </div>
         <div className={`${cardCls} px-4 py-3`}>
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{pur.received || 'Bought · 30 days'}{lang !== 'en' && <span className="sr-only"> Bought · 30 days</span>}</div>
+          <div className="text-2xs font-semibold uppercase tracking-wide text-zinc-500">{pur.received || 'Bought · 30 days'}{lang !== 'en' && <span className="sr-only"> Bought · 30 days</span>}</div>
           <div className="mt-1 text-2xl font-semibold text-zinc-900">{money(stats.spend, settings.currency)}</div>
           <div className="text-xs text-zinc-500">{stats.orders} receipt(s) · {stats.quickReceipts} quick receipt(s)</div>
         </div>
         <div className={`${cardCls} px-4 py-3`}>
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Below par</div>
+          <div className="text-2xs font-semibold uppercase tracking-wide text-zinc-500">Below par</div>
           <div className={`mt-1 text-2xl font-semibold ${lowStock.length ? 'text-amber-600' : 'text-zinc-900'}`}>{lowStock.length}</div>
           <div className="text-xs text-zinc-500">{lowStock.length ? 'waiting to be ordered' : 'everything is stocked'}</div>
         </div>
         <div className={`${cardCls} px-4 py-3`}>
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{pur.supplier || 'Top supplier · 30 days'}</div>
+          <div className="text-2xs font-semibold uppercase tracking-wide text-zinc-500">{pur.supplier || 'Top supplier · 30 days'}</div>
           <div className="mt-1 truncate text-lg font-semibold text-zinc-900">{stats.bySupplier[0]?.name || '—'}</div>
           <div className="text-xs text-zinc-500">{stats.bySupplier[0] ? money(stats.bySupplier[0].value, settings.currency) : 'no spend yet'}</div>
         </div>
@@ -624,7 +624,7 @@ export default function PurchasesScreen() {
             No purchase orders here yet. <button type="button" className="font-semibold text-teal-700 hover:underline" onClick={() => setEditing({ purchase: null, supplierId: '' })}>Start one</button> or fill a low-stock order from the list above.
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="table-scroll">
             <table className="w-full min-w-[880px]">
               <thead className="bg-zinc-50">
                 <tr>

@@ -116,12 +116,12 @@ function TicketsScreen() {
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {[
           { label: tk.activeOrders || 'Active orders', value: activeOrders, note: tk.activeTab || 'In progress', tone: 'orange' },
           { label: tk.readyOrders || 'Ready to serve', value: readyOrders, note: tk.readyTab || 'Kitchen complete', tone: 'green' },
           { label: tk.completedChecks || 'Completed checks', value: completedOrders, note: tk.paidTab || 'Paid tonight', tone: 'blue' },
-        ].map((item) => <div key={item.label} className="flex items-center gap-3 rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-sm"><span className={`flex h-10 w-10 items-center justify-center rounded-xl text-lg font-bold ${item.tone === 'green' ? 'bg-emerald-50 text-emerald-700' : item.tone === 'blue' ? 'bg-sky-50 text-sky-700' : 'bg-orange-50 text-orange-600'}`}>{item.tone === 'green' ? '✓' : item.tone === 'blue' ? '$' : '▤'}</span><span><span className="tnum block text-xl font-bold text-zinc-900">{item.value}</span><span className="mt-0.5 block text-xs font-semibold text-zinc-700">{item.label}</span><span className="block text-[10px] text-zinc-500">{item.note}</span></span></div>)}
+        ].map((item) => <div key={item.label} className="flex items-center gap-3 rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-sm"><span className={`flex h-10 w-10 items-center justify-center rounded-xl text-lg font-bold ${item.tone === 'green' ? 'bg-emerald-50 text-emerald-700' : item.tone === 'blue' ? 'bg-sky-50 text-sky-700' : 'bg-orange-50 text-orange-600'}`}>{item.tone === 'green' ? '✓' : item.tone === 'blue' ? '$' : '▤'}</span><span><span className="tnum block text-xl font-bold text-zinc-900">{item.value}</span><span className="mt-0.5 block text-xs font-semibold text-zinc-700">{item.label}</span><span className="block text-3xs text-zinc-500">{item.note}</span></span></div>)}
       </div>
 
       <div className="grid items-start gap-4 xl:grid-cols-3">

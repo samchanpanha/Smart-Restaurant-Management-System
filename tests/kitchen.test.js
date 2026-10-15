@@ -193,11 +193,13 @@ test('Global language switcher defaults to Khmer and translates menus, tabs, and
   assert.match(container.textContent, /今日销售概览/, 'Dashboard sales overview is in Chinese')
   assert.equal(activeTabLabel?.getAttribute('data-i18n-tab'), '仪表盘')
 
-  // Navigate to Menu & Recipes screen and verify Chinese translation
+  // Navigate to Menu & Recipes screen and verify Chinese translation. The
+  // screen is a lazy route, so give the chunk a longer beat than the default
+  // settle when the suite is running every other file in parallel.
   const menuNavBtn = [...document.querySelectorAll('nav[aria-label="Main navigation"] button')]
     .find((b) => b.textContent.includes('Menu & Recipes'))
   click(menuNavBtn)
-  await settle()
+  await settle(120)
   assert.match(container.textContent, /菜单与配方/, 'Menu screen title is in Chinese')
   assert.match(container.textContent, /招牌牛肉汉堡/, 'Dish names on Menu screen are in Chinese')
 

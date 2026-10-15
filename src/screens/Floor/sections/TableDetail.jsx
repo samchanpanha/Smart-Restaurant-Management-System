@@ -131,7 +131,7 @@ function TableDetail({ table, onClose, onSeat, onError, onFlash }) {
             >
               🔄 Move / Transfer Table
             </button>
-            <p className="text-center text-[11px] text-zinc-500">
+            <p className="text-center text-2xs text-zinc-500">
               Billing happens on Tickets — the table follows the check.
             </p>
           </>

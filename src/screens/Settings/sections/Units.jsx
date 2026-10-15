@@ -37,10 +37,10 @@ function UnitsCard({ draft, patch, inventory }) {
       title="Units of measure"
       sub="The vocabulary every quantity is counted in. Items are stocked in one of these units and bought in packs built from it."
     >
-      <div className="overflow-x-auto">
+      <div className="table-scroll">
         <table className="w-full min-w-[640px] text-sm">
           <thead>
-            <tr className="text-left text-[10px] uppercase tracking-wider text-zinc-400">
+            <tr className="text-left text-3xs uppercase tracking-wider text-zinc-400">
               <th className="pb-2 pr-2 font-bold">Unit</th>
               <th className="pb-2 pr-2 font-bold">Short</th>
               <th className="pb-2 pr-2 font-bold">Family</th>
@@ -157,7 +157,7 @@ function UnitsCard({ draft, patch, inventory }) {
           </button>
         </div>
       </div>
-      <p className="mt-2 text-[11px] text-zinc-500">
+      <p className="mt-2 text-2xs text-zinc-500">
         Factor converts inside a family: a kilogram is 1000 grams, a litre is 1000 millilitres. Count units stay at 1.
         {units.list.length === DEFAULT_UNITS.length ? ' The shipped list is the starting point — edit it freely.' : ''}
       </p>

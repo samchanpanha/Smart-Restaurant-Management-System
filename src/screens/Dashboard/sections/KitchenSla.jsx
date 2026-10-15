@@ -17,7 +17,7 @@ export default function KitchenSla({ copy, avgTicketMin }) {
       <p className="mt-0.5 text-[var(--fs-label)] text-[var(--text-muted)]">{copy.kitchenSlaSub}</p>
 
       <div className="mt-4 flex items-end justify-between">
-        <span className="tnum text-[27px] font-bold leading-none tracking-tight text-[var(--text-strong)]">
+        <span className="tnum text-kpi font-bold leading-none tracking-tight text-[var(--text-strong)]">
           {has ? `${Math.round(avgTicketMin)} min` : '—'}
         </span>
         <span className="text-[var(--fs-label)] text-[var(--text-subtle)]">{copy.slaTarget(target)}</span>

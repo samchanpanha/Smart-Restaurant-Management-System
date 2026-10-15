@@ -68,7 +68,7 @@ function BusinessSection({ draft, patch }) {
               Upload logo
             </button>
             <input ref={fileRef} type="file" accept="image/*" onChange={onLogo} className="hidden" aria-label="Upload logo" />
-            <p className="text-[11px] text-zinc-500">Stored in the snapshot as a data URL — it prints and syncs with the store.</p>
+            <p className="text-2xs text-zinc-500">Stored in the snapshot as a data URL — it prints and syncs with the store.</p>
             {logoError && <p className="text-xs text-red-600">{logoError}</p>}
           </div>
           <div className="grid flex-1 gap-3 sm:grid-cols-2">

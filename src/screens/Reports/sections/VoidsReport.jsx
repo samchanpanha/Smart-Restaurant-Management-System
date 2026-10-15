@@ -52,7 +52,7 @@ function VoidsReport() {
         ].map((k) => (
           <div key={k.label} className="rounded-2xl border border-[var(--color-ink-700)] bg-[var(--color-ink-900)] p-4">
             <div className="tnum text-2xl font-bold">{k.value}</div>
-            <div className="mt-1 text-[11px] font-semibold uppercase tracking-widest text-zinc-500">{k.label}</div>
+            <div className="mt-1 text-2xs font-semibold uppercase tracking-widest text-zinc-500">{k.label}</div>
             <div className="mt-0.5 text-xs text-zinc-500">{k.sub}</div>
           </div>
         ))}

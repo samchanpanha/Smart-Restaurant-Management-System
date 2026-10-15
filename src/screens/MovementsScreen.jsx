@@ -14,7 +14,7 @@ import { RANGES, movementSummary, rangeBounds, stockFlow } from '../lib/reports'
 import { useRestora } from '../lib/store'
 
 const cardCls = 'rounded-2xl border border-zinc-200/80 bg-white shadow-sm'
-const thCls = 'px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-zinc-500'
+const thCls = 'px-3 py-2 text-left text-2xs font-semibold uppercase tracking-wide text-zinc-500'
 const tdCls = 'px-3 py-2.5 text-sm text-zinc-700'
 
 const KIND_META = Object.fromEntries(MOVEMENT_KINDS.map((kind) => [kind.id, kind]))
@@ -99,7 +99,7 @@ function CountStockModal({ onClose, onSave }) {
                 <tr key={item.id} className={delta ? 'bg-amber-50/60' : ''}>
                   <td className={tdCls}>
                     <div className="font-medium text-zinc-800">{translateInventoryName(item, lang)}</div>
-                    <div className="text-[11px] text-zinc-500">{item.sku} · {item.unit}</div>
+                    <div className="text-2xs text-zinc-500">{item.sku} · {item.unit}</div>
                   </td>
                   <td className={tdCls}>{item.onHand}</td>
                   <td className={tdCls}>
@@ -240,22 +240,22 @@ export default function MovementsScreen() {
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div className={`${cardCls} px-4 py-3`}>
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{mv.received || 'Stock in'}</div>
+          <div className="text-2xs font-semibold uppercase tracking-wide text-zinc-500">{mv.received || 'Stock in'}</div>
           <div className="mt-1 text-2xl font-semibold text-emerald-700">{money(summary.inValue, currency)}</div>
           <div className="text-xs text-zinc-500">{summary.inCount} · {summary.inUnits} units</div>
         </div>
         <div className={`${cardCls} px-4 py-3`}>
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{mv.consumed || 'Stock out'}</div>
+          <div className="text-2xs font-semibold uppercase tracking-wide text-zinc-500">{mv.consumed || 'Stock out'}</div>
           <div className="mt-1 text-2xl font-semibold text-rose-600">{money(summary.outValue, currency)}</div>
           <div className="text-xs text-zinc-500">{summary.outCount} · {summary.outUnits} units</div>
         </div>
         <div className={`${cardCls} px-4 py-3`}>
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{mv.totalMovements || 'Net movement'}</div>
+          <div className="text-2xs font-semibold uppercase tracking-wide text-zinc-500">{mv.totalMovements || 'Net movement'}</div>
           <div className={`mt-1 text-2xl font-semibold ${summary.netValue >= 0 ? 'text-zinc-900' : 'text-rose-600'}`}>{money(summary.netValue, currency)}</div>
           <div className="text-xs text-zinc-500">{bounds.label.toLowerCase()}</div>
         </div>
         <div className={`${cardCls} px-4 py-3`}>
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{mv.counted || 'Opened with'}</div>
+          <div className="text-2xs font-semibold uppercase tracking-wide text-zinc-500">{mv.counted || 'Opened with'}</div>
           <div className="mt-1 text-2xl font-semibold text-zinc-900">{money(summary.openingValue, currency)}</div>
           <div className="text-xs text-zinc-500">baseline</div>
         </div>
@@ -302,7 +302,7 @@ export default function MovementsScreen() {
           rows.length === 0 ? (
             <div className="px-4 py-10 text-center text-sm text-zinc-500">Nothing moved in this window with that filter.</div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="table-scroll">
               <table className="w-full min-w-[860px]">
                 <thead className="bg-zinc-50">
                   <tr>
@@ -326,7 +326,7 @@ export default function MovementsScreen() {
                         </td>
                         <td className={tdCls}>
                           <div className="font-medium text-zinc-800">{movement.name}</div>
-                          <div className="text-[11px] text-zinc-500">{movement.unit}</div>
+                          <div className="text-2xs text-zinc-500">{movement.unit}</div>
                         </td>
                         <td className={tdCls}>
                           <StatusPill tone={TONE_BY_KIND[movement.kind] || meta.tone || 'muted'} size="sm">
@@ -358,7 +358,7 @@ export default function MovementsScreen() {
           flow.length === 0 ? (
             <div className="px-4 py-10 text-center text-sm text-zinc-500">No stock movements in this window.</div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="table-scroll">
               <table className="w-full min-w-[820px]">
                 <thead className="bg-zinc-50">
                   <tr>
@@ -377,7 +377,7 @@ export default function MovementsScreen() {
                     <tr key={row.itemId}>
                       <td className={tdCls}>
                         <div className="font-medium text-zinc-800">{row.name}</div>
-                        <div className="text-[11px] text-zinc-500">{row.unit}</div>
+                        <div className="text-2xs text-zinc-500">{row.unit}</div>
                       </td>
                       <td className={`${tdCls} text-right text-zinc-500`}>{signed(row.opening, 3)}</td>
                       <td className={`${tdCls} text-right text-emerald-700`}>{signed(row.inQty, 3)}</td>
@@ -395,7 +395,7 @@ export default function MovementsScreen() {
         )}
 
         {view === 'kinds' && (
-          <div className="overflow-x-auto">
+          <div className="table-scroll">
             <table className="w-full min-w-[720px]">
               <thead className="bg-zinc-50">
                 <tr>
@@ -415,7 +415,7 @@ export default function MovementsScreen() {
                     <tr key={row.kind}>
                       <td className={tdCls}>
                         <div className="font-medium text-zinc-800">{meta.label || row.kind}</div>
-                        <div className="text-[11px] text-zinc-500">{meta.blurb || ''}</div>
+                        <div className="text-2xs text-zinc-500">{meta.blurb || ''}</div>
                       </td>
                       <td className={tdCls}>
                         <StatusPill tone={row.baseline ? 'muted' : TONE_BY_KIND[row.kind] || 'muted'} size="sm">

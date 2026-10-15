@@ -124,7 +124,7 @@ function ReservationsPanel({ onSeatRes, onError }) {
                   <div className="text-xs text-zinc-400">
                     {f.partySize || 'Party'} · {r.partySize} · {formatClock(r.time)} · {slotLabel(r.time)}
                   </div>
-                  <div className={`text-[11px] ${overdue ? 'font-semibold text-red-300' : 'text-zinc-500'}`}>
+                  <div className={`text-2xs ${overdue ? 'font-semibold text-red-300' : 'text-zinc-500'}`}>
                     {minsUntil >= 0 ? `in ${minsUntil}m` : `${-minsUntil}m ago`}
                     {assigned ? ` · ${translateTableName(assigned.name, lang)} (${translateTableStatus(assigned.status, lang)})` : ' · no table yet'}
                     {r.notes ? ` · ${r.notes}` : ''}

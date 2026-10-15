@@ -114,7 +114,7 @@ function IngredientsTab() {
                 {item.imageUrl ? (
                   <img src={item.imageUrl} alt="" className="h-10 w-10 shrink-0 rounded-lg object-cover ring-1 ring-zinc-200" />
                 ) : (
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-zinc-100 text-[9px] uppercase tracking-wide text-zinc-400" aria-hidden>no photo</span>
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-zinc-100 text-3xs uppercase tracking-wide text-zinc-400" aria-hidden>no photo</span>
                 )}
                 <div className="min-w-0">
                   <div className="font-semibold text-zinc-800">
@@ -123,7 +123,7 @@ function IngredientsTab() {
                       <span className="ml-1 text-xs font-normal text-zinc-500">({item.name})</span>
                     )}
                   </div>
-                  <div className="text-[11px] text-zinc-500">
+                  <div className="text-2xs text-zinc-500">
                     {item.sku || 'no SKU'}
                     {(item.packs || []).length > 0 && (
                       <span className="ml-1 text-zinc-400">
@@ -146,7 +146,7 @@ function IngredientsTab() {
               <span className="tnum font-semibold text-zinc-800">
                 {(item.packs || []).length && state.settings?.units?.showPackBreakdown !== false
                   ? describeQty(item, item.onHand, state.settings)
-                  : <>{item.onHand} <span className="text-[10px] font-normal text-zinc-500">{item.unit}</span></>}
+                  : <>{item.onHand} <span className="text-3xs font-normal text-zinc-500">{item.unit}</span></>}
               </span>
             ),
           },
@@ -181,8 +181,8 @@ function IngredientsTab() {
                   <StatusPill tone={status === 'ok' ? 'ok' : status === 'low' ? 'warn' : 'bad'} size="sm">
                     {status === 'ok' ? 'In stock' : status === 'low' ? 'Low' : 'Out'}
                   </StatusPill>
-                  {item.onHand < 0 && <span className="ml-1 text-[10px] font-semibold text-red-600">Recount</span>}
-                  {supplier && status !== 'ok' && <div className="mt-1 text-[10px] text-zinc-500">order from {supplier.name}</div>}
+                  {item.onHand < 0 && <span className="ml-1 text-3xs font-semibold text-red-600">Recount</span>}
+                  {supplier && status !== 'ok' && <div className="mt-1 text-3xs text-zinc-500">order from {supplier.name}</div>}
                 </div>
               )
             },
@@ -202,7 +202,7 @@ function IngredientsTab() {
         rowKey={(row) => row.item.id}
         empty={<div className="rounded-[var(--radius-xl)] border border-[var(--border)] px-4 py-12 text-center text-sm text-zinc-500">No ingredients match this filter.</div>}
       />
-      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-zinc-500">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-2xs text-zinc-500">
         <span>{rows.length} of {state.inventory.length} ingredients</span>
         <span>Counted truth is written by receiving, waste, and the count sheet — this table edits the record itself.</span>
       </div>

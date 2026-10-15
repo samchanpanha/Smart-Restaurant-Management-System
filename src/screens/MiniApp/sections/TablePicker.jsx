@@ -29,7 +29,7 @@ function TablePicker({ tables, pickedId, waitMin, lang, onChoose, onClose }) {
 
         {zones.map((zone) => (
           <div key={zone} className="mt-4">
-            <div className="text-[11px] font-bold uppercase tracking-widest text-stone-400">{translateZone(zone, lang)}</div>
+            <div className="text-2xs font-bold uppercase tracking-widest text-stone-400">{translateZone(zone, lang)}</div>
             <div className="mt-2 grid grid-cols-2 gap-2">
               {tables.filter((t) => (t.zone || 'Main') === zone).map((t) => {
                 const open = isFreeTableStatus(t.status)
@@ -50,7 +50,7 @@ function TablePicker({ tables, pickedId, waitMin, lang, onChoose, onClose }) {
                     className={`flex min-h-[56px] flex-col items-start justify-center rounded-2xl border px-3 py-2 text-left ${tone}`}
                   >
                     <span className="text-sm font-extrabold">{translateTableName(t.name, lang)}</span>
-                    <span className="text-[11px] font-semibold opacity-80">
+                    <span className="text-2xs font-semibold opacity-80">
                       {open ? TABLE_TAG.free : inService && active ? 'Your table' : TABLE_TAG[t.status] || t.status}
                     </span>
                   </button>

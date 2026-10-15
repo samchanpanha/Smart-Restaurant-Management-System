@@ -69,7 +69,7 @@ function CategoryEditor({ kind, node, categories, onClose, onSave, onDelete }) {
         {node ? (
           <div className="flex flex-wrap items-end gap-2">
             <label className="block">
-              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Move items to</span>
+              <span className="mb-1 block text-2xs font-semibold uppercase tracking-wider text-zinc-500">Move items to</span>
               <select value={moveTo} onChange={(e) => setMoveTo(e.target.value)} className={`${smallInput} min-w-[180px]`}>
                 <option value="">— none (blocked) —</option>
                 {categoryOptions(categories, kind).filter((option) => option.id !== node.id && option.depth <= 1).map((option) => (

@@ -110,12 +110,12 @@ export default function UsersScreen() {
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-semibold text-zinc-800">
                       {entry.name}
-                      {entry.id === me?.id && <span className="ml-2 text-[11px] font-medium text-zinc-400">you</span>}
+                      {entry.id === me?.id && <span className="ml-2 text-2xs font-medium text-zinc-400">you</span>}
                     </span>
                     <span className="block truncate text-xs text-zinc-500">{entry.email}</span>
                   </span>
                   <span className="text-xs font-medium text-zinc-600">{entry.role?.label || entry.roleId}</span>
-                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${entry.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                  <span className={`rounded-full px-2 py-0.5 text-2xs font-semibold ${entry.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
                     {entry.status === 'active' ? (us.active || 'active') : (us.disabled || entry.status)}
                   </span>
                   <select

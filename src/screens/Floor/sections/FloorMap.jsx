@@ -192,17 +192,17 @@ function FloorMap({ tables, orders, onOpen }) {
             const right = clampPct(band.max + 10)
             return (
               <div key={band.zone} className="pointer-events-none absolute inset-y-6 rounded-2xl border border-dashed border-zinc-300/70 bg-white/40" style={{ left: `${left}%`, width: `${Math.max(6, right - left)}%` }}>
-                <span className="absolute left-1/2 top-2 -translate-x-1/2 whitespace-nowrap rounded-full bg-white/90 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500 shadow-sm">
+                <span className="absolute left-1/2 top-2 -translate-x-1/2 whitespace-nowrap rounded-full bg-white/90 px-2.5 py-0.5 text-3xs font-bold uppercase tracking-wider text-zinc-500 shadow-sm">
                   {translateZone(band.zone, lang)} · {band.count}
                 </span>
               </div>
             )
           })}
 
-          <div className="pointer-events-none absolute left-5 top-4 rounded-xl border border-zinc-200 bg-white/90 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500 shadow-sm">
+          <div className="pointer-events-none absolute left-5 top-4 rounded-xl border border-zinc-200 bg-white/90 px-3 py-1.5 text-3xs font-bold uppercase tracking-wider text-zinc-500 shadow-sm">
             {dict.nav?.kitchen || 'Kitchen'}
           </div>
-          <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 bg-[#fffdf9] px-3 text-[10px] font-semibold text-zinc-500">
+          <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 bg-[#fffdf9] px-3 text-3xs font-semibold text-zinc-500">
             {lang === 'km' ? 'ច្រកចូល' : lang === 'zh' ? '入口' : 'Entrance'}
           </div>
 
@@ -235,14 +235,14 @@ function FloorMap({ tables, orders, onOpen }) {
 
                   {(showBill || showSelf || count > 0) && (
                     <span className="absolute -right-1.5 -top-1.5 flex items-center gap-0.5">
-                      {showSelf && <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-violet-600 px-1 text-[8px] font-bold text-white ring-2 ring-white" title="Self-seated">S</span>}
-                      {showBill && <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-600 px-1 text-[8px] font-bold text-white ring-2 ring-white" title="Bill requested">$</span>}
-                      {count > 0 && <span className="tnum flex h-4 min-w-4 items-center justify-center rounded-full bg-zinc-900/80 px-1 text-[8px] font-bold text-white ring-2 ring-white" title={`${count} items on the check`}>{count}</span>}
+                      {showSelf && <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-violet-600 px-1 text-4xs font-bold text-white ring-2 ring-white" title="Self-seated">S</span>}
+                      {showBill && <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-600 px-1 text-4xs font-bold text-white ring-2 ring-white" title="Bill requested">$</span>}
+                      {count > 0 && <span className="tnum flex h-4 min-w-4 items-center justify-center rounded-full bg-zinc-900/80 px-1 text-4xs font-bold text-white ring-2 ring-white" title={`${count} items on the check`}>{count}</span>}
                     </span>
                   )}
                 </button>
                 <span className="pointer-events-none mt-1 flex items-center justify-center gap-1">
-                  <span className="rounded-full bg-white/90 px-1.5 py-0.5 text-[9px] font-semibold text-zinc-500 shadow-sm">{table.seats} {f.seats || 'seats'}</span>
+                  <span className="rounded-full bg-white/90 px-1.5 py-0.5 text-3xs font-semibold text-zinc-500 shadow-sm">{table.seats} {f.seats || 'seats'}</span>
                 </span>
               </div>
             )
@@ -250,7 +250,7 @@ function FloorMap({ tables, orders, onOpen }) {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-x-5 gap-y-2 border-t border-zinc-100 px-5 py-3 text-[11px] text-zinc-600">
+      <div className="flex flex-wrap gap-x-5 gap-y-2 border-t border-zinc-100 px-5 py-3 text-2xs text-zinc-600">
         {Object.entries(TABLE_STATUS_META)
           .filter(([status]) => ['free', 'reserved', 'seated', 'ordered', 'billed', 'dirty'].includes(status))
           .map(([status, meta]) => (

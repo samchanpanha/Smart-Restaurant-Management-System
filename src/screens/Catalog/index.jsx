@@ -38,7 +38,7 @@ function CatalogScreen({ initialTab = 'categories' }) {
             )}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2 text-[11px] text-zinc-500">
+        <div className="flex flex-wrap gap-2 text-2xs text-zinc-500">
           <StatusPill tone="muted" size="sm">{state.categories.length} {cat.categoriesTab || 'categories'} · {subCategories} sub</StatusPill>
           <StatusPill tone="muted" size="sm">{state.menu.length} {cat.productsTab || 'products'}</StatusPill>
           <StatusPill tone="muted" size="sm">{state.inventory.length} {cat.ingredientsTab || 'ingredients'}</StatusPill>
@@ -57,7 +57,7 @@ function CatalogScreen({ initialTab = 'categories' }) {
           >
             {tabLabels[entry.id] || entry.label}
             {lang !== 'en' && <span className="sr-only"> {entry.label}</span>}
-            <span className={`ml-2 rounded-full px-1.5 py-0.5 text-[10px] ${tab === entry.id ? 'bg-white/20 text-white' : 'bg-zinc-100 text-zinc-600'}`}>{counts[entry.id]}</span>
+            <span className={`ml-2 rounded-full px-1.5 py-0.5 text-3xs ${tab === entry.id ? 'bg-white/20 text-white' : 'bg-zinc-100 text-zinc-600'}`}>{counts[entry.id]}</span>
           </button>
         ))}
       </div>

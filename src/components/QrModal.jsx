@@ -18,7 +18,7 @@ export default function QrModal({ table, onClose }) {
           <QRCodeSVG value={url} size={200} level="M" />
         </div>
         <div className="mt-3 text-sm font-semibold text-stone-600">Scan to see the menu & order</div>
-        <div className="mt-1 break-all font-mono text-[11px] text-stone-400">{url}</div>
+        <div className="mt-1 break-all font-mono text-2xs text-stone-400">{url}</div>
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2">
         <a
@@ -37,7 +37,7 @@ export default function QrModal({ table, onClose }) {
           Print
         </button>
       </div>
-      <p className="mt-2 text-center text-[11px] text-zinc-500">
+      <p className="mt-2 text-center text-2xs text-zinc-500">
         Demo routing by table id — production tents would carry unguessable tokens.
       </p>
     </Modal>

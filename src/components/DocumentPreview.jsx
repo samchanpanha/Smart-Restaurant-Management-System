@@ -70,7 +70,7 @@ export default function DocumentPreview({
             <div className="text-sm font-bold text-zinc-900">
               {DOC_KIND_META[doc.kind]?.label || doc.kind} · {doc.number || 'draft'}
             </div>
-            <div className="text-[11px] text-zinc-500">
+            <div className="text-2xs text-zinc-500">
               {paper.label} · {template.name}
             </div>
           </div>

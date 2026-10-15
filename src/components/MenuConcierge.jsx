@@ -176,7 +176,7 @@ export default function MenuConcierge({ lang = 'en', locId = null, onClose }) {
           </button>
         </form>
 
-        <p className="mt-2 text-[11px] text-stone-400">{pick(COPY.footer, lang)}</p>
+        <p className="mt-2 text-2xs text-stone-400">{pick(COPY.footer, lang)}</p>
       </div>
     </Sheet>
   )

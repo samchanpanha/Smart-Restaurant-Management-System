@@ -32,9 +32,9 @@ function SellBuyReport({ range }) {
               { label: 'Avg check', value: money(sales.avgCheck), sub: `${money(sales.avgCover)}/cover` },
             ].map((kpi) => (
               <div key={kpi.label} className="rounded-xl bg-black/30 px-3 py-2.5 ring-1 ring-inset ring-[var(--color-ink-700)]">
-                <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">{kpi.label}</div>
+                <div className="text-3xs font-semibold uppercase tracking-widest text-zinc-500">{kpi.label}</div>
                 <div className="tnum mt-0.5 text-lg font-bold text-zinc-100">{kpi.value}</div>
-                <div className="text-[11px] text-zinc-500">{kpi.sub}</div>
+                <div className="text-2xs text-zinc-500">{kpi.sub}</div>
               </div>
             ))}
           </div>
@@ -62,9 +62,9 @@ function SellBuyReport({ range }) {
               { label: 'Cash out', value: money(reports.pnl.cashOut), sub: 'purchases only' },
             ].map((kpi) => (
               <div key={kpi.label} className="rounded-xl bg-black/30 px-3 py-2.5 ring-1 ring-inset ring-[var(--color-ink-700)]">
-                <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">{kpi.label}</div>
+                <div className="text-3xs font-semibold uppercase tracking-widest text-zinc-500">{kpi.label}</div>
                 <div className="tnum mt-0.5 text-lg font-bold text-zinc-100">{kpi.value}</div>
-                <div className="text-[11px] text-zinc-500">{kpi.sub}</div>
+                <div className="text-2xs text-zinc-500">{kpi.sub}</div>
               </div>
             ))}
           </div>
@@ -80,7 +80,7 @@ function SellBuyReport({ range }) {
       </div>
 
       <Card title="Stock in / out">
-        <div className="grid gap-3 sm:grid-cols-3 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[
             { label: 'In', value: money(movements.inValue), sub: `${movements.inUnits} units · ${movements.inCount} rows`, tone: 'text-emerald-300' },
             { label: 'Out', value: money(movements.outValue), sub: `${movements.outUnits} units · ${movements.outCount} rows`, tone: 'text-red-300' },
@@ -88,9 +88,9 @@ function SellBuyReport({ range }) {
             { label: 'Opening baseline', value: money(movements.openingValue), sub: 'not counted as spend', tone: 'text-zinc-400' },
           ].map((kpi) => (
             <div key={kpi.label} className="rounded-xl bg-black/30 px-3 py-2.5 ring-1 ring-inset ring-[var(--color-ink-700)]">
-              <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">{kpi.label}</div>
+              <div className="text-3xs font-semibold uppercase tracking-widest text-zinc-500">{kpi.label}</div>
               <div className={`tnum mt-0.5 text-xl font-bold ${kpi.tone}`}>{kpi.value}</div>
-              <div className="text-[11px] text-zinc-500">{kpi.sub}</div>
+              <div className="text-2xs text-zinc-500">{kpi.sub}</div>
             </div>
           ))}
         </div>
@@ -99,11 +99,11 @@ function SellBuyReport({ range }) {
           <table className="w-full">
             <thead className="bg-black/30">
               <tr>
-                <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Reason</th>
-                <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Direction</th>
-                <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Rows</th>
-                <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Units</th>
-                <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Value</th>
+                <th className="px-3 py-2 text-left text-2xs font-semibold uppercase tracking-wide text-zinc-400">Reason</th>
+                <th className="px-3 py-2 text-left text-2xs font-semibold uppercase tracking-wide text-zinc-400">Direction</th>
+                <th className="px-3 py-2 text-right text-2xs font-semibold uppercase tracking-wide text-zinc-400">Rows</th>
+                <th className="px-3 py-2 text-right text-2xs font-semibold uppercase tracking-wide text-zinc-400">Units</th>
+                <th className="px-3 py-2 text-right text-2xs font-semibold uppercase tracking-wide text-zinc-400">Value</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--color-ink-800)]">
@@ -111,7 +111,7 @@ function SellBuyReport({ range }) {
                 <tr key={row.kind}>
                   <td className="px-3 py-2 text-sm text-zinc-300">
                     {KIND_LABEL[row.kind] || row.kind}
-                    {row.baseline && <span className="ml-2 text-[11px] text-zinc-500">baseline</span>}
+                    {row.baseline && <span className="ml-2 text-2xs text-zinc-500">baseline</span>}
                   </td>
                   <td className="px-3 py-2 text-sm text-zinc-400">
                     {row.baseline ? 'baseline' : MOVEMENT_KINDS.find((kind) => kind.id === row.kind)?.direction === 'out' ? 'out' : 'in'}
@@ -130,11 +130,11 @@ function SellBuyReport({ range }) {
             <table className="w-full">
               <thead className="bg-black/30">
                 <tr>
-                  <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Item</th>
-                  <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Opened</th>
-                  <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-zinc-400">In</th>
-                  <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Out</th>
-                  <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-zinc-400">On hand</th>
+                  <th className="px-3 py-2 text-left text-2xs font-semibold uppercase tracking-wide text-zinc-400">Item</th>
+                  <th className="px-3 py-2 text-right text-2xs font-semibold uppercase tracking-wide text-zinc-400">Opened</th>
+                  <th className="px-3 py-2 text-right text-2xs font-semibold uppercase tracking-wide text-zinc-400">In</th>
+                  <th className="px-3 py-2 text-right text-2xs font-semibold uppercase tracking-wide text-zinc-400">Out</th>
+                  <th className="px-3 py-2 text-right text-2xs font-semibold uppercase tracking-wide text-zinc-400">On hand</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--color-ink-800)]">

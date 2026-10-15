@@ -43,7 +43,7 @@ export default function AuthScreen() {
   }
 
   return (
-    <div className="restora-theme flex min-h-screen items-center justify-center bg-[var(--color-ink-950)] px-4 py-10 text-zinc-100">
+    <div className="restora-theme guest-shell flex items-center justify-center bg-[var(--color-ink-950)] px-4 py-10 text-zinc-100">
       <div className="w-full max-w-md">
         <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -55,7 +55,7 @@ export default function AuthScreen() {
             </div>
             <div>
               <div className="text-2xl font-bold leading-none tracking-tight">Restora</div>
-              <div className="mt-1 text-[11px] tracking-wide text-zinc-500">{dict.brandSubtitle}</div>
+              <div className="mt-1 text-2xs tracking-wide text-zinc-500">{dict.brandSubtitle}</div>
             </div>
           </div>
           <LanguageSwitcher compact testIdPrefix="auth-lang" />

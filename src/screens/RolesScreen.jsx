@@ -112,9 +112,9 @@ export default function RolesScreen() {
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-semibold text-zinc-800">{role.label}</span>
-                      <span className="block truncate font-mono text-[11px] text-zinc-400">{role.key}</span>
+                      <span className="block truncate font-mono text-2xs text-zinc-400">{role.key}</span>
                     </span>
-                    {role.isSystem && <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-semibold text-zinc-500">{rl.systemRole || 'System'}</span>}
+                    {role.isSystem && <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-2xs font-semibold text-zinc-500">{rl.systemRole || 'System'}</span>}
                     {!role.isSystem && (
                       <button type="button" onClick={() => remove(role.id)} className="rounded-lg p-1.5 text-zinc-400 hover:bg-red-50 hover:text-red-600" aria-label={`Delete ${role.label}`}>
                         <Icon name="trash" size={16} />
@@ -123,7 +123,7 @@ export default function RolesScreen() {
                   </div>
                   <div className="mt-2 flex flex-wrap gap-1.5 pl-12">
                     {(role.screens.includes('*') ? ALL_SCREENS : role.screens).map((id) => (
-                      <span key={id} className="rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-medium text-orange-700 ring-1 ring-inset ring-orange-100">
+                      <span key={id} className="rounded-full bg-orange-50 px-2 py-0.5 text-2xs font-medium text-orange-700 ring-1 ring-inset ring-orange-100">
                         {translateScreenLabel(id, SCREEN_LABELS[id] || id, lang)}
                       </span>
                     ))}

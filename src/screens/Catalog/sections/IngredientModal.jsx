@@ -140,18 +140,18 @@ function IngredientModal({ item, onClose, onSave }) {
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
             <div className="text-xs font-bold text-zinc-800">Packaging</div>
-            <p className="mt-0.5 text-[11px] text-zinc-500">
+            <p className="mt-0.5 text-2xs text-zinc-500">
               How this item is bought and stored: a case of 12, a bottle of 750 {stockShort}, a 5 kg bag.
               Packs can be sized in the stock unit or in another pack.
             </p>
           </div>
-          <button type="button" onClick={addPack} className="min-h-8 rounded-lg border border-zinc-200 px-2.5 text-[11px] font-semibold text-zinc-600 hover:bg-zinc-50">
+          <button type="button" onClick={addPack} className="min-h-8 rounded-lg border border-zinc-200 px-2.5 text-2xs font-semibold text-zinc-600 hover:bg-zinc-50">
             Add pack
           </button>
         </div>
 
         {draft.packs.length === 0 && (
-          <p className="mt-2 text-[11px] text-zinc-500">No packs — this item is counted and ordered in {draft.unit} only.</p>
+          <p className="mt-2 text-2xs text-zinc-500">No packs — this item is counted and ordered in {draft.unit} only.</p>
         )}
 
         <div className="mt-2 space-y-2">
@@ -195,7 +195,7 @@ function IngredientModal({ item, onClose, onSave }) {
                 </select>
               </Field>
               <div className="flex items-center gap-1 pb-1">
-                <span className="tnum text-[11px] text-zinc-500">= {packFactorOf(pack)} {stockShort}</span>
+                <span className="tnum text-2xs text-zinc-500">= {packFactorOf(pack)} {stockShort}</span>
                 <button
                   type="button"
                   onClick={() => removePack(index)}

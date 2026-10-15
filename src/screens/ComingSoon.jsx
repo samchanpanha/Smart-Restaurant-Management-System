@@ -104,7 +104,7 @@ export default function ComingSoon({ screen }) {
   return (
     <div className="mx-auto max-w-2xl pt-10">
       <div className="rounded-2xl border border-[var(--color-ink-700)] bg-[var(--color-ink-900)] p-8">
-        <div className="text-[11px] font-semibold uppercase tracking-widest text-amber-300">
+        <div className="text-2xs font-semibold uppercase tracking-widest text-amber-300">
           Build step {c.step} · not yet implemented
         </div>
         <h1 className="mt-2 text-2xl font-bold tracking-tight">{c.title}</h1>

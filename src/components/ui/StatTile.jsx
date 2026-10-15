@@ -67,7 +67,7 @@ export function StatTile({
         </div>
       )}
 
-      <div className="tnum mt-auto pt-3 text-[27px] font-bold leading-none tracking-tight text-[var(--text-strong)]">
+      <div className="tnum mt-auto pt-3 text-kpi font-bold leading-none tracking-tight text-[var(--text-strong)]">
         {value}
         {unit && <span className="ml-1 text-base font-medium text-[var(--text-subtle)]">{unit}</span>}
       </div>

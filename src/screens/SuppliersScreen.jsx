@@ -144,7 +144,7 @@ function SupplierModal({ supplier, onClose, onSave }) {
       </div>
 
       <div className="mt-3">
-        <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Delivery days</span>
+        <span className="mb-1 block text-2xs font-semibold uppercase tracking-wider text-zinc-500">Delivery days</span>
         <div className="flex flex-wrap gap-1.5">
           {DAYS.map((day) => (
             <button
@@ -244,7 +244,7 @@ function ReceiveModal({ supplier, onClose }) {
                 onChange={(e) => setLine(index, { unitCost: e.target.value })}
                 className={`${smallInput} tnum w-28`} aria-label="Unit cost"
               />
-              <span className="text-[11px] text-zinc-500">{sku ? `/${sku.unit}` : ''}</span>
+              <span className="text-2xs text-zinc-500">{sku ? `/${sku.unit}` : ''}</span>
               <button type="button" onClick={() => setLines((current) => current.filter((_, i) => i !== index))} className="rounded-lg px-2 py-1 text-zinc-400 hover:text-red-600" aria-label="Remove line">
                 ×
               </button>
@@ -333,16 +333,16 @@ function SupplierDetail({ supplier, onEdit, onDelete }) {
             { label: 'Delivery days', value: supplier.deliveryDays.join(' ') || 'Any', note: last ? `last drop ${new Date(last.at).toLocaleDateString()}` : 'no deliveries yet' },
           ].map((metric) => (
             <div key={metric.label} className="rounded-xl border border-zinc-200 p-3">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">{metric.label}</div>
+              <div className="text-3xs font-bold uppercase tracking-wider text-zinc-500">{metric.label}</div>
               <div className="tnum mt-1 text-lg font-bold text-zinc-900">{metric.value}</div>
-              <div className="text-[11px] text-zinc-500">{metric.note}</div>
+              <div className="text-2xs text-zinc-500">{metric.note}</div>
             </div>
           ))}
         </div>
 
         <div className="mt-4 grid gap-4 text-sm text-zinc-600 sm:grid-cols-2">
           <div>
-            <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Contact</div>
+            <div className="text-3xs font-bold uppercase tracking-wider text-zinc-500">Contact</div>
             <div className="mt-1 space-y-0.5">
               <div>{supplier.email || '—'}</div>
               <div>{supplier.phone || '—'}</div>
@@ -354,7 +354,7 @@ function SupplierDetail({ supplier, onEdit, onDelete }) {
             </div>
           </div>
           <div>
-            <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Notes</div>
+            <div className="text-3xs font-bold uppercase tracking-wider text-zinc-500">Notes</div>
             <p className="mt-1 text-sm leading-relaxed text-zinc-600">{supplier.notes || 'No notes yet.'}</p>
           </div>
         </div>
@@ -373,13 +373,13 @@ function SupplierDetail({ supplier, onEdit, onDelete }) {
                   <li key={line.item.id} className="flex items-center justify-between gap-2 py-2">
                     <div className="min-w-0">
                       <div className="truncate font-semibold text-zinc-800">{line.item.name}</div>
-                      <div className="text-[11px] text-zinc-500">
+                      <div className="text-2xs text-zinc-500">
                         on hand {line.item.onHand} {line.item.unit} · reorder at {reorderPointFor(line.item, state.settings)} · par {line.item.par}
                       </div>
                     </div>
                     <div className="text-right">
                       <div className="tnum font-bold text-zinc-800">{line.qty} {line.item.unit}</div>
-                      <div className="tnum text-[11px] text-zinc-500">{money(line.cost)}</div>
+                      <div className="tnum text-2xs text-zinc-500">{money(line.cost)}</div>
                     </div>
                   </li>
                 ))}
@@ -392,7 +392,7 @@ function SupplierDetail({ supplier, onEdit, onDelete }) {
                   Email order
                 </a>
                 {supplier.minOrderValue > reorderTotal && (
-                  <span className="self-center text-[11px] text-amber-700">
+                  <span className="self-center text-2xs text-amber-700">
                     {money(supplier.minOrderValue - reorderTotal)} below the {money(supplier.minOrderValue)} minimum
                   </span>
                 )}
@@ -415,7 +415,7 @@ function SupplierDetail({ supplier, onEdit, onDelete }) {
                       <span className="font-semibold text-zinc-800">{new Date(invoice.at).toLocaleString()}</span>
                       <span className="tnum font-bold text-zinc-700">{money(value)}</span>
                     </div>
-                    <div className="mt-0.5 text-[11px] text-zinc-500">
+                    <div className="mt-0.5 text-2xs text-zinc-500">
                       {(invoice.lines || []).map((line) => {
                         const sku = state.inventory.find((item) => item.id === line.inventoryItemId)
                         return `${line.qty} × ${sku?.name || line.inventoryItemId} @ ${money(line.unitCost)}`
@@ -509,7 +509,7 @@ export default function SuppliersScreen() {
                       <span className="truncate text-sm font-semibold text-zinc-800">{supplier.name}</span>
                       <StatusPill tone={STATUS_TONE[supplier.status] || 'muted'} size="sm">{supplier.status}</StatusPill>
                     </div>
-                    <div className="mt-0.5 flex items-center justify-between gap-2 text-[11px] text-zinc-500">
+                    <div className="mt-0.5 flex items-center justify-between gap-2 text-2xs text-zinc-500">
                       <span>{totals[supplier.id] || 0} SKUs · {paymentTermsLabel(supplier.paymentTerms)}</span>
                       <span className="tnum">{money(spend.total)}</span>
                     </div>
@@ -520,7 +520,7 @@ export default function SuppliersScreen() {
             {!suppliers.length && <li className="px-3 py-8 text-center text-sm text-zinc-500">No suppliers match.</li>}
           </ul>
           {(totals.unassigned || 0) > 0 && (
-            <div className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-[11px] leading-snug text-amber-800">
+            <div className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-2xs leading-snug text-amber-800">
               {totals.unassigned} stock items have no supplier. Assign them in <strong>Catalog → Ingredients</strong> so
               reorder alerts name a vendor.
             </div>

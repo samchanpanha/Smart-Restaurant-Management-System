@@ -158,7 +158,7 @@ export function Router() {
 /** A quiet hold while the session cookie is being checked. */
 function AuthSplash() {
   return (
-    <div className="restora-theme flex min-h-screen items-center justify-center bg-[var(--color-ink-950)] text-zinc-400">
+    <div className="restora-theme guest-shell flex items-center justify-center bg-[var(--color-ink-950)] text-zinc-400">
       <span className="text-sm">Opening your workspace…</span>
     </div>
   )

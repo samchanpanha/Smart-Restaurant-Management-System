@@ -130,7 +130,7 @@ export default function SystemScreen() {
   return (
     <div className="space-y-6">
       <header>
-        <div className="text-[11px] font-semibold uppercase tracking-widest text-amber-300">
+        <div className="text-2xs font-semibold uppercase tracking-widest text-amber-300">
           {sys.kicker || 'Build step 1 · object model + status machines'}
           {lang !== 'en' && <span className="sr-only"> Build step 1 · object model + status machines</span>}
         </div>
@@ -154,7 +154,7 @@ export default function SystemScreen() {
             <div className="mt-1 text-xs font-semibold uppercase tracking-widest text-zinc-500">
               {c.label}
             </div>
-            <div className="mt-0.5 text-[11px] text-zinc-500">{c.note}</div>
+            <div className="mt-0.5 text-2xs text-zinc-500">{c.note}</div>
           </div>
         ))}
       </div>
@@ -182,7 +182,7 @@ export default function SystemScreen() {
             <StatusPill tone="ok" size="sm">Bumped</StatusPill>
             <p className="mt-2">
               Sending is the commit — 15-second undo, then the kitchen owns the item.{' '}
-              <code className="rounded bg-black/40 px-1 font-mono text-[11px]">
+              <code className="rounded bg-black/40 px-1 font-mono text-2xs">
                 canTicketTransition({'"sent", "paid"'})
               </code>{' '}
               →{' '}
@@ -272,7 +272,7 @@ export default function SystemScreen() {
                 <li key={a.key} className="flex items-start justify-between gap-2">
                   <div>
                     <div className="text-zinc-200">{a.label}</div>
-                    <div className="text-[11px] text-zinc-500">{a.detail}</div>
+                    <div className="text-2xs text-zinc-500">{a.detail}</div>
                   </div>
                   <StatusPill tone={a.severity === 'high' ? 'bad' : 'warn'} size="sm">
                     {a.severity}

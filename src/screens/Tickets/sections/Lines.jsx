@@ -16,12 +16,12 @@ function HeldLine({ order, item }) {
           <div className="text-sm font-semibold text-zinc-100">
             {translateDishName(menu, lang)}
             {item.by === 'guest' && (
-              <span className="ml-1.5 rounded bg-violet-500/20 px-1.5 py-0.5 align-middle text-[10px] font-bold text-violet-300 ring-1 ring-inset ring-violet-500/40">
+              <span className="ml-1.5 rounded bg-violet-500/20 px-1.5 py-0.5 align-middle text-3xs font-bold text-violet-300 ring-1 ring-inset ring-violet-500/40">
                 QR{item.guest ? ` · ${item.guest}` : ''}
               </span>
             )}
           </div>
-          <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-400">
+          <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-2xs text-zinc-400">
             <span className="rounded bg-black/40 px-1.5 py-0.5 font-semibold uppercase tracking-wide">{translateCourse(item.course, lang)}</span>
             {item.modifiers?.map((m) => (
               <span key={m.id} className="rounded bg-black/40 px-1.5 py-0.5">{translateModifier(m.value, lang)}</span>
@@ -85,12 +85,12 @@ function FiredLine({ order, item, onComp, onVoid }) {
           <div className={`text-sm font-semibold ${item.voided ? 'text-zinc-500 line-through' : 'text-zinc-100'}`}>
             {item.qty}× {translateDishName(menu, lang)}
             {item.by === 'guest' && (
-              <span className="ml-1.5 rounded bg-violet-500/20 px-1.5 py-0.5 align-middle text-[10px] font-bold text-violet-300 ring-1 ring-inset ring-violet-500/40">
+              <span className="ml-1.5 rounded bg-violet-500/20 px-1.5 py-0.5 align-middle text-3xs font-bold text-violet-300 ring-1 ring-inset ring-violet-500/40">
                 QR{item.guest ? ` · ${item.guest}` : ''}
               </span>
             )}
           </div>
-          <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-400">
+          <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-2xs text-zinc-400">
             <span className="rounded bg-black/40 px-1.5 py-0.5 font-semibold uppercase tracking-wide">{translateCourse(item.course, lang)}</span>
             {item.modifiers?.map((m) => (
               <span key={m.id} className="rounded bg-black/40 px-1.5 py-0.5">{translateModifier(m.value, lang)}</span>

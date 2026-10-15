@@ -643,7 +643,7 @@ export function RestoraProvider({ children, waitForServer = true }) {
 
   if (waitForServer && link.status === 'starting') {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--color-ink-950)]">
+      <div className="guest-shell flex items-center justify-center bg-[var(--color-ink-950)]">
         <div className="text-center">
           <div className="text-2xl font-bold tracking-tight text-zinc-100">Restora</div>
           <div className="mt-2 text-sm text-zinc-500">Connecting to service…</div>

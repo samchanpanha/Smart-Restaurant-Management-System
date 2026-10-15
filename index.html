@@ -1,12 +1,37 @@
 <!doctype html>
-<html lang="en">
+<html lang="km-KH">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#0b0d12" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="Restora — table, kitchen, stock, and reporting consoles for one casual dining room, plus a phone-first guest menu." />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Restora — Smart Restaurant Management</title>
+    <!-- The UI defaults to Khmer (src/lib/kitchen-i18n.js). Set <html lang>
+         before first paint so the script-aware type scale, line-heights, and
+         assistive tech are correct from the first frame, not after React
+         mounts. Mirrors applyDocumentLang() in src/lib/i18n.js. -->
+    <script>
+      (function () {
+        var tags = { km: 'km-KH', en: 'en-US', zh: 'zh-CN' }
+        var lang = 'km'
+        try {
+          var saved = window.localStorage.getItem('restora-kitchen-lang') || window.localStorage.getItem('restora-lang')
+          if (saved && tags[saved]) lang = saved
+        } catch (error) {
+          /* private mode: keep the default */
+        }
+        document.documentElement.lang = tags[lang]
+        document.documentElement.dataset.lang = lang
+      })()
+    </script>
+    <!-- Self-hosted Inter (public/fonts). Same-origin font fetches are CORS
+         requests, so `crossorigin` is required for the preload to match. -->
+    <link rel="preload" href="/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/noto-sans-khmer-khmer-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
   </head>
   <body>
     <div id="root"></div>

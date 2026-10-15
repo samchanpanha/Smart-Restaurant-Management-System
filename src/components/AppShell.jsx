@@ -145,7 +145,7 @@ export default function AppShell({ children }) {
       : { tone: 'muted', label: dict.localDemo }
 
   return (
-    <div className="restora-theme flex h-screen min-h-screen overflow-hidden bg-[var(--color-ink-950)] text-zinc-100">
+    <div className="restora-theme app-shell flex overflow-hidden bg-[var(--color-ink-950)] text-zinc-100">
       <aside className="app-sidebar flex w-[248px] shrink-0 flex-col border-r border-[var(--color-ink-700)] bg-[var(--color-ink-900)] text-zinc-100">
         <div className="border-b border-[var(--color-ink-700)] px-5 py-5">
           <div className="flex items-center gap-3">
@@ -158,7 +158,7 @@ export default function AppShell({ children }) {
             </div>
             <div className="app-sidebar-copy min-w-0">
               <div className="text-[23px] font-bold leading-none tracking-tight">Restora</div>
-              <div className="mt-1 text-[10px] tracking-wide text-zinc-500">{dict.brandSubtitle}</div>
+              <div className="mt-1 text-3xs tracking-wide text-zinc-500">{dict.brandSubtitle}</div>
             </div>
           </div>
         </div>
@@ -196,12 +196,12 @@ export default function AppShell({ children }) {
                     {translatedLabel !== item.label && <span className="sr-only"> {item.label}</span>}
                   </span>
                   {item.id === 'tickets' && alerts.some((alert) => alert.type === 'bill_request') && (
-                    <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-500 px-1.5 text-[10px] font-bold text-white">
+                    <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-500 px-1.5 text-3xs font-bold text-white">
                       {alerts.filter((alert) => alert.type === 'bill_request').length}
                     </span>
                   )}
                   {item.id === 'floor' && alerts.some((alert) => alert.type === 'call_server') && (
-                    <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 text-[10px] font-bold text-white">
+                    <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 text-3xs font-bold text-white">
                       {alerts.filter((alert) => alert.type === 'call_server').length}
                     </span>
                   )}
@@ -224,7 +224,7 @@ export default function AppShell({ children }) {
               </span>
               <span className="app-sidebar-branch min-w-0 flex-1">
                 <span className="block truncate text-xs font-semibold text-zinc-100">{state.settings.restaurantName || 'The Olive Restaurant'}</span>
-                <span className="mt-0.5 block text-[11px] text-zinc-500">{location.short} · {dict.branch}</span>
+                <span className="mt-0.5 block text-2xs text-zinc-500">{location.short} · {dict.branch}</span>
               </span>
               <Icon name="chevron" size={16} className={`text-zinc-500 transition-transform ${locationOpen ? 'rotate-180' : ''}`} />
             </button>
@@ -247,7 +247,7 @@ export default function AppShell({ children }) {
           <div className="mt-1 flex items-center justify-between gap-2 px-2.5 pb-1">
             <StatusPill tone={linkPill.tone} size="sm">{linkPill.label}</StatusPill>
             {link.mode === 'server' && (
-              <button type="button" onClick={() => resync()} className="text-[11px] text-zinc-500 hover:text-zinc-200" title="Reload authoritative snapshot">
+              <button type="button" onClick={() => resync()} className="text-2xs text-zinc-500 hover:text-zinc-200" title="Reload authoritative snapshot">
                 {dict.resync}
               </button>
             )}
@@ -259,14 +259,14 @@ export default function AppShell({ children }) {
                 dispatch({ type: 'RESET_ALL' })
               }
             }}
-            className="mt-2 w-full rounded-lg px-2.5 py-2 text-left text-[11px] text-zinc-500 transition-colors hover:bg-red-500/10 hover:text-red-300"
+            className="mt-2 w-full rounded-lg px-2.5 py-2 text-left text-2xs text-zinc-500 transition-colors hover:bg-red-500/10 hover:text-red-300"
           >
             {dict.resetDemoData}
           </button>
         </div>
       </aside>
 
-      <main className="flex h-screen min-h-0 min-w-0 flex-1 flex-col">
+      <main className="app-shell-main flex min-h-0 min-w-0 flex-1 flex-col">
         <header className="app-topbar relative z-30 flex items-center justify-between gap-5 px-6 py-3">
           <div className="global-search relative w-full max-w-[540px]">
             <div className={`flex h-10 items-center gap-3 rounded-xl border bg-[#f7f7f8] px-3.5 transition-all ${searchOpen ? 'border-orange-300 ring-2 ring-orange-100' : 'border-transparent'}`}>
@@ -304,7 +304,7 @@ export default function AppShell({ children }) {
             <div className="relative">
               <button type="button" onClick={() => { setNoticeOpen((open) => !open); setProfileOpen(false) }} aria-label={`Notifications, ${alerts.length} alerts`} aria-expanded={noticeOpen} className="relative flex h-10 w-10 items-center justify-center rounded-full text-zinc-600 hover:bg-zinc-100">
                 <Icon name="bell" size={20} />
-                {alerts.length > 0 && <span className="absolute right-1 top-1 flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">{Math.min(9, alerts.length)}</span>}
+                {alerts.length > 0 && <span className="absolute right-1 top-1 flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-red-500 px-1 text-3xs font-bold text-white">{Math.min(9, alerts.length)}</span>}
               </button>
               {noticeOpen && (
                 <div className="absolute right-0 top-full z-50 mt-2 w-[min(360px,90vw)] rounded-2xl border border-zinc-200 bg-white p-3 shadow-[0_18px_45px_rgba(22,30,40,.16)]">
@@ -319,13 +319,13 @@ export default function AppShell({ children }) {
 
             <div className="hidden text-right leading-tight md:block">
               <div className="text-xs font-semibold text-zinc-700">{dateLabel}</div>
-              <div className="mt-1 text-[11px] text-zinc-500">{timeLabel}</div>
+              <div className="mt-1 text-2xs text-zinc-500">{timeLabel}</div>
             </div>
             <div className="hidden h-8 w-px bg-zinc-200 md:block" />
             <div className="relative">
               <button type="button" onClick={() => { setProfileOpen((open) => !open); setNoticeOpen(false) }} aria-expanded={profileOpen} className="flex items-center gap-2.5 rounded-xl py-1 pl-1 pr-1.5 text-left hover:bg-zinc-50">
                 <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-orange-200 to-orange-400 text-sm font-bold text-orange-900 ring-2 ring-white">{displayName.split(' ').map((part) => part[0]).slice(0, 2).join('')}</span>
-                <span className="hidden min-w-[112px] sm:block"><span className="block text-xs font-bold text-zinc-800">{displayName}</span><span className="mt-0.5 block text-[10px] text-zinc-500">{roleTitle}</span></span>
+                <span className="hidden min-w-[112px] sm:block"><span className="block text-xs font-bold text-zinc-800">{displayName}</span><span className="mt-0.5 block text-3xs text-zinc-500">{roleTitle}</span></span>
                 <Icon name="chevron" size={15} className={`text-zinc-500 transition-transform ${profileOpen ? 'rotate-180' : ''}`} />
               </button>
               {profileOpen && (
@@ -339,7 +339,7 @@ export default function AppShell({ children }) {
                     </>
                   ) : (
                     <>
-                      <label className="mt-3 block px-2 text-[10px] font-bold uppercase tracking-wider text-zinc-500" htmlFor="role">{dict.demoRole}</label>
+                      <label className="mt-3 block px-2 text-3xs font-bold uppercase tracking-wider text-zinc-500" htmlFor="role">{dict.demoRole}</label>
                       <select id="role" value={role} onChange={(event) => changeRole(event.target.value)} className="mt-1.5 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800">
                         {Object.entries(ROLES).map(([id, item]) => <option key={id} value={id}>{dict.roles?.[id] ? `${item.name} · ${dict.roles[id]}` : item.label}</option>)}
                       </select>

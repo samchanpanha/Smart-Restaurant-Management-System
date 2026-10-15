@@ -633,7 +633,7 @@ function MiniAppTableController({ onTableReady, activeTable, onSelectTable }) {
                     {selectedResBooking.partySize} guests · {new Date(selectedResBooking.time).toLocaleDateString()} at{' '}
                     {new Date(selectedResBooking.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </div>
-                  <div className="mt-1 text-[11px] text-amber-800">
+                  <div className="mt-1 text-2xs text-amber-800">
                     Reschedules used: {selectedResBooking.modificationCount || 0} of {bookingPolicy.maxGuestReschedules || 2}
                   </div>
                 </div>
@@ -728,7 +728,7 @@ function MiniAppTableController({ onTableReady, activeTable, onSelectTable }) {
                       </p>
                       {nearestSlots.length > 0 && (
                         <div className="mt-2">
-                          <span className="text-[11px] font-bold text-slate-700">Recommended Alternative Times:</span>
+                          <span className="text-2xs font-bold text-slate-700">Recommended Alternative Times:</span>
                           <div className="mt-1.5 flex flex-wrap gap-2">
                             {nearestSlots.map((slot) => {
                               const slotTime = new Date(slot.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })

@@ -50,7 +50,7 @@ function PnlReport() {
             </li>
           ))}
         </ul>
-        <p className="mt-2 text-[11px] text-zinc-500">
+        <p className="mt-2 text-2xs text-zinc-500">
           Labor, rent, and card fees are out of scope — this is the kitchen&apos;s truth, not the accountant&apos;s.
         </p>
       </Card>

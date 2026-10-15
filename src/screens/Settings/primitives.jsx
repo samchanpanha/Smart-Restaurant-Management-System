@@ -2,14 +2,14 @@ import { useState } from 'react'
 
 export const inputCls =
   'w-full min-h-10 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 outline-none transition focus:border-orange-300 focus:ring-2 focus:ring-orange-100'
-export const labelCls = 'mb-1 block text-[11px] font-semibold uppercase tracking-wider text-zinc-500'
+export const labelCls = 'mb-1 block text-2xs font-semibold uppercase tracking-wider text-zinc-500'
 
 export function Field({ label, hint, children }) {
   return (
     <label className="block">
       <span className={labelCls}>{label}</span>
       {children}
-      {hint && <span className="mt-1 block text-[11px] text-zinc-500">{hint}</span>}
+      {hint && <span className="mt-1 block text-2xs text-zinc-500">{hint}</span>}
     </label>
   )
 }
@@ -20,7 +20,7 @@ export function Toggle({ label, hint, checked, onChange }) {
       <input type="checkbox" checked={Boolean(checked)} onChange={(event) => onChange(event.target.checked)} className="mt-0.5 h-4 w-4 accent-orange-500" />
       <span className="min-w-0">
         <span className="block text-sm font-semibold text-zinc-800">{label}</span>
-        {hint && <span className="mt-0.5 block text-[11px] text-zinc-500">{hint}</span>}
+        {hint && <span className="mt-0.5 block text-2xs text-zinc-500">{hint}</span>}
       </span>
     </label>
   )
@@ -85,7 +85,7 @@ export function LabelListEditor({ label, hint, values, onChange, placeholder = '
           Add
         </button>
       </div>
-      {hint && <span className="mt-1 block text-[11px] text-zinc-500">{hint}</span>}
+      {hint && <span className="mt-1 block text-2xs text-zinc-500">{hint}</span>}
     </div>
   )
 }

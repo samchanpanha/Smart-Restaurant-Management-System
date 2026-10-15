@@ -54,7 +54,7 @@ function PayModal({ order, onClose }) {
               <span className="text-zinc-200">
                 {l.qty}× {l.name}
                 {split === 'byitem' && (
-                  <span className={`ml-2 rounded px-1.5 py-0.5 text-[10px] font-bold ${assign[l.id] != null && assign[l.id] < seats ? 'bg-sky-500/20 text-sky-300' : 'bg-red-500/15 text-red-300'}`}>
+                  <span className={`ml-2 rounded px-1.5 py-0.5 text-3xs font-bold ${assign[l.id] != null && assign[l.id] < seats ? 'bg-sky-500/20 text-sky-300' : 'bg-red-500/15 text-red-300'}`}>
                     {assign[l.id] != null && assign[l.id] < seats ? seatNames[assign[l.id]] : 'tap to assign'}
                   </span>
                 )}
@@ -95,7 +95,7 @@ function PayModal({ order, onClose }) {
             <Stepper value={ways} onChange={setWays} min={2} max={8} />
           </Field>
           <div className="text-right">
-            <div className="text-[11px] uppercase tracking-widest text-zinc-500">each pays</div>
+            <div className="text-2xs uppercase tracking-widest text-zinc-500">each pays</div>
             <div className="tnum text-2xl font-bold text-amber-300">{money(t.total / ways)}</div>
           </div>
         </div>

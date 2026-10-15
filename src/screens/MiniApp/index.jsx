@@ -112,7 +112,7 @@ function MiniAppScreen({ tableId }) {
   }
 
   return (
-    <div className="min-h-screen bg-[var(--guest-page)]">
+    <div className="guest-shell bg-[var(--guest-page)]">
       <header ref={headerRef} className="sticky top-0 z-40 border-b border-black/5 bg-[var(--guest-chrome)] text-white">
         <div className="mx-auto flex max-w-md items-center gap-3 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-amber-400">
@@ -120,7 +120,7 @@ function MiniAppScreen({ tableId }) {
           </span>
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-bold">{state.settings?.restaurantName || 'The Olive Restaurant'}</div>
-            <div className="text-[11px] text-white/60">
+            <div className="text-2xs text-white/60">
               {table
                 ? `${translateTableName(table.name, lang)} · ${translateZone(table.zone, lang)}`
                 : state.tables.length > 0 ? (dict.miniapp?.noTableSelected || 'No table selected') : (dict.miniapp?.tableNotFound || 'Table not found')}
@@ -133,19 +133,19 @@ function MiniAppScreen({ tableId }) {
             <button
               type="button"
               onClick={() => setPickerOpen((open) => !open)}
-              className="shrink-0 rounded-lg border border-white/15 bg-white/10 px-2.5 py-1.5 text-[11px] font-semibold text-white"
+              className="shrink-0 rounded-lg border border-white/15 bg-white/10 px-2.5 py-1.5 text-2xs font-semibold text-white"
             >
               {table ? (dict.miniapp?.table || 'Table') : (dict.miniapp?.choose || 'Choose')} ▾
               <span className="sr-only">Table</span>
             </button>
           )}
           {inTelegram ? (
-            <span className="rounded-full bg-emerald-500/15 px-2 py-1 text-[10px] font-bold text-emerald-300">
+            <span className="rounded-full bg-emerald-500/15 px-2 py-1 text-3xs font-bold text-emerald-300">
               {dict.miniapp?.inTelegram || 'In Telegram'}
               {lang !== 'en' && <span className="sr-only"> In Telegram</span>}
             </span>
           ) : (
-            <span className="rounded-full bg-amber-500/15 px-2 py-1 text-[10px] font-bold text-amber-300">
+            <span className="rounded-full bg-amber-500/15 px-2 py-1 text-3xs font-bold text-amber-300">
               {dict.miniapp?.webPreview || 'Web preview'}
               {lang !== 'en' && <span className="sr-only"> Web preview</span>}
             </span>
@@ -166,7 +166,7 @@ function MiniAppScreen({ tableId }) {
       </div>
 
       {!inTelegram && (
-        <p className="mx-auto max-w-md px-4 pt-3 text-[11px] leading-relaxed text-stone-500">
+        <p className="mx-auto max-w-md px-4 pt-3 text-2xs leading-relaxed text-stone-500">
           This page is the mini app a guest opens from the bot. Opened outside Telegram it behaves exactly like the
           table QR page — the platform calls (ready, expand, theme, haptics) simply do nothing.
         </p>

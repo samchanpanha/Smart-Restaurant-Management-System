@@ -51,6 +51,24 @@ export function getAppLang() {
   return loadKitchenLang()
 }
 
+// `document.documentElement.lang` was left at the static "en" from index.html,
+// which meant (a) screen readers and translation tools were told the wrong
+// language on a Khmer-by-default UI, and (b) the script-aware typography in
+// src/styles/typography.css (`html[lang='km']` / `html[lang='zh']`) could never
+// match. One writer, called on boot and on every change.
+const LANG_TAG = { km: 'km-KH', en: 'en-US', zh: 'zh-CN' }
+
+export function applyDocumentLang(lang) {
+  const normalized = normalizeKitchenLang(lang)
+  if (typeof document === 'undefined' || !document.documentElement) return normalized
+  document.documentElement.lang = LANG_TAG[normalized] || normalized
+  document.documentElement.dataset.lang = normalized
+  // Both languages are left-to-right; pinning it keeps a future RTL locale
+  // from inheriting a stale value.
+  document.documentElement.dir = 'ltr'
+  return normalized
+}
+
 export function setAppLang(nextLang) {
   const saved = saveKitchenLang(nextLang)
   try {
@@ -58,6 +76,7 @@ export function setAppLang(nextLang) {
   } catch {
     /* ignore */
   }
+  applyDocumentLang(saved)
   if (typeof globalThis.window !== 'undefined' && typeof globalThis.CustomEvent === 'function') {
     globalThis.window.dispatchEvent(new globalThis.CustomEvent(LANG_EVENT, { detail: { lang: saved } }))
   }
@@ -70,6 +89,12 @@ export function setAppLang(nextLang) {
  */
 export function useI18n() {
   const [lang, setLangState] = useState(() => getAppLang())
+
+  // Keep <html lang> honest on first paint (the store may boot in km) and on
+  // every switch — this is what drives the Khmer/Chinese type scale.
+  useEffect(() => {
+    applyDocumentLang(lang)
+  }, [lang])
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined

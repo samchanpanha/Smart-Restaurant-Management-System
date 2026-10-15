@@ -116,7 +116,7 @@ function FoodSection({ draft, patch }) {
       <Card title="Service windows" sub="When each part of the menu is sellable. Assign a window to an item to hide it outside those hours.">
         <div className="overflow-hidden rounded-xl border border-zinc-200">
           <table className="w-full text-left text-sm">
-            <thead className="bg-zinc-50 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+            <thead className="bg-zinc-50 text-3xs font-bold uppercase tracking-wider text-zinc-500">
               <tr>
                 <th className="px-3 py-2">Window</th>
                 <th className="px-3 py-2">From</th>

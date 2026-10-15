@@ -64,7 +64,7 @@ function TopLowReport({ range }) {
                       <span className={`tnum font-semibold ${block.value(row) < 0 ? 'text-red-300' : 'text-zinc-100'}`}>
                         {block.value(row) < 0 ? `−${money(-block.value(row))}` : money(block.value(row))}
                       </span>
-                      <span className="ml-2 text-[11px] text-zinc-500">{block.sub(row)}</span>
+                      <span className="ml-2 text-2xs text-zinc-500">{block.sub(row)}</span>
                     </span>
                   </li>
                 ))}

@@ -174,7 +174,7 @@ function FloorScreen() {
           { label: f.free || 'Available', value: freeCount, note: translateTableStatus('free', lang), tone: 'green', icon: '✓' },
           { label: translateTableStatus('reserved', lang), value: state.tables.filter((table) => table.status === 'reserved').length, note: f.booked || 'Booked', tone: 'violet', icon: '◷' },
           { label: f.dirty || 'Needs cleaning', value: dirtyCount, note: f.cleanTable || 'Bus & reset', tone: 'red', icon: '!' },
-        ].map((item) => <div key={item.label} className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-sm"><div className="flex items-center gap-3"><span className={`flex h-9 w-9 items-center justify-center rounded-xl text-sm font-bold ${item.tone === 'green' ? 'bg-emerald-50 text-emerald-700' : item.tone === 'violet' ? 'bg-violet-50 text-violet-700' : item.tone === 'red' ? 'bg-red-50 text-red-600' : 'bg-orange-50 text-orange-600'}`}>{item.icon}</span><span className="text-xs font-medium text-zinc-500">{item.label}</span></div><div className="tnum mt-2 text-2xl font-bold text-zinc-900">{item.value}</div><div className="mt-0.5 text-[10px] text-zinc-500">{item.note}</div></div>)}
+        ].map((item) => <div key={item.label} className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-sm"><div className="flex items-center gap-3"><span className={`flex h-9 w-9 items-center justify-center rounded-xl text-sm font-bold ${item.tone === 'green' ? 'bg-emerald-50 text-emerald-700' : item.tone === 'violet' ? 'bg-violet-50 text-violet-700' : item.tone === 'red' ? 'bg-red-50 text-red-600' : 'bg-orange-50 text-orange-600'}`}>{item.icon}</span><span className="text-xs font-medium text-zinc-500">{item.label}</span></div><div className="tnum mt-2 text-2xl font-bold text-zinc-900">{item.value}</div><div className="mt-0.5 text-3xs text-zinc-500">{item.note}</div></div>)}
       </div>
 
       <div className="grid items-start gap-4 xl:grid-cols-12">
@@ -203,7 +203,7 @@ function FloorScreen() {
                           <li key={table.id} className="flex items-center justify-between gap-2 rounded-xl bg-[var(--color-ink-800)] p-3 ring-1 ring-inset ring-[var(--color-ink-600)]">
                             <div>
                               <div className="text-sm font-semibold text-zinc-100">{table.name}</div>
-                              <div className="text-[11px] text-zinc-500">{table.seats} seats · {TABLE_STATUS_META[table.status].label}</div>
+                              <div className="text-2xs text-zinc-500">{table.seats} seats · {TABLE_STATUS_META[table.status].label}</div>
                             </div>
                             <div className="flex gap-2">
                               <button type="button" onClick={() => setEditor({ table })} className="min-h-[36px] rounded-lg border border-[var(--color-ink-600)] px-3 text-xs font-semibold text-zinc-200 hover:bg-white/5">

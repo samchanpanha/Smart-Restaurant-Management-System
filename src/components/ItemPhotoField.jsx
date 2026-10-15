@@ -31,13 +31,13 @@ export function PhotoField({ value, onChange, maxKb = 180, hint }) {
 
   return (
     <div>
-      <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Photo</span>
+      <span className="mb-1 block text-2xs font-semibold uppercase tracking-wider text-zinc-500">Photo</span>
       <div className="flex flex-wrap items-start gap-3">
         <div className="grid h-24 w-24 shrink-0 place-items-center overflow-hidden rounded-xl border border-dashed border-zinc-300 bg-zinc-50">
           {value ? (
             <img src={value} alt="Item photo" className="h-full w-full object-cover" />
           ) : (
-            <span className="px-2 text-center text-[10px] uppercase tracking-wide text-zinc-400">No photo</span>
+            <span className="px-2 text-center text-3xs uppercase tracking-wide text-zinc-400">No photo</span>
           )}
         </div>
         <div className="min-w-[220px] flex-1 space-y-2">
@@ -71,7 +71,7 @@ export function PhotoField({ value, onChange, maxKb = 180, hint }) {
             placeholder={value?.startsWith('data:') ? 'Uploaded photo stored in this app' : 'https://… or /photos/plate.jpg'}
             className={inputCls}
           />
-          <p className="text-[11px] text-zinc-500">
+          <p className="text-2xs text-zinc-500">
             {error ? <span className="text-red-600">{error}</span> : (hint || `Resized and compressed to about ${maxKb} kB before it is saved — no upload service needed.`)}
           </p>
         </div>
@@ -85,7 +85,7 @@ export function PhotoField({ value, onChange, maxKb = 180, hint }) {
 export function ChipPicker({ label, options, selected, onToggle, empty }) {
   return (
     <div>
-      <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-zinc-500">{label}</span>
+      <span className="mb-1 block text-2xs font-semibold uppercase tracking-wider text-zinc-500">{label}</span>
       <div className="flex flex-wrap gap-1.5">
         {options.length === 0 && <span className="text-xs text-zinc-500">{empty}</span>}
         {options.map((option) => {

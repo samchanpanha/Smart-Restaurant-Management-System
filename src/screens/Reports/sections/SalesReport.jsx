@@ -74,7 +74,7 @@ function SalesReport({ range }) {
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="rounded-2xl border border-[var(--color-ink-700)] bg-[var(--color-ink-900)] p-4">
           <div className="tnum text-3xl font-bold">{money(total)}</div>
-          <div className="mt-1 text-[11px] font-semibold uppercase tracking-widest text-zinc-500">
+          <div className="mt-1 text-2xs font-semibold uppercase tracking-widest text-zinc-500">
             Sales · {RANGES.find((r) => r.id === range).label}
           </div>
           <div className="mt-1.5">
@@ -85,12 +85,12 @@ function SalesReport({ range }) {
         </div>
         <div className="rounded-2xl border border-[var(--color-ink-700)] bg-[var(--color-ink-900)] p-4">
           <div className="tnum text-3xl font-bold">{checks == null ? '—' : checks}</div>
-          <div className="mt-1 text-[11px] font-semibold uppercase tracking-widest text-zinc-500">Checks</div>
+          <div className="mt-1 text-2xs font-semibold uppercase tracking-widest text-zinc-500">Checks</div>
           <div className="mt-1.5 text-xs text-zinc-500">{checks == null ? 'check detail is tonight-only' : `${money(avgCheck)} average check`}</div>
         </div>
         <div className="rounded-2xl border border-[var(--color-ink-700)] bg-[var(--color-ink-900)] p-4">
           <div className="tnum text-3xl font-bold">{money(histAvg)}</div>
-          <div className="mt-1 text-[11px] font-semibold uppercase tracking-widest text-zinc-500">7-day daily avg</div>
+          <div className="mt-1 text-2xs font-semibold uppercase tracking-widest text-zinc-500">7-day daily avg</div>
           <div className="mt-1.5 text-xs text-zinc-500">the compare baseline, always on</div>
         </div>
       </div>

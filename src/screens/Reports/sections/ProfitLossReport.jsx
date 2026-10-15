@@ -36,12 +36,12 @@ function ProfitLossReport({ range }) {
               <span className="text-zinc-300">{row.label}</span>
               <span className={`tnum ${row.tone}`}>
                 {row.value < 0 ? `−${money(-row.value)}` : money(row.value)}
-                {row.sub && <span className="ml-2 text-[11px] font-normal text-zinc-500">{row.sub}</span>}
+                {row.sub && <span className="ml-2 text-2xs font-normal text-zinc-500">{row.sub}</span>}
               </span>
             </li>
           ))}
         </ul>
-        <p className="mt-2 text-[11px] text-zinc-500">
+        <p className="mt-2 text-2xs text-zinc-500">
           Cost of goods is the recipe book applied to paid checks, frozen at the moment each plate fired — a delivery
           arriving tomorrow cannot rewrite tonight&apos;s margin. Labour, rent and card fees stay out of scope.
         </p>
@@ -64,7 +64,7 @@ function ProfitLossReport({ range }) {
               </li>
             ))}
           </ul>
-          <p className="mt-2 text-[11px] text-zinc-500">
+          <p className="mt-2 text-2xs text-zinc-500">
             Suppliers are paid when a receipt is booked, not when the order is raised — ordering alone never moves cash.
           </p>
         </Card>

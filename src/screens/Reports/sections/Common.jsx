@@ -7,7 +7,7 @@ function ReportShell({ title, source, action, children }) {
         <header className="flex flex-wrap items-baseline justify-between gap-2">
           <div>
             {title && <h2 className="text-lg font-bold tracking-tight text-zinc-100">{title}</h2>}
-            {source && <p className="mt-0.5 text-[11px] text-zinc-500">{source}</p>}
+            {source && <p className="mt-0.5 text-2xs text-zinc-500">{source}</p>}
           </div>
           {action}
         </header>

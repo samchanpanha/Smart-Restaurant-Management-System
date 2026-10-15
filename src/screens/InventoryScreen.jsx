@@ -160,7 +160,7 @@ function StockTab() {
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-lg">{itemIcon(sku.name)}</span>
                     <span className="min-w-0">
                       <span className="block text-sm font-semibold text-zinc-800">{localName}{lang !== 'en' && localName !== sku.name && <span className="ml-1 text-xs font-normal text-zinc-500">({sku.name})</span>}</span>
-                      <span className="mt-0.5 block max-w-[260px] truncate text-[10px] text-zinc-500">{sku.vendor}{dishes.length ? ` · ${dishes.length} recipes` : ''}</span>
+                      <span className="mt-0.5 block max-w-[260px] truncate text-3xs text-zinc-500">{sku.vendor}{dishes.length ? ` · ${dishes.length} recipes` : ''}</span>
                     </span>
                   </div>
                 )
@@ -171,13 +171,13 @@ function StockTab() {
               key: 'onHand',
               header: inv.currentStock || 'Current stock',
               render: ({ sku }) => (
-                <span><span className={`tnum text-sm font-bold ${sku.onHand < 0 ? 'text-red-600' : 'text-zinc-800'}`}>{sku.onHand}</span><span className="ml-1 text-[10px] text-zinc-500">{sku.unit}</span></span>
+                <span><span className={`tnum text-sm font-bold ${sku.onHand < 0 ? 'text-red-600' : 'text-zinc-800'}`}>{sku.onHand}</span><span className="ml-1 text-3xs text-zinc-500">{sku.unit}</span></span>
               ),
             },
             {
               key: 'par',
               header: inv.parLevel || 'Par level',
-              render: ({ sku }) => <span className="tnum text-sm text-zinc-700">{sku.par} <span className="text-[10px] text-zinc-400">{sku.unit}</span></span>,
+              render: ({ sku }) => <span className="tnum text-sm text-zinc-700">{sku.par} <span className="text-3xs text-zinc-400">{sku.unit}</span></span>,
             },
             {
               key: 'status',
@@ -185,7 +185,7 @@ function StockTab() {
               render: ({ sku, st }) => (
                 <span>
                   <StatusPill tone={st === 'ok' ? 'ok' : st === 'low' ? 'warn' : 'bad'} size="sm">{st === 'ok' ? (inv.inStock || 'In stock') : st === 'low' ? (inv.lowStock || 'Low stock') : (inv.outOfStock || 'Out of stock')}</StatusPill>
-                  {sku.onHand < 0 && <span className="ml-1 text-[10px] font-semibold text-red-600">Recount</span>}
+                  {sku.onHand < 0 && <span className="ml-1 text-3xs font-semibold text-red-600">Recount</span>}
                 </span>
               ),
             },
@@ -201,7 +201,7 @@ function StockTab() {
           empty={<div className="rounded-[var(--radius-xl)] border border-[var(--border)] px-6 py-14 text-center text-sm text-zinc-500">Nothing matches this filter.</div>}
         />
       </div>
-      <div className="flex items-center justify-between border-t border-zinc-100 px-5 py-3 text-[11px] text-zinc-500"><span>Showing {rows.length} of {state.inventory.length} inventory items</span><span>On-hand is theoretical · actions update live</span></div>
+      <div className="flex items-center justify-between border-t border-zinc-100 px-5 py-3 text-2xs text-zinc-500"><span>Showing {rows.length} of {state.inventory.length} inventory items</span><span>On-hand is theoretical · actions update live</span></div>
     </div>
   )
 }
@@ -318,7 +318,7 @@ function ReceiveTab({ onDone }) {
 
           {impact.length > 0 && (
             <div className="rounded-xl bg-sky-500/10 p-3 ring-1 ring-inset ring-sky-500/30">
-              <div className="text-[11px] font-bold uppercase tracking-widest text-sky-300">
+              <div className="text-2xs font-bold uppercase tracking-widest text-sky-300">
                 Plate-cost impact · live on save
               </div>
               <ul className="mt-2 space-y-1 text-xs">
@@ -434,14 +434,14 @@ function CountTab({ onDone }) {
               <div className="grid items-center gap-3 sm:grid-cols-12">
                 <div className="sm:col-span-4">
                   <div className="text-sm font-semibold text-zinc-100">{sku.name}</div>
-                  <div className="text-[11px] text-zinc-500">{sku.unit} · {money(sku.lastCost)} each</div>
+                  <div className="text-2xs text-zinc-500">{sku.unit} · {money(sku.lastCost)} each</div>
                 </div>
                 <div className="sm:col-span-2">
-                  <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">theoretical</div>
+                  <div className="text-3xs font-semibold uppercase tracking-widest text-zinc-500">theoretical</div>
                   <div className="tnum text-lg font-bold">{sku.onHand}</div>
                 </div>
                 <div className="sm:col-span-2">
-                  <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">counted</div>
+                  <div className="text-3xs font-semibold uppercase tracking-widest text-zinc-500">counted</div>
                   <input
                     type="number"
                     step="any"
@@ -454,16 +454,16 @@ function CountTab({ onDone }) {
                   />
                 </div>
                 <div className="sm:col-span-2">
-                  <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">variance</div>
+                  <div className="text-3xs font-semibold uppercase tracking-widest text-zinc-500">variance</div>
                   <div className={`tnum text-lg font-bold ${!hasCount ? 'text-zinc-600' : off ? (variance < 0 ? 'text-red-300' : 'text-sky-300') : 'text-emerald-300'}`}>
                     {hasCount ? `${variance > 0 ? '+' : ''}${Math.round(variance * 100) / 100}` : '—'}
                   </div>
                   {hasCount && off && (
-                    <div className="tnum text-[11px] text-zinc-500">{money(varianceValue)}</div>
+                    <div className="tnum text-2xs text-zinc-500">{money(varianceValue)}</div>
                   )}
                 </div>
                 <div className="sm:col-span-2">
-                  <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">reason {off ? '*' : ''}</div>
+                  <div className="text-3xs font-semibold uppercase tracking-widest text-zinc-500">reason {off ? '*' : ''}</div>
                   {off ? (
                     <select
                       value={e.reason}
@@ -645,7 +645,7 @@ export default function InventoryScreen() {
       </header>
 
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        {metrics.map((item) => <div key={item.label} className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-sm"><div className="flex items-center gap-3"><span className={`flex h-10 w-10 items-center justify-center rounded-xl text-lg font-bold ${iconTone[item.tone]}`}>{item.icon}</span><span className="text-xs font-medium text-zinc-500">{item.label}</span></div><div className="tnum mt-3 text-2xl font-bold text-zinc-900">{item.value}</div><div className="mt-1 text-[11px] text-zinc-500">{item.note}</div></div>)}
+        {metrics.map((item) => <div key={item.label} className="rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-sm"><div className="flex items-center gap-3"><span className={`flex h-10 w-10 items-center justify-center rounded-xl text-lg font-bold ${iconTone[item.tone]}`}>{item.icon}</span><span className="text-xs font-medium text-zinc-500">{item.label}</span></div><div className="tnum mt-3 text-2xl font-bold text-zinc-900">{item.value}</div><div className="mt-1 text-2xs text-zinc-500">{item.note}</div></div>)}
       </div>
 
       <div className="flex items-start gap-3 rounded-xl border border-sky-100 bg-sky-50 px-4 py-3 text-xs leading-relaxed text-sky-800"><span className="mt-0.5 text-base" aria-hidden="true">ⓘ</span><p>On-hand is <strong>theoretical</strong> — it drops when the kitchen fires. Counted truth is written only by receiving, waste, or the count sheet. Par alerts surface 2 hours before the {state.settings.rushHour}:00 rush.</p></div>
@@ -664,7 +664,7 @@ export default function InventoryScreen() {
           >
             {tabLabels[item.id] || item.label}
             {lang !== 'en' && <span className="sr-only"> {item.label}</span>}
-            {item.id === 'stock' && belowPar > 0 && <span className={`ml-2 rounded-full px-1.5 py-0.5 text-[10px] ${tab === item.id ? 'bg-white/20 text-white' : 'bg-orange-50 text-orange-700'}`}>{belowPar}</span>}
+            {item.id === 'stock' && belowPar > 0 && <span className={`ml-2 rounded-full px-1.5 py-0.5 text-3xs ${tab === item.id ? 'bg-white/20 text-white' : 'bg-orange-50 text-orange-700'}`}>{belowPar}</span>}
           </button>
         ))}
       </div>

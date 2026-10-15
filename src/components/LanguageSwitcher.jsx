@@ -23,7 +23,7 @@ export default function LanguageSwitcher({ compact = false, testIdPrefix = 'app-
             aria-label={`Switch language to ${option.englishName}`}
             data-testid={`${testIdPrefix}-${option.id}`}
             className={`rounded-lg font-bold transition-colors ${
-              compact ? 'min-h-[30px] px-2.5 text-[11px]' : 'min-h-[36px] px-3 text-xs'
+              compact ? 'min-h-[30px] px-2.5 text-2xs' : 'min-h-[36px] px-3 text-xs'
             } ${
               active
                 ? 'bg-orange-500 text-white shadow-xs'

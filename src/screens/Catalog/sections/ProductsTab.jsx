@@ -131,7 +131,7 @@ function ProductsTab() {
                 {dish.imageUrl ? (
                   <img src={dish.imageUrl} alt="" className="h-10 w-10 shrink-0 rounded-lg object-cover ring-1 ring-zinc-200" />
                 ) : (
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-zinc-100 text-[9px] uppercase tracking-wide text-zinc-400" aria-hidden>no photo</span>
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-zinc-100 text-3xs uppercase tracking-wide text-zinc-400" aria-hidden>no photo</span>
                 )}
                 <div className="min-w-0">
                   <div className="font-semibold text-zinc-800">
@@ -140,7 +140,7 @@ function ProductsTab() {
                       <span className="ml-1 text-xs font-normal text-zinc-500">({dish.name})</span>
                     )}
                   </div>
-                  <div className="text-[11px] text-zinc-500">{dish.sku || 'no SKU'}{dish.description ? ` · ${dish.description.slice(0, 40)}` : ''}</div>
+                  <div className="text-2xs text-zinc-500">{dish.sku || 'no SKU'}{dish.description ? ` · ${dish.description.slice(0, 40)}` : ''}</div>
                   <div className="mt-1 flex flex-wrap gap-1">
                     {dish.course && <StatusPill tone="muted" size="sm">{dish.course}</StatusPill>}
                     {dish.dietaryTags.slice(0, 2).map((tag) => <StatusPill key={tag} tone="ok" size="sm">{tag}</StatusPill>)}
@@ -181,7 +181,7 @@ function ProductsTab() {
               </select>
             ),
           },
-          { key: 'supply', header: 'Supply', render: ({ suppliers }) => <span className="text-[11px] text-zinc-500">{suppliers.length ? suppliers.join(', ') : 'No recipe yet'}</span> },
+          { key: 'supply', header: 'Supply', render: ({ suppliers }) => <span className="text-2xs text-zinc-500">{suppliers.length ? suppliers.join(', ') : 'No recipe yet'}</span> },
           {
             key: 'status',
             header: 'Status',
@@ -217,7 +217,7 @@ function ProductsTab() {
         rowKey={(row) => row.dish.id}
         empty={<div className="rounded-[var(--radius-xl)] border border-[var(--border)] px-4 py-12 text-center text-sm text-zinc-500">No products match this filter.</div>}
       />
-      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-zinc-500">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-2xs text-zinc-500">
         <span>{rows.length} of {state.menu.length} products</span>
         <span>Plate cost follows the stock valuation method set in Settings → Stock rules.</span>
       </div>

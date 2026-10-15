@@ -38,7 +38,7 @@ function TableCard({ table, onOpen }) {
       <div className="flex items-start justify-between gap-2">
         <div>
           <div className="text-base font-bold leading-tight">{table.name}</div>
-          <div className="text-[11px] text-zinc-500">
+          <div className="text-2xs text-zinc-500">
             {table.seats} seats · {table.zone}
           </div>
         </div>
@@ -59,7 +59,7 @@ function TableCard({ table, onOpen }) {
               Party of {table.partySize || table.seats} · {mins}m
             </div>
             {predictedFree && (
-              <div className="mt-0.5 text-[11px] text-zinc-500">
+              <div className="mt-0.5 text-2xs text-zinc-500">
                 free ~{formatClock(predictedFree.at)} ({predictedFree.avg}m avg turn)
               </div>
             )}
@@ -116,7 +116,7 @@ function TableCard({ table, onOpen }) {
             />
           </div>
           {longTurn && (
-            <div className="mt-1 text-[11px] font-semibold text-amber-300">
+            <div className="mt-1 text-2xs font-semibold text-amber-300">
               Long turn · {mins}m of {table.targetTurnMinutes}m target
             </div>
           )}

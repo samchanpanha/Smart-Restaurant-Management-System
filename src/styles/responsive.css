@@ -1,0 +1,292 @@
+/* ─── Responsive + runtime behaviour layer ───────────────────────────
+   Rules here are deliberately UNLAYERED: Tailwind emits utilities inside
+   `@layer utilities`, so an unlayered rule of equal specificity wins without
+   `!important`. That is how `.app-shell` overrides `h-screen`, and how the
+   compact mode below tightens a layout without forking every component.
+
+   Contents:
+     1. Viewport height (dvh) for the whole shell + guest surfaces
+     2. Touch behaviour and safe-area insets
+     3. Scroll containers for wide content (`.table-scroll`)
+     4. Compact layout for phones and short viewports
+     5. Charts (Recharts palette lives in CSS, not in the JSX)
+     6. Print — owners print reports and the audit trail
+     7. Contrast preferences                                                */
+
+/* ── 1. Viewport height ──────────────────────────────────────────────── */
+/* 100vh on mobile browsers measures the *largest* viewport, so the bottom of
+   a terminal's UI hides behind the browser chrome. `dvh` tracks the visible
+   area; the vh line stays as the fallback for older engines. */
+.app-shell,
+.app-shell-main,
+.guest-shell {
+  height: 100vh;
+}
+
+@supports (height: 100dvh) {
+  .app-shell,
+  .app-shell-main,
+  .guest-shell {
+    height: 100dvh;
+  }
+}
+
+/* Guest + mini-app surfaces scroll as a document, never as a fixed pane. */
+.guest-shell {
+  height: auto;
+  min-height: 100vh;
+}
+
+@supports (height: 100dvh) {
+  .guest-shell {
+    min-height: 100dvh;
+  }
+}
+
+/* ── 2. Touch + safe areas ───────────────────────────────────────────── */
+html {
+  /* iOS Safari inflates text in landscape unless this is pinned; the guest
+     menu then reflows unevenly. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  /* Long-press highlight on a dark console flashes grey boxes on Android. */
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+[role='button'],
+label,
+select,
+summary {
+  /* Removes the 300ms double-tap delay; the UI has no double-tap gesture. */
+  touch-action: manipulation;
+}
+
+/* A phone in landscape puts the notch on the left or right: pad the shell
+   itself (the topbar/page keep their own Tailwind padding) so content never
+   slides under the cutout. */
+.app-shell {
+  padding-left: env(safe-area-inset-left, 0);
+  padding-right: env(safe-area-inset-right, 0);
+}
+
+/* iOS: a positioned, scrollable pane needs momentum scrolling and must not
+   scroll the page behind it. */
+.app-workspace,
+.tab-list,
+.table-scroll,
+.miniapp-table-bar,
+.miniapp-service-bar,
+.miniapp-pax-pills,
+.miniapp-zone-tabs {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* ── 3. Wide content ─────────────────────────────────────────────────── */
+/* Financial tables (movements, purchases, units, currency) are wider than a
+   phone. They scroll inside their card instead of stretching the page, and an
+   inset shadow on the leading edge signals there is more to the right. */
+.table-scroll {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  background:
+    linear-gradient(to right, var(--surface) 30%, rgb(255 255 255 / 0%)),
+    linear-gradient(to left, var(--surface) 30%, rgb(255 255 255 / 0%)) 100% 0,
+    radial-gradient(farthest-side at 0 50%, rgb(20 28 38 / 12%), rgb(20 28 38 / 0%)),
+    radial-gradient(farthest-side at 100% 50%, rgb(20 28 38 / 12%), rgb(20 28 38 / 0%)) 100% 0;
+  background-repeat: no-repeat;
+  background-size: 40px 100%, 40px 100%, 14px 100%, 14px 100%;
+  background-attachment: local, local, scroll, scroll;
+}
+
+/* ── 4. Compact layout ───────────────────────────────────────────────── */
+/* Tablets in portrait and phones get a tighter page frame and a topbar that
+   wraps the search onto its own row instead of squeezing the actions. */
+@media (max-width: 900px) {
+  .restora-theme .app-topbar {
+    flex-wrap: wrap;
+    row-gap: 8px;
+    padding-block: 10px;
+  }
+
+  .restora-theme .app-topbar .global-search {
+    order: 2;
+    max-width: none;
+    flex-basis: 100%;
+  }
+
+  .restora-theme .app-topbar .global-actions {
+    order: 1;
+    margin-left: auto;
+  }
+}
+
+/* Short viewports (landscape phones, split-screen tablet): the chrome gives
+   space back to the workspace. */
+@media (max-height: 560px) {
+  .restora-theme .app-topbar {
+    padding-block: 6px;
+  }
+
+  .restora-theme .app-sidebar > div:first-child {
+    padding-block: 10px;
+  }
+
+  .restora-theme .app-page {
+    padding-block: 14px 24px;
+  }
+}
+
+/* ── 5. Charts ───────────────────────────────────────────────────────── */
+/* Recharts renders SVG with presentation attributes, which lose to any CSS
+   rule — so the palette lives here and follows the surface scope (light
+   workspace vs. dark). Previously it was hard-coded to a dark grey that was
+   invisible on the light reports page. */
+.recharts-cartesian-grid line {
+  stroke: var(--border-subtle);
+}
+
+.recharts-cartesian-axis line {
+  stroke: var(--border);
+}
+
+.recharts-cartesian-axis-tick text,
+.recharts-text.recharts-cartesian-axis-tick-value {
+  fill: var(--text-subtle);
+  font-family: var(--font-sans);
+  font-size: var(--fs-caption);
+  font-variant-numeric: tabular-nums;
+}
+
+.recharts-cartesian-axis-tick-line {
+  stroke: var(--border);
+}
+
+.recharts-default-tooltip {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: var(--fs-label);
+}
+
+.recharts-tooltip-label,
+.recharts-default-tooltip .recharts-tooltip-label {
+  color: var(--text-strong);
+  font-weight: 600;
+}
+
+.recharts-tooltip-item {
+  color: var(--text) !important;
+}
+
+.recharts-tooltip-cursor,
+.recharts-curve.recharts-tooltip-cursor {
+  stroke: var(--border-strong);
+  fill: var(--surface-hover);
+}
+
+/* ── 6. Print ────────────────────────────────────────────────────────── */
+/* An owner prints the P&L, the variance report, or the audit trail. The ops
+   chrome (rail, topbar, tab strip) is noise on paper, cards should not split
+   across pages, and the page should not print dark surfaces. */
+@media print {
+  .app-sidebar,
+  .app-topbar,
+  .app-tabs,
+  .app-print-hide,
+  [data-print='hide'] {
+    display: none !important;
+  }
+
+  html,
+  body,
+  .app-shell,
+  .app-shell-main,
+  .app-workspace {
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  .app-page {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+
+  body,
+  .restora-theme {
+    color: #111827;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .table-scroll {
+    overflow: visible !important;
+    background: none !important;
+  }
+
+  .restora-theme .rounded-2xl.border,
+  .restora-theme .rounded-xl.border {
+    box-shadow: none !important;
+  }
+
+  h1,
+  h2,
+  h3,
+  table,
+  .avoid-break {
+    break-inside: avoid;
+  }
+
+  tr,
+  img,
+  svg {
+    break-inside: avoid;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  a[href]::after {
+    content: '';
+  }
+
+  @page {
+    margin: 12mm;
+  }
+}
+
+/* ── 7. Contrast preferences ─────────────────────────────────────────── */
+@media (prefers-contrast: more) {
+  :root {
+    --border-subtle: #c7cad1;
+    --border: #b3b8c0;
+    --border-strong: #9aa0aa;
+    --text-muted: #414852;
+    --text-subtle: #414852;
+  }
+
+  .restora-theme input,
+  .restora-theme select,
+  .restora-theme textarea {
+    border-color: var(--border-strong);
+  }
+}
+
+/* ── Utility: horizontal scrollers that keep their swipe but drop the bar ── */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

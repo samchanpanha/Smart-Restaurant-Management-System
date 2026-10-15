@@ -1,0 +1,84 @@
+/* ─── Script-aware typography ────────────────────────────────────────
+   The UI runs in Khmer (default), English, and Chinese. Latin-tuned numbers
+   are wrong for the other two scripts:
+
+   • Khmer stacks vowel and diacritic clusters above *and* below the base
+     glyph, so a 10–11px badge with 1.35 leading that reads fine in Latin
+     collides or clips in Khmer. `html[lang='km']` (written by src/lib/i18n.js
+     on every language change) re-scales the micro type tokens, the semantic
+     --fs-* scale, and the tracking utilities — no per-component overrides.
+   • Chinese glyphs are square and dense: same size, slightly wider leading.
+
+   Everything here is variable-overriding (Tailwind v4 resolves
+   `font-size: var(--text-2xs)` / `letter-spacing: var(--tracking-wider)` at the
+   element), so components keep using ordinary utilities. */
+
+html[lang='km'] {
+  /* Micro type tokens declared in `@theme` (index.css). 8–11px becomes
+     11–13px: Khmer needs roughly one extra step to stay legible. */
+  --text-4xs: 0.6875rem;
+  --text-4xs--line-height: 1.6;
+  --text-3xs: 0.75rem;
+  --text-3xs--line-height: 1.7;
+  --text-2xs: 0.8125rem;
+  --text-2xs--line-height: 1.7;
+
+  /* Tailwind's own steps, opened up for subscript consonants. */
+  --text-xs--line-height: 1.6;
+  --text-sm--line-height: 1.65;
+  --text-base--line-height: 1.65;
+  --text-lg--line-height: 1.6;
+  --text-xl--line-height: 1.55;
+  --text-2xl--line-height: 1.5;
+
+  /* The semantic scale in src/components/ui/* (text-[var(--fs-*)]) */
+  --fs-caption: 0.75rem;
+  --fs-label: 0.8125rem;
+  --fs-body: 0.9375rem;
+  --fs-h3: 1.0625rem;
+  --fs-h2: 1.1875rem;
+
+  /* Wide Latin tracking stretches Khmer clusters apart; keep it tight. */
+  --tracking-wide: 0.01em;
+  --tracking-wider: 0.02em;
+  --tracking-widest: 0.035em;
+
+  line-height: 1.65;
+}
+
+html[lang='zh'] {
+  --text-4xs: 0.5625rem;
+  --text-4xs--line-height: 1.35;
+  --text-3xs: 0.6875rem;
+  --text-3xs--line-height: 1.45;
+  --text-2xs: 0.75rem;
+  --text-2xs--line-height: 1.5;
+  --text-xs--line-height: 1.5;
+  --text-sm--line-height: 1.6;
+  --tracking-wider: 0.02em;
+  --tracking-widest: 0.05em;
+  line-height: 1.6;
+}
+
+/* Tabular numerals: every KPI, timer, and money column lines up. Inter ships
+   `tnum`; the fallback stacks get `font-variant-numeric` for free. */
+.tnum {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: 'tnum' 1, 'lnum' 1;
+  letter-spacing: -0.02em;
+}
+
+/* Long headings should not leave one orphan word on the last line; body copy
+   gets `pretty` (avoids a single trailing word). Both are no-ops where
+   unsupported. */
+h1,
+h2,
+h3,
+legend {
+  text-wrap: balance;
+}
+
+p,
+li {
+  text-wrap: pretty;
+}

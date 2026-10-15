@@ -414,7 +414,7 @@ export default function TabStrip({ fallbackScreen }) {
                     {badge && (
                       <span
                         title={`${badge.count} alert${badge.count > 1 ? 's' : ''} need attention`}
-                        className={`tab-badge flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full px-1 text-[9px] font-bold text-white ${badge.critical ? 'bg-red-500' : 'bg-amber-500'}`}
+                        className={`tab-badge flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full px-1 text-3xs font-bold text-white ${badge.critical ? 'bg-red-500' : 'bg-amber-500'}`}
                       >
                         {tab.pinned ? '' : Math.min(9, badge.count)}
                       </span>
@@ -505,7 +505,7 @@ function MenuItem({ label, srLabel, hint, disabled, onPick }) {
         {label}
         {srLabel && srLabel !== label && <span className="sr-only"> {srLabel}</span>}
       </span>
-      {hint && <span className="ml-4 text-[10px] text-zinc-400">{hint}</span>}
+      {hint && <span className="ml-4 text-3xs text-zinc-400">{hint}</span>}
     </button>
   )
 }
