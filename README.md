@@ -15,6 +15,8 @@ npm run build    # production build → dist/
 npm run server   # API on :3001 (SQLite, SSE, Telegram webhook) — optional
 npm run seed:demo # load a full two-store demo + one sign-in per staff role
 npm test         # reducer, SQLite catalog, settings/currency/documents, screens contracts, tabs
+npm run check:ui # static audit of fonts, CSS, type scale, and responsive risk
+npm run fonts:sync # re-vendor the self-hosted webfonts from node_modules
 ```
 
 No backend needed for the demo: state persists to `localStorage`; **Reset demo data** in the sidebar restores the Friday-night seed.
@@ -31,9 +33,11 @@ With the API running, extra environment (all optional — nothing breaks without
 | `SUPERADMIN_EMAIL` / `SUPERADMIN_PASSWORD` / `SUPERADMIN_NAME` | Seed (or promote) the platform super admin on boot. |
 | `RESTORA_TENANT` | Slug (or id) of the owner the Telegram bot serves; defaults to the first owner, else the legacy `default` tenant. |
 | `RESTORA_SECURE_COOKIES` | Set to `1` behind HTTPS so session cookies are marked `Secure`. |
-| `AI_API_KEY` | Provider key (OpenAI/Anthropic/Gemini/Ollama). **Absent ⇒ AI is off everywhere** and the app behaves exactly as before. |
+| `AI_API_KEY` | Provider key (OpenAI, Anthropic, Gemini, DeepSeek, Qwen, Groq, OpenRouter, Mistral, Cerebras, GLM, Kimi, Grok, Together, Perplexity, Ollama, LM Studio). **Absent ⇒ AI is off everywhere** and the app behaves exactly as before. |
 | `AI_PROVIDER` / `AI_MODEL` / `AI_BASE_URL` | Which provider, model, and endpoint to call (each has a default; see **AI assistant**). |
+| `AI_KEYS` | Extra keys for the failover chain: `sk-a,sk-b` (same vendor) or a JSON array `[{"provider":"qwen","apiKey":"…"}]`. |
 | `AI_TIMEOUT_MS` / `AI_RATE_LIMIT` / `AI_GUEST_RATE_LIMIT` / `AI_RATE_WINDOW_MS` / `AI_CACHE_TTL_MS` | Outbound timeout, per-window rate limits (staff / guest), and the insight-cache TTL. |
+| `AI_FAILOVER_COOLDOWN_MS` | How long a key that just failed stays parked so the next key answers (default `60000`). |
 
 ## Accounts & tenants
 
@@ -392,9 +396,39 @@ live shift and returns text — it is **read-only and never dispatches a reducer
 action**, and it is **off by default**: with no `AI_API_KEY` every `/api/ai/*`
 route is a clean 503 no-op and the app is byte-for-byte the same.
 
-- **Providers:** `openai` (default), `anthropic`, `gemini`, `ollama` — chosen
-  with `AI_PROVIDER`; each has a default `AI_MODEL`/endpoint, all overridable
-  (`AI_MODEL`, `AI_BASE_URL`). No SDKs — just `fetch`.
+- **Providers:** sixteen vendors, all on the same `fetch`-only adapter
+  (`src/lib/ai-providers.js`), chosen with `AI_PROVIDER`:
+
+  | Provider id | Wire | Default model | Tier |
+  |---|---|---|---|
+  | `openai` (default) | OpenAI | `gpt-4o-mini` | paid |
+  | `anthropic` | Anthropic | `claude-3-5-haiku-latest` | paid |
+  | `gemini` | Gemini | `gemini-2.0-flash` | free quota |
+  | `deepseek` | OpenAI-compatible | `deepseek-chat` | cheap |
+  | `qwen` (DashScope international; mainland endpoint offered in the UI) | OpenAI-compatible | `qwen-plus` | free quota |
+  | `groq` | OpenAI-compatible | `llama-3.3-70b-versatile` | free |
+  | `openrouter` | OpenAI-compatible | `deepseek/deepseek-chat-v3-0324:free` | free `:free` models |
+  | `mistral` | OpenAI-compatible | `mistral-small-latest` | free "Experiment" plan |
+  | `cerebras` | OpenAI-compatible | `llama3.1-8b` | free |
+  | `zhipu` (GLM) | OpenAI-compatible | `glm-4-flash` | free |
+  | `moonshot` (Kimi) | OpenAI-compatible | `moonshot-v1-8k` | cheap |
+  | `xai` (Grok) | OpenAI-compatible | `grok-3-mini` | paid |
+  | `together` / `perplexity` | OpenAI-compatible | Llama 3.3 / `sonar` | paid |
+  | `ollama` / `lmstudio` | native / OpenAI-compatible | local | **no key needed** |
+
+  Aliases (`dashscope`, `kimi`, `glm`, `claude`, `grok`, `lm-studio`, …) resolve
+  to the right entry, and every field is overridable with `AI_MODEL` /
+  `AI_BASE_URL`. No SDKs — just `fetch`.
+- **Several keys, with failover.** Beyond the primary key, a tenant can hold a
+  **key pool** (Settings → AI assistant → *Failover keys*): more DeepSeek keys,
+  a Qwen key, a free vendor, a local box. The router tries them in order
+  (primary → backups → `AI_KEYS` from the environment) and a key that just
+  failed is parked for `AI_FAILOVER_COOLDOWN_MS` so the next request goes
+  straight to a working key. With *Spread requests across all keys* on, the
+  chain is round-robined instead. Responses report which key answered
+  (`via`, `failover`); keys themselves are never returned (`hasKey`,
+  `poolCount` only), and pool health in `/api/ai/status` is staff-only.
+  Local providers (`ollama`, `lmstudio`) need no key at all — just a base URL.
 - **Surfaces:** the **Ops Copilot** screen (`Insight → Ops Copilot`) for chat +
   advisors + a shift briefing; the **Dashboard** AI cards (alert explainer,
   menu advisor, prep forecast, shift briefing); and the guest/mini-app **Menu
@@ -416,16 +450,20 @@ route is a clean 503 no-op and the app is byte-for-byte the same.
   /api/ai/briefing` with `deliver:true`, using the same notifier/chats as the
   rest of the pushes).
 - **Configure in-app:** an owner or super admin can set the provider, model,
-  base URL, and API key from **Settings → AI assistant**. It is stored per
-  restaurant in SQLite (the key is write-only and never sent back to the
-  browser) and overrides the env vars below; any field left blank falls back to
-  them. The routes (`GET`/`PUT /api/ai/config`, `POST /api/ai/config/test`) are
-  owner-only and take effect without a restart.
+  base URL, API key, the failover pool, and rotation from **Settings → AI
+  assistant**. It is stored per restaurant in SQLite (every key is write-only
+  and never sent back to the browser) and overrides the env vars below; any
+  field left blank falls back to them. The screen also lists the free and local
+  options with a one-click *Use this* and a link to each vendor's key page, and
+  can **Test** the primary or any single backup key. The routes
+  (`GET`/`PUT /api/ai/config`, `POST /api/ai/config/test` with an optional
+  `keyId`) are owner-only and take effect without a restart.
 
 | Variable | Purpose | Default |
 |---|---|---|
 | `AI_API_KEY` | Provider key; absent ⇒ AI disabled | — |
-| `AI_PROVIDER` | `openai` \| `anthropic` \| `gemini` \| `ollama` | `openai` |
+| `AI_KEYS` | Extra keys for the failover chain (comma list or JSON array) | — |
+| `AI_PROVIDER` | any catalogue id — `openai`, `anthropic`, `gemini`, `deepseek`, `qwen`, `groq`, `openrouter`, `mistral`, `cerebras`, `zhipu`, `moonshot`, `xai`, `together`, `perplexity`, `ollama`, `lmstudio` | `openai` |
 | `AI_MODEL` | Model id | provider default |
 | `AI_BASE_URL` | Override endpoint (self-host / proxy) | provider default |
 | `AI_TIMEOUT_MS` | Outbound timeout | `20000` |
@@ -433,6 +471,58 @@ route is a clean 503 no-op and the app is byte-for-byte the same.
 | `AI_GUEST_RATE_LIMIT` | Requests per window (guest) | `6` |
 | `AI_RATE_WINDOW_MS` | Rate-limit window | `60000` |
 | `AI_CACHE_TTL_MS` | Response cache TTL | `300000` |
+| `AI_FAILOVER_COOLDOWN_MS` | How long a failed key stays parked | `60000` |
+
+## Typography, responsiveness & the UI audit
+
+The interface is dense (10–11px labels on purpose) and runs in Khmer,
+English, and Chinese on tablets, phones, and the Kitchen display — so the type
+and the layout are pinned down mechanically rather than by eye.
+
+**Type**
+
+- **Self-hosted webfonts**, vendored into `public/fonts` by `npm run fonts:sync`
+  and declared in `src/styles/fonts.css`: **Inter Variable** (Latin +
+  Latin-extended) and **Noto Sans Khmer Variable** (Khmer script). No CDN
+  request at runtime, `font-display: swap`, `woff2` only (~190 KB for all three
+  subsets; browsers fetch only the subsets a screen uses).
+- **Micro type is tokenised**: `text-2xs` (11px), `text-3xs` (10px),
+  `text-4xs` (8px, chip counters), `text-kpi` (27px numerals). Arbitrary
+  `text-[11px]` classes are gone, so sizes stay consistent and can be rescaled
+  in one place.
+- **Script-aware scale** (`src/styles/typography.css`): `src/lib/i18n.js` writes
+  `<html lang>` on every language change (and `index.html` sets it before first
+  paint, from the saved language), and `html[lang='km']` / `html[lang='zh']`
+  raise the micro sizes, open up leading, and relax Latin tracking — Khmer
+  subscript clusters otherwise collide at 10px in tight leading.
+- Numerals use tabular figures (`.tnum`) and headings get `text-wrap: balance`.
+
+**Responsiveness**
+
+- The shell is sized in `dvh` (`.app-shell`, `.guest-shell`) with a `vh`
+  fallback, honours `env(safe-area-inset-*)`, disables tap highlight, and sets
+  `-webkit-text-size-adjust: 100%` so iOS does not inflate text in landscape.
+- The topbar wraps its search onto its own row ≤900px, the sidebar collapses to
+  a 68px rail ≤760px and 58px ≤560px, and short viewports (landscape phones)
+  give the row height back to the workspace.
+- Wide financial tables (movements, purchases, currency, units) use the shared
+  `.table-scroll` container: horizontal scroll with an edge fade and momentum
+  scrolling instead of stretching the page.
+- Chart colours (grid, axes, ticks, tooltip) come from `.recharts-*` rules in
+  `src/styles/responsive.css`, so they follow the surface scope instead of a
+  hard-coded dark palette.
+- **Print** strips the rail, topbar, and tab strip, forces a white page, keeps
+  colour (`print-color-adjust: exact`), and avoids breaking cards or table rows
+  across pages — for the owner printing a P&L or the audit trail.
+- `prefers-reduced-motion`, `prefers-contrast: more`, and focus rings are all
+  handled; the focus ring clears 3:1 against its own surface in both the light
+  workspace and the dark rail.
+
+**Verify it**: `npm run check:ui` prints a report (fonts declared ⇄ files on
+disk, balanced CSS, font stacks with a generic family, type below the 10px
+floor, 5+ column grids without a breakpoint, wide tables with no scroll
+container) and `tests/typography-css.test.js` asserts it stays clean **and**
+computes the WCAG contrast of every text token.
 
 ## Multi-location
 
