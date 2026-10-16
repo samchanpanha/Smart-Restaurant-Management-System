@@ -36,6 +36,9 @@ export default function AppShell({ children }) {
   useDomTranslator(null, lang)
   const [search, setSearch] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
+  const [searchActiveIndex, setSearchActiveIndex] = useState(0)
+  const searchInputRef = useRef(null)
+  const searchShortcut = /Mac|iPhone|iPad/i.test(globalThis.navigator?.platform || '') ? '⌘ K' : 'Ctrl K'
   const [noticeOpen, setNoticeOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const [locationOpen, setLocationOpen] = useState(false)
@@ -54,6 +57,14 @@ export default function AppShell({ children }) {
   const searchIndex = useMemo(() => {
     const tableById = new Map(state.tables.map((table) => [table.id, table]))
     const entries = []
+    // Navigation entries come first so the same global search can jump directly
+    // to any screen the current role is allowed to open.
+    for (const item of NAV_ITEMS) {
+      if (!allowed.includes(item.id)) continue
+      const title = translateScreenLabel(item.id, item.label, lang)
+      const result = { id: `screen-${item.id}`, title, detail: dict.openScreen, screen: item.id, kind: 'screen' }
+      entries.push({ haystack: `${title} ${item.label} ${item.id}`.toLowerCase(), result })
+    }
     if (allowed.includes('tickets')) {
       for (const order of state.orders) {
         const table = tableById.get(order.tableId)
@@ -81,19 +92,32 @@ export default function AppShell({ children }) {
       }
     }
     return entries
-  }, [allowed, state.menu, state.orders, state.tables])
+  }, [allowed, dict.openScreen, lang, state.menu, state.orders, state.tables])
 
   // Keep typing responsive on a big ticket book: the query that drives the
   // dropdown trails the raw input by a frame.
   const deferredSearch = useDeferredValue(search)
   const searchResults = useMemo(() => {
     const query = deferredSearch.trim().toLowerCase()
-    if (!query) return []
+    if (!query) return searchIndex.filter((entry) => entry.result.kind === 'screen').slice(0, 7).map((entry) => entry.result)
     return searchIndex
       .filter((entry) => entry.haystack.includes(query))
       .slice(0, 7)
       .map((entry) => entry.result)
   }, [searchIndex, deferredSearch])
+
+  useEffect(() => {
+    function onGlobalSearchShortcut(event) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault()
+        setSearchOpen(true)
+        setSearchActiveIndex(0)
+        searchInputRef.current?.focus()
+      }
+    }
+    window.addEventListener('keydown', onGlobalSearchShortcut)
+    return () => window.removeEventListener('keydown', onGlobalSearchShortcut)
+  }, [])
 
   useEffect(() => {
     function closeMenusOnOutsideClick(event) {
@@ -124,11 +148,16 @@ export default function AppShell({ children }) {
   }, [activeTabId, saveTabScroll])
 
   function selectSearchResult(result) {
-    if (result.orderId) { setSelectedTableId(null); setSelectedOrderId(result.orderId) }
-    else if (result.tableId) setSelectedTableId(result.tableId)
-    if (result.dishId) setSelectedDishId(result.dishId)
-    setScreen(result.screen)
+    if (result.kind === 'screen') {
+      openScreenInTab(result.screen)
+    } else {
+      if (result.orderId) { setSelectedTableId(null); setSelectedOrderId(result.orderId) }
+      else if (result.tableId) setSelectedTableId(result.tableId)
+      if (result.dishId) setSelectedDishId(result.dishId)
+      setScreen(result.screen)
+    }
     setSearch('')
+    setSearchActiveIndex(0)
     setSearchOpen(false)
   }
 
@@ -274,28 +303,54 @@ export default function AppShell({ children }) {
             <div className={`flex h-10 items-center gap-3 rounded-xl border bg-[#f7f7f8] px-3.5 transition-all ${searchOpen ? 'border-orange-300 ring-2 ring-orange-100' : 'border-transparent'}`}>
               <Icon name="search" size={18} className="shrink-0 text-zinc-500" />
               <input
+                ref={searchInputRef}
                 value={search}
-                onChange={(event) => { setSearch(event.target.value); setSearchOpen(true) }}
+                role="combobox"
+                aria-autocomplete="list"
+                aria-expanded={searchOpen}
+                aria-controls="global-search-results"
+                aria-activedescendant={searchOpen && searchResults[searchActiveIndex] ? `search-result-${searchResults[searchActiveIndex].id}` : undefined}
+                onChange={(event) => { setSearch(event.target.value); setSearchActiveIndex(0); setSearchOpen(true) }}
                 onFocus={() => setSearchOpen(true)}
                 onKeyDown={(event) => {
-                  if (event.key === 'Escape') { setSearch(''); setSearchOpen(false) }
-                  if (event.key === 'Enter' && searchResults[0]) selectSearchResult(searchResults[0])
+                  if (event.key === 'Escape') { setSearch(''); setSearchActiveIndex(0); setSearchOpen(false) }
+                  else if (event.key === 'ArrowDown' && searchResults.length) {
+                    event.preventDefault()
+                    setSearchActiveIndex((index) => (index + 1) % searchResults.length)
+                  } else if (event.key === 'ArrowUp' && searchResults.length) {
+                    event.preventDefault()
+                    setSearchActiveIndex((index) => (index - 1 + searchResults.length) % searchResults.length)
+                  } else if (event.key === 'Enter' && searchOpen && searchResults[searchActiveIndex]) {
+                    event.preventDefault()
+                    selectSearchResult(searchResults[searchActiveIndex])
+                  }
                 }}
                 placeholder={dict.searchPlaceholder}
-                aria-label="Search orders, tables, and menu"
+                aria-label={dict.searchInputLabel}
                 className="h-full min-w-0 flex-1 border-0 bg-transparent p-0 text-sm text-zinc-800 outline-none placeholder:text-zinc-400 focus:ring-0"
               />
-              {search && <button type="button" aria-label={dict.clearSearch} onClick={() => setSearch('')} className="text-zinc-400 hover:text-zinc-700">×</button>}
+              {search
+                ? <button type="button" aria-label={dict.clearSearch} onClick={() => { setSearch(''); setSearchActiveIndex(0); searchInputRef.current?.focus() }} className="text-zinc-400 hover:text-zinc-700">×</button>
+                : <kbd className="hidden rounded border border-zinc-200 bg-white px-1.5 py-0.5 text-[10px] text-zinc-500 sm:inline-flex">{searchShortcut}</kbd>}
             </div>
-            {searchOpen && search.trim() && (
-              <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-2xl border border-zinc-200 bg-white p-1.5 shadow-[0_18px_45px_rgba(22,30,40,.16)]">
-                {searchResults.length ? searchResults.map((result) => (
-                  <button key={result.id} type="button" onClick={() => selectSearchResult(result)} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-orange-50">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-100 text-orange-600"><Icon name={result.screen === 'floor' ? 'tables' : result.screen === 'menu' ? 'menu' : 'orders'} size={16} /></span>
+            {searchOpen && (
+              <div id="global-search-results" role="listbox" aria-label={dict.searchResultsLabel} className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-2xl border border-zinc-200 bg-white p-1.5 shadow-[0_18px_45px_rgba(22,30,40,.16)]">
+                {searchResults.length ? searchResults.map((result, index) => (
+                  <button
+                    key={result.id}
+                    id={`search-result-${result.id}`}
+                    type="button"
+                    role="option"
+                    aria-selected={index === searchActiveIndex}
+                    onMouseEnter={() => setSearchActiveIndex(index)}
+                    onClick={() => selectSearchResult(result)}
+                    className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left ${index === searchActiveIndex ? 'bg-orange-50' : 'hover:bg-orange-50'}`}
+                  >
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-100 text-orange-600"><Icon name={result.kind === 'screen' ? (result.screen === 'floor' ? 'tables' : result.screen === 'menu' ? 'menu' : result.screen === 'kitchen' ? 'kitchen' : 'dashboard') : result.screen === 'floor' ? 'tables' : result.screen === 'menu' ? 'menu' : 'orders'} size={16} /></span>
                     <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-zinc-800">{result.title}</span><span className="block truncate text-xs text-zinc-500">{result.detail}</span></span>
-                    <span className="text-xs text-zinc-400">{dict.openResult}</span>
+                    <span className="text-xs text-zinc-400">{result.kind === 'screen' ? dict.openScreen : dict.openResult}</span>
                   </button>
-                )) : <div className="px-3 py-4 text-sm text-zinc-500">{dict.noSearchResults}</div>}
+                )) : <div className="px-3 py-4 text-sm text-zinc-500" role="option">{dict.noSearchResults}</div>}
               </div>
             )}
           </div>
