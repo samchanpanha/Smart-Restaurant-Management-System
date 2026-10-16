@@ -530,3 +530,31 @@ test('reports wrap in a shared shell and saved views capture and restore the ran
   await settle()
   assert.ok([...document.querySelector('select[aria-label="Saved views"]').options].every((option) => option.value !== 'Week close'), 'the view is deleted')
 })
+
+test('global quick search opens with Ctrl+K and navigates to an allowed screen', async () => {
+  await freshApp()
+  const input = document.querySelector('.global-search input')
+  assert.ok(input, 'the global search input exists')
+
+  act(() => {
+    dom.window.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true }))
+  })
+  assert.equal(document.activeElement, input, 'Ctrl+K focuses the global search')
+  assert.equal(input.getAttribute('aria-expanded'), 'true', 'the suggestion list opens')
+
+  setValue(input, 'Reports')
+  await settle(60)
+  const listbox = document.querySelector('[role="listbox"]')
+  assert.ok(listbox, 'search results render as an accessible listbox')
+  const reportsOption = [...listbox.querySelectorAll('[role="option"]')]
+    .find((option) => (option.textContent || '').includes('Reports'))
+  assert.ok(reportsOption, 'an allowed Reports screen is searchable')
+
+  act(() => {
+    input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+  })
+  await settle(60)
+  await flush()
+  assert.ok(panel().textContent.includes('Reports & Analytics'), 'Enter opens the selected screen')
+})
+
