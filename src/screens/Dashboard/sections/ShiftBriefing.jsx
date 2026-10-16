@@ -21,7 +21,10 @@ export default function ShiftBriefing({ copy, configured, lang, locId, provider 
     if (res.ok && res.reply) {
       setState({ loading: false, reply: res.reply, error: '', delivered: Boolean(res.delivered) })
     } else {
-      setState({ loading: false, reply: '', error: res.error || copy.aiUnavailable, delivered: false })
+      const error = res.kind === 'busy'
+        ? (copy.aiBusy || 'The assistant is busy right now — try again in a moment.')
+        : (res.error || copy.aiUnavailable)
+      setState({ loading: false, reply: '', error, delivered: false })
     }
   }
 
@@ -38,7 +41,7 @@ export default function ShiftBriefing({ copy, configured, lang, locId, provider 
         title={copy.briefingTitle}
         sub={copy.briefingSub}
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {provider && <Badge tone="accent" dot>{provider}</Badge>}
             <div role="group" aria-label={copy.briefingTitle} className="flex rounded-[var(--radius-md)] border border-[var(--border)] p-0.5">
               {phases.map((item) => (

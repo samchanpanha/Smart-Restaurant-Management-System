@@ -6,7 +6,12 @@
 // a short window — the same context produces the same answer, and model
 // calls cost money. Chat is never cached.
 
+import { classifyAiFailure, isRetryable } from './ai-errors.js'
+
 const INSIGHT_TTL_MS = 60_000
+// A provider "spike" clears in well under a second, so one silent retry is
+// usually enough to turn a high-demand blip into a normal answer.
+const RETRY_DELAY_MS = 400
 const insightCache = new Map()
 
 function ownerParam() {
@@ -25,9 +30,17 @@ function withOwner(path, params = {}) {
   return qs ? `${path}?${qs}` : path
 }
 
-async function post(path, body, fetchImpl) {
-  const f = fetchImpl || globalThis.fetch
-  if (typeof f !== 'function') return { ok: false, error: 'fetch unavailable' }
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+// Tag a failed result with its kind so callers can pick the right copy.
+function classified(result) {
+  if (!result || result.ok) return result
+  return { ...result, kind: result.kind || classifyAiFailure(result) }
+}
+
+async function postOnce(f, path, body) {
   try {
     const res = await f(path, {
       method: 'POST',
@@ -35,11 +48,33 @@ async function post(path, body, fetchImpl) {
       body: JSON.stringify(body),
     })
     const json = await res.json().catch(() => ({}))
-    if (!res.ok) return { ok: false, error: json?.error || `HTTP ${res.status}`, status: res.status }
+    if (!res.ok) {
+      return {
+        ok: false,
+        error: json?.error || `HTTP ${res.status}`,
+        status: res.status,
+        ...(json?.kind ? { kind: json.kind } : {}),
+        ...(json?.configured === false ? { configured: false } : {}),
+      }
+    }
     return json
   } catch (err) {
     return { ok: false, error: err?.message || 'request failed' }
   }
+}
+
+// One silent retry, but only for genuinely transient failures (provider
+// overload or a connection that never landed). A bad key never clears, so
+// it is returned immediately instead of hammering the provider.
+async function post(path, body, fetchImpl) {
+  const f = fetchImpl || globalThis.fetch
+  if (typeof f !== 'function') return classified({ ok: false, error: 'fetch unavailable' })
+  let result = classified(await postOnce(f, path, body))
+  if (!result.ok && isRetryable(result.kind)) {
+    await delay(RETRY_DELAY_MS)
+    result = classified(await postOnce(f, path, body))
+  }
+  return result
 }
 
 /** Is AI configured on this server? Never throws. */

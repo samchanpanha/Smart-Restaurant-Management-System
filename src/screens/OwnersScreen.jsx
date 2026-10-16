@@ -86,7 +86,7 @@ export default function OwnersScreen() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-5">
+    <div className="space-y-5">
       <header>
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900">
           {ow.title || 'Host owners'}

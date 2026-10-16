@@ -35,10 +35,19 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 // A stubbed AI API: /api/ai/* answers, everything else (the store boot) is
 // offline so the provider falls back to the seeded local demo.
 const json = (body, status = 200) => ({ ok: status < 400, status, json: async () => body })
+// Flip to make /api/ai/chat answer like an overloaded Gemini endpoint. The
+// client retries a transient failure once, so both attempts must fail to see
+// the note.
+let chatMode = 'ok'
 globalThis.fetch = async (url) => {
   const href = String(url)
   if (href.includes('/api/ai/status')) return json({ configured: true, provider: 'openai', model: 'gpt-4o-mini' })
-  if (href.includes('/api/ai/chat')) return json({ ok: true, reply: 'Two tickets are running late.', provider: 'openai', model: 'gpt-4o-mini' })
+  if (href.includes('/api/ai/chat')) {
+    if (chatMode === 'busy') {
+      return json({ ok: false, error: 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', kind: 'busy' }, 502)
+    }
+    return json({ ok: true, reply: 'Two tickets are running late.', provider: 'openai', model: 'gpt-4o-mini' })
+  }
   if (href.includes('/api/ai/insight')) return json({ ok: true, kind: 'alert', reply: 'Cap the grill — two tickets trail the SLA.' })
   if (href.includes('/api/ai/briefing')) return json({ ok: true, reply: 'Focus on the grill through the rush.', delivered: true })
   throw new Error('offline')
@@ -111,4 +120,14 @@ test('the shift briefing can be generated and pushed', async () => {
   await settle(40)
   assert.ok(text().includes('Focus on the grill through the rush.'), 'the briefing text renders')
   assert.ok(text().includes('sent to Telegram'), 'delivery is confirmed')
+})
+
+test('a provider demand spike shows a calm note, never the raw model text', async () => {
+  chatMode = 'busy'
+  clickText('What should we reorder?')
+  // aiChat retries a transient failure once after a short delay.
+  await settle(700)
+  assert.ok(text().includes('The assistant is busy right now'), 'the friendly busy line renders')
+  assert.ok(!text().includes('experiencing high demand'), 'the raw provider error is never shown to staff')
+  chatMode = 'ok'
 })

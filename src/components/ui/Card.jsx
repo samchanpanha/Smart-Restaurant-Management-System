@@ -17,7 +17,12 @@ export function Card({ as: Tag = 'div', className, inset = false, ...props }) {
 
 export function SectionHeader({ title, sub, actions, className, icon, id }) {
   return (
-    <div className={cn('mb-3 flex items-start justify-between gap-3', className)}>
+    // The header wraps instead of clipping: when the title block and the
+    // actions cannot share one line, the actions drop to their own line. The
+    // actions wrapper also lets its own children wrap, so a long row of
+    // controls (badge + toggle + button) folds inside a narrow card instead of
+    // forcing the card — and the page — into a horizontal scroll.
+    <div className={cn('mb-3 flex flex-wrap items-start justify-between gap-x-3 gap-y-2', className)}>
       <div className="min-w-0">
         <h2 id={id} className="flex items-center gap-2 text-[var(--fs-h2)] font-bold tracking-tight text-[var(--text-strong)]">
           {icon}
@@ -25,7 +30,11 @@ export function SectionHeader({ title, sub, actions, className, icon, id }) {
         </h2>
         {sub && <p className="mt-0.5 text-[var(--fs-label)] text-[var(--text-muted)]">{sub}</p>}
       </div>
-      {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+      {actions && (
+        <div className="flex min-w-0 flex-wrap items-center gap-2 [&>*]:min-w-0 [&>*]:flex-wrap">
+          {actions}
+        </div>
+      )}
     </div>
   )
 }

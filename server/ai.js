@@ -24,6 +24,7 @@
 
 import express from 'express'
 import { AI_INSIGHT_KINDS, AI_SCOPES, buildAiContext, buildMessages, hashContext } from '../src/lib/ai.js'
+import { classifyAiFailure } from '../src/lib/ai-errors.js'
 import { listProviders, normalizeProvider, providerDefaults, providerRequest, providerResult } from '../src/lib/ai-providers.js'
 
 const DEFAULT_TIMEOUT_MS = 20000
@@ -153,10 +154,16 @@ export function createAiRouter({
       clearTimeout(timer)
       const json = await res.json().catch(() => ({}))
       const { text, error } = providerResult({ provider: cfg.provider, json })
-      if (!res.ok || error) return { ok: false, error: error || `HTTP ${res.status}` }
+      if (!res.ok || error) {
+        const failure = error || `HTTP ${res.status}`
+        // Classify against the *upstream* status so a 503 overload reads as
+        // transient even when the body carries no usable message.
+        return { ok: false, error: failure, kind: classifyAiFailure({ status: res.status, error: failure }) }
+      }
       return { ok: true, text }
     } catch (err) {
-      return { ok: false, error: err?.message || 'request failed' }
+      const failure = err?.message || 'request failed'
+      return { ok: false, error: failure, kind: classifyAiFailure({ error: failure }) }
     }
   }
 
@@ -247,7 +254,7 @@ export function createAiRouter({
     if (!result.ok) {
       stats.errors += 1
       stats.lastError = result.error
-      return res.status(502).json({ ok: false, error: result.error })
+      return res.status(502).json({ ok: false, error: result.error, kind: result.kind })
     }
     stats.replies += 1
     cacheSet(cacheKey, { text: result.text })
@@ -282,7 +289,7 @@ export function createAiRouter({
     if (!result.ok) {
       stats.errors += 1
       stats.lastError = result.error
-      return res.status(502).json({ ok: false, error: result.error })
+      return res.status(502).json({ ok: false, error: result.error, kind: result.kind })
     }
     stats.replies += 1
     cacheSet(cacheKey, { text: result.text })
@@ -316,7 +323,7 @@ export function createAiRouter({
       if (!result.ok) {
         stats.errors += 1
         stats.lastError = result.error
-        return res.status(502).json({ ok: false, error: result.error })
+        return res.status(502).json({ ok: false, error: result.error, kind: result.kind })
       }
       stats.replies += 1
       text = result.text
@@ -345,7 +352,7 @@ export function createAiRouter({
       config: cfg,
     })
     if (result.skipped) return { ok: false, configured: false, error: result.reason }
-    if (!result.ok) return { ok: false, error: result.error }
+    if (!result.ok) return { ok: false, error: result.error, kind: result.kind }
     return { ok: true, reply: result.text, provider: cfg.provider, model: cfg.model }
   }
 

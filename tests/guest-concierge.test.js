@@ -45,6 +45,7 @@ globalThis.fetch = async (url, opts) => {
   if (href.includes('/api/ai/chat')) {
     chatRequests.push(JSON.parse(opts?.body || '{}'))
     if (chatMode === 'fail') return json({ ok: false, error: 'no AI_API_KEY configured' }, 503)
+    if (chatMode === 'busy') return json({ ok: false, kind: 'busy', error: 'This model is currently experiencing high demand. Please try again later.' }, 502)
     return json({ ok: true, reply: 'The garden bowl is vegan and the wings can be made mild.' })
   }
   throw new Error('offline')
@@ -115,4 +116,14 @@ test('a dead AI endpoint degrades to a note, not a broken menu', async () => {
   await settle(40)
   assert.ok(text().includes('The menu assistant is offline right now'), 'the unavailable note shows')
   assert.ok(text().includes('Mains'), 'the menu is still on screen')
+})
+
+test('a provider demand spike reads as busy, not offline, and hides the raw error', async () => {
+  chatMode = 'busy'
+  clickText('Desserts?')
+  // aiChat retries a transient failure once; settle past the retry delay.
+  await settle(700)
+  assert.ok(text().includes('The menu assistant is busy right now'), 'the busy note shows')
+  assert.ok(!text().includes('experiencing high demand'), 'the raw provider text never reaches a guest')
+  chatMode = 'ok'
 })

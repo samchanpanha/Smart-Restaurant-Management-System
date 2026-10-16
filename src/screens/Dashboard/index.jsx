@@ -97,7 +97,7 @@ export default function DashboardScreen() {
       <KpiRow tiles={tiles} />
 
       <div className="grid items-start gap-4 xl:grid-cols-12">
-        <div className="space-y-4 xl:col-span-8">
+        <div className="min-w-0 space-y-4 xl:col-span-8">
           <div className="grid items-stretch gap-4 lg:grid-cols-12">
             <SalesTrend
               copy={copy}
@@ -148,7 +148,7 @@ export default function DashboardScreen() {
           <QuickOverview copy={copy} items={overviewItems} onOpen={setScreen} />
         </div>
 
-        <aside className="space-y-4 xl:col-span-4">
+        <aside className="min-w-0 space-y-4 xl:col-span-4">
           <ShiftBriefing
             copy={copy}
             configured={aiConfigured}

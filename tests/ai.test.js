@@ -21,6 +21,7 @@ import {
   providerRequest,
   providerResult,
 } from '../src/lib/ai-providers.js'
+import { classifyAiFailure, isRetryable } from '../src/lib/ai-errors.js'
 import { createAiRouter } from '../server/ai.js'
 
 const shopOf = (empire) => empire.locations.downtown
@@ -64,6 +65,48 @@ test('every provider builds a request and reads its own reply shape', () => {
   assert.equal(providerResult({ provider: 'ollama', json: { message: { content: 'local' } } }).text, 'local')
 
   assert.equal(providerResult({ provider: 'openai', json: {} }).error, 'empty response')
+})
+
+test('a failed exchange cannot leave two same-role turns in a row', () => {
+  // After a question fails there is no assistant reply, so the next question
+  // arrives right after the unanswered one. Anthropic rejects that, so the
+  // adapter folds the run into a single user turn for every provider.
+  const turns = [
+    { role: 'user', content: 'first' },
+    { role: 'user', content: 'second' },
+    { role: 'assistant', content: 'hi' },
+    { role: 'assistant', content: 'again' },
+    { role: 'user', content: 'third' },
+  ]
+  const { body } = providerRequest({ provider: 'anthropic', model: 'm', baseUrl: 'https://x.test', apiKey: 'k', messages: turns })
+  assert.deepEqual(body.messages.map((msg) => msg.role), ['user', 'assistant', 'user'])
+  assert.equal(body.messages[0].content, 'first\n\nsecond')
+  assert.equal(body.messages[1].content, 'hi\n\nagain')
+  assert.equal(body.messages[2].content, 'third')
+})
+
+// ─── Failure classification (pure) ─────────────────────────────────
+
+test('provider failures classify by meaning, not just status', () => {
+  // The exact message Gemini uses during a demand spike.
+  const highDemand = 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.'
+  assert.equal(classifyAiFailure({ status: 502, error: highDemand }), 'busy')
+  assert.equal(classifyAiFailure({ status: 502, error: 'The engine is currently overloaded' }), 'busy')
+  assert.equal(classifyAiFailure({ status: 503, error: 'empty response' }), 'busy', 'an opaque gateway error is still capacity')
+  assert.equal(classifyAiFailure({ status: 429, error: 'Too many AI requests' }), 'limited')
+  assert.equal(classifyAiFailure({ status: 503, configured: false, error: 'no AI_API_KEY configured' }), 'config')
+  assert.equal(classifyAiFailure({ status: 503, error: 'no AI_API_KEY configured' }), 'config', 'AI_API_KEY still reads as config without the flag')
+  assert.equal(classifyAiFailure({ status: 502, error: 'Incorrect API key provided' }), 'auth')
+  assert.equal(classifyAiFailure({ error: 'offline' }), 'offline', 'a thrown fetch has no status')
+  assert.equal(classifyAiFailure({ status: 400, error: 'bad request' }), 'error')
+})
+
+test('only transient failures are worth an automatic retry', () => {
+  assert.equal(isRetryable('busy'), true)
+  assert.equal(isRetryable('offline'), true)
+  assert.equal(isRetryable('limited'), false, 'our own limiter must not be re-hit')
+  assert.equal(isRetryable('auth'), false)
+  assert.equal(isRetryable('config'), false)
 })
 
 // ─── Context digest (pure) ─────────────────────────────────────────
@@ -243,6 +286,40 @@ test('insight returns a suggestion and the rate limit eventually bites', async (
     }
     assert.equal(last.status, 429)
     assert.ok(Number(last.headers.get('retry-after')) >= 0)
+  } finally {
+    await app.close()
+  }
+})
+
+test('an overloaded provider is reported as transient, an overload body or not', async () => {
+  const overload = async () => ({
+    ok: false,
+    status: 503,
+    json: async () => ({ error: { code: 503, message: 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.' } }),
+  })
+  const app = await startApp({ authed: true, fetchImpl: overload })
+  try {
+    const res = await fetch(`${app.base}/api/ai/chat`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: 'food cost?' }),
+    })
+    assert.equal(res.status, 502)
+    const body = await res.json()
+    assert.equal(body.ok, false)
+    assert.equal(body.kind, 'busy', 'the client can tell a spike from a bad key')
+  } finally {
+    await app.close()
+  }
+})
+
+test('a rejected key is reported as auth, not transient', async () => {
+  const rejected = async () => ({ ok: false, status: 401, json: async () => ({ error: { message: 'Incorrect API key provided' } }) })
+  const app = await startApp({ authed: true, fetchImpl: rejected })
+  try {
+    const res = await fetch(`${app.base}/api/ai/chat`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: 'hi' }),
+    })
+    const body = await res.json()
+    assert.equal(body.kind, 'auth')
   } finally {
     await app.close()
   }

@@ -35,6 +35,11 @@ const COPY = {
     km: 'សំណួរច្រើនពេកក្នុងពេលតែមួយ — រង់ចាំបន្តិច ហើយព្យាយាមម្តងទៀត។',
     zh: '一次问得太多了——请稍后再试。',
   },
+  overloaded: {
+    en: 'The menu assistant is busy right now — give it a moment and try again.',
+    km: 'ជំនួយការមុខម្ហូបកំពុងរវល់ — រង់ចាំបន្តិច ហើយព្យាយាមម្តងទៀត។',
+    zh: '菜单助手正忙——请稍后再试。',
+  },
   footer: { en: 'Answers come from this menu only.', km: 'ចម្លើយមកពីមុខម្ហូបនេះប៉ុណ្ណោះ។', zh: '回答仅来自本菜单。' },
   prompts: [
     { en: 'Recommend something', km: 'ណែនាំមុខម្ហូបមួយ', zh: '推荐一道菜' },
@@ -51,7 +56,7 @@ const pick = (entry, lang) => entry?.[lang] || entry?.en || ''
 export default function MenuConcierge({ lang = 'en', locId = null, onClose }) {
   const [messages, setMessages] = useState([])
   const [pending, setPending] = useState(false)
-  const [note, setNote] = useState('') // '', 'offline', 'busy'
+  const [note, setNote] = useState('') // '', 'offline', 'busy', 'overloaded'
   const [ready, setReady] = useState(null) // null = checking, true = AI on
   const nextId = useRef(0)
   const listRef = useRef(null)
@@ -86,7 +91,9 @@ export default function MenuConcierge({ lang = 'en', locId = null, onClose }) {
       setMessages((prev) => [...prev, { id: `m${nextId.current}`, role: 'assistant', content: res.reply }])
       return true
     }
-    setNote(res.status === 429 ? 'busy' : 'offline')
+    // Rate limit and provider overload are both "try again", but mean
+    // different things to a guest — keep the wording honest.
+    setNote(res.kind === 'busy' ? 'overloaded' : res.kind === 'limited' ? 'busy' : 'offline')
     return false
   }
 
@@ -138,10 +145,14 @@ export default function MenuConcierge({ lang = 'en', locId = null, onClose }) {
 
         {note && (
           <p
-            className={`mt-3 rounded-xl px-3 py-2 text-xs font-semibold ${note === 'busy' ? 'bg-amber-50 text-amber-800' : 'bg-stone-100 text-stone-600'}`}
+            className={`mt-3 rounded-xl px-3 py-2 text-xs font-semibold ${note === 'offline' ? 'bg-stone-100 text-stone-600' : 'bg-amber-50 text-amber-800'}`}
             data-testid="menu-concierge-note"
           >
-            {note === 'busy' ? pick(COPY.busy, lang) : pick(COPY.offline, lang)}
+            {note === 'offline'
+              ? pick(COPY.offline, lang)
+              : note === 'overloaded'
+                ? pick(COPY.overloaded, lang)
+                : pick(COPY.busy, lang)}
           </p>
         )}
 

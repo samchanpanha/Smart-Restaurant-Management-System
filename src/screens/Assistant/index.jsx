@@ -39,6 +39,8 @@ function AssistantScreen() {
     delivered: a.delivered || 'sent to Telegram',
     notConfigured: a.notConfigured || 'AI is not configured',
     notConfiguredSub: a.notConfiguredSub || 'Add a key in Settings → AI assistant to switch the copilot on. Everything else keeps working while it is off.',
+    busy: a.busy || 'The assistant is busy right now — try again in a moment.',
+    limited: a.limited || 'Too many questions at once — wait a moment and try again.',
   }
 
   const [status, setStatus] = useState(null)
@@ -60,6 +62,15 @@ function AssistantScreen() {
     setMessages((prev) => [...prev, { id: `m${nextId.current}`, role, content, error }])
   }
 
+  // A provider overload or a dropped connection gets a calm, localized line
+  // instead of the raw model text ("This model is currently experiencing
+  // high demand…"), which only makes sense to whoever owns the API key.
+  function failureText(res) {
+    if (res?.kind === 'busy') return copy.busy
+    if (res?.kind === 'limited') return copy.limited
+    return res?.error || copy.notConfigured
+  }
+
   async function ask(question) {
     if (!question || pending) return
     const history = messages
@@ -70,7 +81,7 @@ function AssistantScreen() {
     const res = await aiChat({ question, history, lang, scope: 'ops', locId })
     setPending(false)
     if (res.ok && res.reply) push('assistant', res.reply)
-    else push('assistant', res.status === 429 ? 'Too many questions at once — wait a moment and try again.' : (res.error || copy.notConfigured), true)
+    else push('assistant', failureText(res), true)
   }
 
   async function runInsight(kind) {
@@ -78,7 +89,7 @@ function AssistantScreen() {
     setResult({ kind, loading: true, reply: '', error: '', delivered: false })
     const res = await aiInsight({ kind, lang, scope: 'ops', locId })
     if (res.ok && res.reply) setResult({ kind, loading: false, reply: res.reply, error: '', delivered: false })
-    else setResult({ kind, loading: false, reply: '', error: res.error || copy.notConfigured, delivered: false })
+    else setResult({ kind, loading: false, reply: '', error: failureText(res), delivered: false })
   }
 
   async function runBriefing() {
@@ -86,7 +97,7 @@ function AssistantScreen() {
     setResult({ kind: 'briefing', loading: true, reply: '', error: '', delivered: false })
     const res = await aiBriefing({ phase: 'open', lang, locId, deliver })
     if (res.ok && res.reply) setResult({ kind: 'briefing', loading: false, reply: res.reply, error: '', delivered: Boolean(res.delivered) })
-    else setResult({ kind: 'briefing', loading: false, reply: '', error: res.error || copy.notConfigured, delivered: false })
+    else setResult({ kind: 'briefing', loading: false, reply: '', error: failureText(res), delivered: false })
   }
 
   return (

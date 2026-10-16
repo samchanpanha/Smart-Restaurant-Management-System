@@ -23,7 +23,7 @@ export const PROVIDERS = {
   gemini: {
     label: 'Google Gemini',
     baseUrl: 'https://generativelanguage.googleapis.com',
-    defaultModel: 'gemini-1.5-flash',
+    defaultModel: 'gemini-2.5-flash',
     docs: 'https://ai.google.dev/api/generate-content',
   },
   ollama: {
@@ -31,6 +31,57 @@ export const PROVIDERS = {
     baseUrl: 'http://localhost:11434',
     defaultModel: 'llama3.1',
     docs: 'https://github.com/ollama/ollama/blob/main/docs/api.md',
+  },
+  groq: {
+    label: 'Groq',
+    baseUrl: 'https://api.groq.com/openai/v1',
+    defaultModel: 'llama-3.1-8b-instant',
+    docs: 'https://console.groq.com/docs/api-reference#chat-completions',
+  },
+  openrouter: {
+    label: 'OpenRouter',
+    baseUrl: 'https://openrouter.ai/api/v1',
+    defaultModel: 'google/gemini-2.5-flash',
+    docs: 'https://openrouter.ai/docs/requests',
+  },
+  mistral: {
+    label: 'Mistral AI',
+    baseUrl: 'https://api.mistral.ai/v1',
+    defaultModel: 'mistral-small-latest',
+    docs: 'https://docs.mistral.ai/api/#tag/chat/operation/chat_completion_v1_chat_completions_post',
+  },
+  cerebras: {
+    label: 'Cerebras',
+    baseUrl: 'https://api.cerebras.ai/v1',
+    defaultModel: 'llama3.1-8b',
+    docs: 'https://inference-docs.cerebras.ai/api-reference/chat-completions',
+  },
+  // Alibaba Cloud Qwen (DashScope) - OpenAI-compatible
+  dashscope: {
+    label: 'Alibaba Cloud Qwen (DashScope)',
+    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    defaultModel: 'qwen-plus',
+    docs: 'https://help.aliyun.com/zh/model-studio/developer-reference/compatibility-of-openai-with-dashscope',
+  },
+  // SiliconCloud - Qwen models
+  siliconcloud: {
+    label: 'SiliconCloud (Qwen)',
+    baseUrl: 'https://api.siliconflow.cn/v1',
+    defaultModel: 'Qwen/Qwen2.5-7B-Instruct',
+    docs: 'https://docs.siliconflow.cn/api-reference/chat-completions/chat-completions',
+  },
+  // Alibaba Cloud Model Studio (market place) - also OpenAI-compatible
+  alibaba: {
+    label: 'Alibaba Cloud Model Studio',
+    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    defaultModel: 'qwen-plus',
+    docs: 'https://help.aliyun.com/zh/model-studio/developer-reference/compatibility-of-openai-with-dashscope',
+  },
+  modelstudio: {
+    label: 'Alibaba Cloud Model Studio (Qwen)',
+    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    defaultModel: 'qwen-plus',
+    docs: 'https://help.aliyun.com/zh/model-studio/developer-reference/compatibility-of-openai-with-dashscope',
   },
 }
 
@@ -54,9 +105,19 @@ export function listProviders() {
 // Chat history is shared by every provider; only user/assistant turns are
 // legal, and empty content is dropped.
 function cleanTurns(messages = []) {
-  return (Array.isArray(messages) ? messages : [])
+  const turns = (Array.isArray(messages) ? messages : [])
     .filter((msg) => msg && (msg.role === 'user' || msg.role === 'assistant') && typeof msg.content === 'string' && msg.content.trim())
     .map((msg) => ({ role: msg.role, content: msg.content }))
+  // A failed exchange leaves an unanswered user turn, so the next question
+  // can arrive right after it. Anthropic rejects two same-role turns in a
+  // row, so collapse a run of the same role into one turn for every provider.
+  const merged = []
+  for (const turn of turns) {
+    const last = merged[merged.length - 1]
+    if (last && last.role === turn.role) last.content = `${last.content}\n\n${turn.content}`
+    else merged.push({ ...turn })
+  }
+  return merged
 }
 
 function trimSlash(url) {
@@ -109,7 +170,7 @@ export function providerRequest({ provider, model, baseUrl, apiKey, system, mess
     }
   }
 
-  // openai + ollama share { messages } with an optional system turn.
+  // openai + ollama + any OpenAI-compatible (groq, openrouter, mistral, cerebras, dashscope, siliconcloud, alibaba, modelstudio) share { messages } with an optional system turn.
   const body = {
     model: chosenModel,
     messages: sys ? [{ role: 'system', content: sys }, ...turns] : turns,

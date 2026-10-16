@@ -425,11 +425,12 @@ degrades to the plain menu whenever the server has no AI key.
 ## AI assistant (optional)
 
 An optional, provider-agnostic layer (`server/ai.js` + the pure modules
-`src/lib/ai.js` and `src/lib/ai-providers.js`, called from the browser through
-`src/lib/ai-client.js`). It reads a **redacted, pre-computed digest** of the
-live shift and returns text — it is **read-only and never dispatches a reducer
-action**, and it is **off by default**: with no `AI_API_KEY` every `/api/ai/*`
-route is a clean 503 no-op and the app is byte-for-byte the same.
+`src/lib/ai.js`, `src/lib/ai-providers.js`, and `src/lib/ai-errors.js`, called
+from the browser through `src/lib/ai-client.js`). It reads a **redacted,
+pre-computed digest** of the live shift and returns text — it is **read-only
+and never dispatches a reducer action**, and it is **off by default**: with no
+`AI_API_KEY` every `/api/ai/*` route is a clean 503 no-op and the app is
+byte-for-byte the same.
 
 - **Providers:** `openai` (default), `anthropic`, `gemini`, `ollama` — chosen
   with `AI_PROVIDER`; each has a default `AI_MODEL`/endpoint, all overridable
@@ -451,6 +452,14 @@ route is a clean 503 no-op and the app is byte-for-byte the same.
   money); guests are pinned to `scope:'menu'` so a public caller can never read
   sales, stock, or staff; responses are cached per context hash; separate staff
   and guest rate limits apply (guest buckets are per client IP).
+- **Failures are classified, never raw:** `src/lib/ai-errors.js` sorts every
+  failure into `busy` (provider overload / high demand), `limited`, `offline`,
+  `config`, `auth`, or `error`. A transient `busy`/`offline` is retried once
+  silently by `ai-client` and, if it still fails, surfaced as a calm localized
+  line — a "high demand" 503 is never shown to staff or guests verbatim. A bad
+  key is returned immediately instead of hammering the provider, and the
+  provider adapter folds back-to-back same-role turns into one so an unanswered
+  question can't create a transcript Anthropic rejects.
 - **Telegram:** the shift briefing can be pushed to the bot (`POST
   /api/ai/briefing` with `deliver:true`, using the same notifier/chats as the
   rest of the pushes).

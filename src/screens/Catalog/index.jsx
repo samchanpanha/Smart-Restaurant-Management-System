@@ -45,7 +45,7 @@ function CatalogScreen({ initialTab = 'categories' }) {
         </div>
       </header>
 
-      <div className="flex gap-1.5 rounded-xl border border-zinc-200 bg-white p-1.5 shadow-sm" role="tablist" aria-label="Catalog sections">
+      <div className="flex gap-1.5 overflow-x-auto rounded-xl border border-zinc-200 bg-white p-1.5 shadow-sm" role="tablist" aria-label="Catalog sections">
         {TABS.map((entry) => (
           <button
             key={entry.id}

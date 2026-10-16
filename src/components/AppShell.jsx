@@ -149,7 +149,7 @@ export default function AppShell({ children }) {
       : { tone: 'muted', label: dict.localDemo }
 
   return (
-    <div className="restora-theme flex h-screen min-h-screen overflow-hidden bg-[var(--color-ink-950)] text-zinc-100">
+    <div className="restora-theme app-shell flex overflow-hidden bg-[var(--color-ink-950)] text-zinc-100">
       <aside className="app-sidebar flex w-[248px] shrink-0 flex-col border-r border-[var(--color-ink-700)] bg-[var(--color-ink-900)] text-zinc-100">
         <div className="border-b border-[var(--color-ink-700)] px-5 py-5">
           <div className="flex items-center gap-3">
@@ -275,7 +275,7 @@ export default function AppShell({ children }) {
         </div>
       </aside>
 
-      <main className="flex h-screen min-h-0 min-w-0 flex-1 flex-col">
+      <main className="app-main flex min-h-0 min-w-0 flex-1 flex-col">
         <header className="app-topbar relative z-30 flex items-center justify-between gap-5 px-6 py-3">
           <div className="global-search relative w-full max-w-[540px]">
             <div className={`flex h-10 items-center gap-3 rounded-xl border bg-[#f7f7f8] px-3.5 transition-all ${searchOpen ? 'border-orange-300 ring-2 ring-orange-100' : 'border-transparent'}`}>

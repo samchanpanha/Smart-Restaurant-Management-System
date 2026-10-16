@@ -230,6 +230,26 @@ body {
   color: #25282c;
   background: var(--color-ink-950);
   min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* The shell fills the dynamic viewport height: `100vh` is taller than the
+   visible area on mobile (browser chrome), which used to clip the workspace
+   and force a second scrollbar. `dvh` tracks the real height; `vh` is the
+   fallback for browsers that do not understand it. */
+.restora-theme.app-shell {
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+}
+
+/* Same mobile correction for the guest QR menu, the Telegram mini app and
+   the auth splash, which size themselves with the `min-h-screen` utility:
+   keep `100vh` for older browsers, prefer `dvh` when it is supported. This is
+   unlayered so it wins over Tailwind's layered utility. */
+.min-h-screen {
+  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .restora-theme :is(.app-topbar, .app-tabs, .app-workspace) .text-zinc-100 { color: #1d2024; }
@@ -264,6 +284,12 @@ body {
   color: #f8f8f8;
   background: #17181a;
   border-color: #2a2c2f;
+
+  /* Containing block for the `sr-only` labels inside the scrolling nav. Like
+     the workspace, without a positioned ancestor those absolutely positioned
+     spans sit against the viewport and escape the nav's overflow clipping,
+     which stretched the document and produced a second scrollbar. */
+  position: relative;
 }
 
 .restora-theme .app-sidebar nav > div > div:first-child {
@@ -338,11 +364,51 @@ body {
   background: #f7f8fa;
 }
 
+/* The workspace is a flex column under the topbar + tab strip; the panel
+   itself scrolls, so the column must be able to shrink to the shell height. */
+.restora-theme .app-main {
+  height: 100%;
+  min-height: 0;
+}
+
+/* A positioned workspace is the containing block for absolutely positioned
+   descendants — chiefly the `sr-only` i18n nodes. Without it their containing
+   block is the viewport, so their static position (deep in the tall page)
+   escaped the workspace's overflow clipping and stretched the document,
+   giving the app a second, page-level scrollbar. */
+.restora-theme .app-workspace {
+  position: relative;
+  /* The page itself never scrolls sideways — wide tables carry their own
+     `overflow-x-auto`. Clipping here also contains stray absolutely positioned
+     `sr-only` nodes that would otherwise add a phantom horizontal scrollbar
+     when they originate inside a horizontally scrolled card. */
+  overflow-x: hidden;
+}
+
+/* Full-bleed page: the workspace was capped at 1480px and centred, so wide
+   monitors showed empty gutters on both sides. It now fills the workspace
+   edge to edge; the padding keeps content off the edges. */
 .restora-theme .app-page {
   width: 100%;
-  max-width: 1480px;
-  margin-inline: auto;
+  max-width: none;
+  min-width: 0;
   padding: 28px 30px 40px;
+  /* Khmer (and some zh) copy is written without spaces, so a whole sentence is
+     a single unbreakable "word". `anywhere` lets it wrap and — crucially —
+     lowers the element's min-content width, so grid/flex tracks can shrink to
+     the viewport instead of overflowing. */
+  overflow-wrap: anywhere;
+}
+
+/* Grid items default to `min-width: auto`, so a child whose content is
+   intrinsically wide (a chart, a nowrap label, long Khmer copy) props its track
+   open and the whole page scrolls sideways. Zeroing the automatic minimum lets
+   every track shrink to the viewport and lets truncating/flexing content do its
+   job. Scoped to grid items only: `min-width: auto` on flex children is what
+   lets `overflow-x-auto` strips (report tabs) scroll instead of clipping their
+   labels. `:where()` keeps specificity at 0, so any `min-w-*` utility still wins. */
+.restora-theme .app-page :where(.grid, .inline-grid) > * {
+  min-width: 0;
 }
 
 .restora-theme input,
@@ -494,6 +560,24 @@ body {
 
   .restora-theme .app-page {
     padding-inline: 14px;
+  }
+}
+
+/* On a phone the topbar is too narrow for the search and the action buttons
+   on one line: let the search take a full row of its own and keep the
+   actions right-aligned underneath. */
+@media (max-width: 560px) {
+  .restora-theme .app-topbar {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  .restora-theme .app-topbar .global-search {
+    max-width: none;
+  }
+
+  .restora-theme .app-topbar .global-actions {
+    margin-left: auto;
   }
 }
 

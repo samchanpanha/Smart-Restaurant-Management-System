@@ -39,7 +39,14 @@ export default function AiInsight({
     setState({ loading: true, reply: '', error: '' })
     const res = await aiInsight({ kind, lang, scope: 'ops', locId })
     if (res.ok && res.reply) setState({ loading: false, reply: res.reply, error: '' })
-    else setState({ loading: false, reply: '', error: res.error || copy.aiUnavailable })
+    else {
+      // A provider overload reads badly verbatim, so soften it; other
+      // failures keep their own text (a bad key, a dead endpoint).
+      const error = res.kind === 'busy'
+        ? (copy.aiBusy || 'The assistant is busy right now — try again in a moment.')
+        : (res.error || copy.aiUnavailable)
+      setState({ loading: false, reply: '', error })
+    }
   }
 
   // Auto-run only when the caller has data worth explaining; otherwise a click
@@ -59,7 +66,7 @@ export default function AiInsight({
         title={title || copy.aiExplainTitle}
         sub={sub || copy.aiExplainSub}
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {provider && <Badge tone="accent" dot>{provider}</Badge>}
             <Button size="sm" variant="secondary" onClick={run} disabled={state.loading}>
               <Icon name="sparkles" size={14} />
