@@ -546,9 +546,8 @@ test('global quick search opens with Ctrl+K and navigates to an allowed screen',
   await settle(60)
   const listbox = document.querySelector('[role="listbox"]')
   assert.ok(listbox, 'search results render as an accessible listbox')
-  const reportsOption = [...listbox.querySelectorAll('[role="option"]')]
-    .find((option) => (option.textContent || '').includes('Reports'))
-  assert.ok(reportsOption, 'an allowed Reports screen is searchable')
+  const reportsOption = listbox.querySelector('#search-result-screen-reports')
+  assert.ok(reportsOption, 'an allowed Reports screen is searchable even when its label is translated')
 
   act(() => {
     input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
