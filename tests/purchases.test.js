@@ -203,7 +203,6 @@ test('a cancelled purchase never touches stock', () => {
 
 test('sales, waste, and counts all land in the ledger with the right sign', () => {
   let empire = buildEmpire()
-  const shop = shopOf(empire)
   // Build a ticket the way the composer does: add a line (held), then fire it.
   empire = act(empire, 'downtown', { type: 'ADD_ITEM', orderId: 'o_seed_3', menuItemId: 'm_burger', qty: 2, by: 'jordan' })
   const openOrder = shopOf(empire).orders.find((order) => order.id === 'o_seed_3')

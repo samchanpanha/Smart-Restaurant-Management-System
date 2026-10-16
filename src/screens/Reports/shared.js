@@ -2,8 +2,10 @@ import { MOVEMENT_KINDS } from '../../lib/reducer'
 
 const TABS = [
   { id: 'sales', label: 'Sales' },
-  { id: 'sellbuy', label: 'Sell & buy in/out' },
+  { id: 'buying', label: 'Buying' },
+  { id: 'stockflow', label: 'Stock flow' },
   { id: 'pl', label: 'Profit & loss' },
+  { id: 'sellbuy', label: 'Sell & buy in/out' },
   { id: 'toplow', label: 'Top & bottom' },
   { id: 'service', label: 'Service' },
   { id: 'voids', label: 'Voids & comps' },

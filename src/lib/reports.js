@@ -421,7 +421,7 @@ export function profitAndLoss(shop, bounds) {
   const compValue = roundMoney((shop.orders || [])
     .filter((order) => inRange(order.paidAt || order.createdAt, bounds))
     .reduce((sum, order) => sum + (Number(order.compTotal) || 0), 0))
-  const discounts = roundMoney(sales.lines.reduce((sum, line) => sum + 0, 0))
+  const discounts = roundMoney(sales.discount || 0)
 
   const grossProfit = roundMoney(sales.netSales - sales.cogs)
   const operatingResult = roundMoney(grossProfit - wasteValue - shrinkageValue)

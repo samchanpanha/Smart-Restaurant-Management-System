@@ -13,6 +13,8 @@ import { VarianceReport } from './sections/VarianceReport.jsx'
 import { PnlReport } from './sections/PnlReport.jsx'
 import { SellBuyReport } from './sections/SellBuyReport.jsx'
 import { ProfitLossReport } from './sections/ProfitLossReport.jsx'
+import { BuyingReport } from './sections/BuyingReport.jsx'
+import { StockFlowReport } from './sections/StockFlowReport.jsx'
 import { TopLowReport } from './sections/TopLowReport.jsx'
 import { DeliveryReport } from './sections/DeliveryReport.jsx'
 
@@ -39,8 +41,10 @@ function ReportsScreen() {
 
   const reportTabLabels = {
     sales: rep.salesTab || 'Sales',
-    sellbuy: lang === 'km' ? 'លក់ និងទិញ ចូល/ចេញ' : lang === 'zh' ? '销售与采购进出' : 'Sell & buy in/out',
+    buying: rep.buyingTab || (lang === 'km' ? 'ការទិញចូល' : lang === 'zh' ? '采购进货' : 'Buying'),
+    stockflow: rep.stockflowTab || (lang === 'km' ? 'ចលនាស្តុក' : lang === 'zh' ? '库存流向' : 'Stock flow'),
     pl: lang === 'km' ? 'ចំណេញ និងខាត' : lang === 'zh' ? '损益表' : 'Profit & loss',
+    sellbuy: lang === 'km' ? 'លក់ និងទិញ ចូល/ចេញ' : lang === 'zh' ? '销售与采购进出' : 'Sell & buy in/out',
     toplow: lang === 'km' ? 'លក់ដាច់បំផុត និងតិចបំផុត' : lang === 'zh' ? '畅销与滞销' : 'Top & bottom',
     service: rep.serviceTab || 'Service',
     voids: rep.voidsTab || 'Voids & comps',
@@ -113,8 +117,10 @@ function ReportsScreen() {
       </div>
 
       {tab === 'sales' && <SalesReport range={range} />}
-      {tab === 'sellbuy' && <SellBuyReport range={range} />}
+      {tab === 'buying' && <BuyingReport range={range} />}
+      {tab === 'stockflow' && <StockFlowReport range={range} />}
       {tab === 'pl' && <ProfitLossReport range={range} />}
+      {tab === 'sellbuy' && <SellBuyReport range={range} />}
       {tab === 'toplow' && <TopLowReport range={range} />}
       {tab === 'service' && <ServiceReport />}
       {tab === 'voids' && <VoidsReport />}

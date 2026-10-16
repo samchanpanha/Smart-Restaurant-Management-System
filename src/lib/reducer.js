@@ -4,7 +4,7 @@
 // The ticket stays the system of record on every terminal.
 
 import { DELIVERY_STATUS_META, STATIONS, TARGETS } from './constants.js'
-import { itemPacks, packFactor, sanitizePackList, slugUnitId } from './units.js'
+import { packFactor, sanitizePackList, slugUnitId } from './units.js'
 import {
   applyAuto86,
   assertTableTransition,
@@ -362,7 +362,7 @@ export const MOVEMENT_KINDS = [
   { id: 'adjust', label: 'Manual adjust', direction: 'adjust', icon: 'settings' },
 ]
 
-const MOVEMENT_LABEL = Object.fromEntries(MOVEMENT_KINDS.map((kind) => [kind.id, kind.label]))
+export const MOVEMENT_LABEL = Object.fromEntries(MOVEMENT_KINDS.map((kind) => [kind.id, kind.label]))
 
 /**
  * Apply signed stock deltas and record the matching movements.
@@ -562,22 +562,7 @@ function relabelCategoryItems(state, from, to) {
 
 // ─── Reducer ────────────────────────────────────────────────────
 
-function decrementInventory(inventory, decMap, sign = -1) {
-  const byId = Object.fromEntries(inventory.map((i) => [i.id, i]))
-  const next = inventory.map((item) => {
-    const delta = decMap[item.id] || 0
-    if (!delta) return item
-    const onHand = Math.round((item.onHand + sign * delta) * 100) / 100
-    return { ...item, onHand }
-  })
-  // Auto-86 is derived in selectors (out-of-stock ingredients), not stored —
-  // except the manual 86 flag on menu items. Negative on-hand is kept as a
-  // visible flag, never silently wrapped.
-  void byId
-  return next
-}
-
-// ── Table CRUD helpers ─────────────────────────────────────
+// ─── Table CRUD helpers ─────────────────────────────────────
 // Tables are editable config: name, seats, zone, and target turn. Status
 // moves through the status machine, never through editing.
 
@@ -1378,14 +1363,28 @@ function shopReducerBase(state, action) {
     }
 
     case 'PAY_ORDER': {
-      const { orderId, method = 'card', split = null, tip = 0, freeTable = false } = action
+      const { orderId, method = 'card', split = null, tip = 0, freeTable = false, tenderDetails = null, payments = null } = action
       const order = state.orders.find((o) => o.id === orderId)
       if (!order || !['ready', 'served', 'in_prep', 'sent'].includes(order.status)) return state
       const menuById = Object.fromEntries(state.menu.map((m) => [m.id, m]))
       const total = roundMoney(orderSubtotal(order, menuById) + (Number(order.deliveryFee) || 0))
+      const finalPayments = Array.isArray(payments) && payments.length > 0
+        ? payments
+        : [{ method, amount: roundMoney(total + (Number(tip) || 0)), at: new Date().toISOString() }]
       const orders = state.orders.map((o) =>
         o.id === orderId
-          ? { ...o, status: 'paid', paidAt: new Date().toISOString(), payMethod: method, split, tip: Number(tip) || 0, total, billRequested: null }
+          ? {
+              ...o,
+              status: 'paid',
+              paidAt: new Date().toISOString(),
+              payMethod: method,
+              split,
+              tip: Number(tip) || 0,
+              total,
+              tenderDetails,
+              payments: finalPayments,
+              billRequested: null,
+            }
           : o,
       )
       // Table ordered -> billed; record the turn for host wait quotes.

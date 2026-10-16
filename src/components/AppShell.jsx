@@ -109,7 +109,9 @@ export default function AppShell({ children }) {
   const panelRef = useRef(null)
   const prevTabRef = useRef(activeTabId)
   const tabsRef = useRef(tabs)
-  tabsRef.current = tabs
+  useEffect(() => {
+    tabsRef.current = tabs
+  })
   useEffect(() => {
     const panel = panelRef.current
     if (!panel) return undefined

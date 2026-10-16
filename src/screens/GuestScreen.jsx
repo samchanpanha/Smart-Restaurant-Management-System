@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from 'react'
 import LanguageSwitcher from '../components/LanguageSwitcher'
 import MenuConcierge from '../components/MenuConcierge'
 import { Sheet } from '../components/ui'
+import { QRCodeSVG } from 'qrcode.react'
 import {
   translateCategory,
   translateDishName,
@@ -269,53 +270,270 @@ function PaySheet({ order, onClose, onPaid }) {
   const t = orderTotals(order, menuById, state.settings.taxPct)
   const [tipPct, setTipPct] = useState(18)
   const [customTip, setCustomTip] = useState('')
+  const [method, setMethod] = useState('apple_pay')
+  const [processing, setProcessing] = useState(false)
   const tip = customTip !== '' ? Math.max(0, Number(customTip) || 0) : (t.subtotal * tipPct) / 100
+  const finalTotal = Math.round((t.total + tip) * 100) / 100
+
+  function handlePay() {
+    if (processing) return
+    setProcessing(true)
+    setTimeout(() => {
+      const tipRounded = Math.round(tip * 100) / 100
+      dispatch({
+        type: 'PAY_ORDER',
+        orderId: order.id,
+        method: method === 'apple_pay' ? 'card' : method,
+        tip: tipRounded,
+        split: { kind: 'full', by: 'guest' },
+        freeTable: false,
+        tenderDetails: {
+          method,
+          subtotal: t.subtotal,
+          tax: t.tax,
+          tip: tipRounded,
+          total: finalTotal,
+        },
+      })
+      setProcessing(false)
+      onPaid()
+    }, 350)
+  }
 
   return (
     <Sheet onClose={onClose} label="Pay check">
       <h2 className="text-xl font-extrabold text-stone-900">Your check</h2>
-        <ul className="mt-3 max-h-44 space-y-1 overflow-y-auto text-sm">
-          {t.lines.map((l) => (
-            <li key={l.id} className="flex justify-between text-stone-700">
-              <span>{l.qty}× {l.name}</span>
-              <span className="tnum font-bold">{money(l.lineTotal)}</span>
-            </li>
-          ))}
-        </ul>
-        <div className="mt-3 space-y-1 border-t border-stone-100 pt-3 text-sm">
-          <div className="flex justify-between text-stone-500"><span>Subtotal</span><span className="tnum">{money(t.subtotal)}</span></div>
-          <div className="flex justify-between text-stone-500"><span>Tax</span><span className="tnum">{money(t.tax)}</span></div>
+      <ul className="mt-3 max-h-40 space-y-1 overflow-y-auto text-sm">
+        {t.lines.map((l) => (
+          <li key={l.id} className="flex justify-between text-stone-700">
+            <span>{l.qty}× {l.name}</span>
+            <span className="tnum font-bold">{money(l.lineTotal)}</span>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-3 space-y-1 border-t border-stone-100 pt-3 text-sm">
+        <div className="flex justify-between text-stone-500"><span>Subtotal</span><span className="tnum">{money(t.subtotal)}</span></div>
+        <div className="flex justify-between text-stone-500"><span>Tax</span><span className="tnum">{money(t.tax)}</span></div>
+        {tip > 0 && (
+          <div className="flex justify-between font-semibold text-amber-700">
+            <span>Tip ({customTip ? 'Custom' : `${tipPct}%`})</span>
+            <span className="tnum">+{money(tip)}</span>
+          </div>
+        )}
+        <div className="flex justify-between border-t border-stone-200 pt-1.5 text-base font-black text-stone-900">
+          <span>Total due</span>
+          <span className="tnum text-amber-600">{money(finalTotal)}</span>
         </div>
+      </div>
 
-        <div className="mt-4 text-xs font-bold uppercase tracking-widest text-stone-500">Tip the team</div>
-        <div className="mt-1.5 grid grid-cols-4 gap-2">
-          {[10, 15, 18, 22].map((p) => (
+      <div className="mt-4 text-xs font-bold uppercase tracking-widest text-stone-500">Tip the team</div>
+      <div className="mt-1.5 grid grid-cols-5 gap-1.5">
+        {[
+          [0, 'No tip'],
+          [10, '10%'],
+          [15, '15%'],
+          [18, '18%'],
+          [20, '20%'],
+        ].map(([p, label]) => {
+          const active = customTip === '' && tipPct === p
+          const amt = p > 0 ? (t.subtotal * p) / 100 : 0
+          return (
             <button
-              key={p} type="button"
+              key={p}
+              type="button"
               onClick={() => { setTipPct(p); setCustomTip('') }}
-              className={`min-h-[44px] rounded-xl text-sm font-extrabold ${customTip === '' && tipPct === p ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-700'}`}
+              className={`flex flex-col items-center justify-center rounded-xl py-2 text-xs font-extrabold transition ${
+                active ? 'bg-stone-900 text-white shadow-sm' : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+              }`}
             >
-              {p}%
+              <span>{label}</span>
+              {p > 0 && <span className="tnum text-[10px] opacity-75">{money(amt)}</span>}
+            </button>
+          )
+        })}
+      </div>
+      <input
+        value={customTip}
+        onChange={(e) => setCustomTip(e.target.value)}
+        type="number"
+        min="0"
+        step="any"
+        placeholder="Custom tip $"
+        className="tnum mt-2 min-h-[40px] w-full rounded-xl border border-stone-200 bg-stone-50 px-3 text-xs"
+      />
+
+      <div className="mt-4 text-xs font-bold uppercase tracking-widest text-stone-500">Payment method</div>
+      <div className="mt-1.5 grid grid-cols-3 gap-2">
+        {[
+          ['apple_pay', '🍎 Apple Pay'],
+          ['card', '💳 Card'],
+          ['qr', '📱 QR Pay'],
+        ].map(([m, label]) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => setMethod(m)}
+            className={`min-h-[42px] rounded-xl border text-xs font-extrabold transition ${
+              method === m
+                ? 'border-stone-900 bg-stone-900 text-white shadow-sm'
+                : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {method === 'qr' && (
+        <div className="mt-3 flex items-center gap-3 rounded-2xl bg-amber-50/80 p-3 ring-1 ring-amber-200">
+          <QRCodeSVG value={`restora:guest-pay?order=${order.id}&amount=${finalTotal}`} size={64} />
+          <div className="text-xs text-stone-600">
+            <div className="font-bold text-stone-900">Scan with your Banking App</div>
+            <div>Supports KHQR, Bakong & PromptPay. Instant settlement.</div>
+          </div>
+        </div>
+      )}
+
+      <button
+        type="button"
+        disabled={processing}
+        onClick={handlePay}
+        className="tnum mt-4 min-h-[52px] w-full rounded-2xl bg-amber-500 text-base font-extrabold text-stone-950 shadow-sm hover:bg-amber-400 disabled:opacity-60"
+      >
+        {processing ? 'Authorizing payment...' : `Pay ${money(finalTotal)}`}
+      </button>
+      <p className="mt-2 text-center text-[11px] text-stone-400">Demo checkout · Simulated payment authorization</p>
+    </Sheet>
+  )
+}
+
+function PaidCheckSummary({ table, paid, menuById, taxPct, onResetTable }) {
+  const t = paid ? orderTotals(paid, menuById, taxPct) : null
+  const [rating, setRating] = useState(5)
+  const [feedbackTags, setFeedbackTags] = useState([])
+  const [showItemized, setShowItemized] = useState(false)
+  const [feedbackSent, setFeedbackSent] = useState(false)
+
+  const tags = ['🌟 Delicious food', '⚡ Super fast', '🍷 Great drinks', '🛋️ Cozy vibe', '👍 Friendly staff']
+
+  function toggleTag(tag) {
+    setFeedbackTags((prev) => prev.includes(tag) ? prev.filter((item) => item !== tag) : [...prev, tag])
+  }
+
+  return (
+    <div className="rounded-3xl bg-white p-6 shadow-sm">
+      <div className="text-center">
+        <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-3xl font-black text-emerald-600 shadow-inner">
+          ✓
+        </div>
+        <h1 className="mt-3 text-2xl font-black text-stone-900">Payment Complete!</h1>
+        <p className="mt-1 text-sm text-stone-500">
+          {table?.name || 'Your order'} · check closed {paid?.paidAt ? new Date(paid.paidAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Paid in full'}
+        </p>
+      </div>
+
+      {t && (
+        <div className="mt-5 rounded-2xl bg-stone-50 p-4 text-sm text-stone-700">
+          <div className="flex justify-between py-1">
+            <span className="text-stone-500">Subtotal & Tax</span>
+            <span className="tnum font-semibold">{money(t.total)}</span>
+          </div>
+          {(paid?.tip || 0) > 0 && (
+            <div className="flex justify-between py-1 text-amber-800">
+              <span className="font-medium">Staff Tip</span>
+              <span className="tnum font-bold">+{money(paid.tip)}</span>
+            </div>
+          )}
+          <div className="mt-2 flex justify-between border-t border-stone-200 pt-2 text-base font-black text-stone-950">
+            <span>Total Paid</span>
+            <span className="tnum text-emerald-600">{money(t.total + (paid?.tip || 0))}</span>
+          </div>
+          <div className="mt-2 flex items-center justify-between text-xs text-stone-500">
+            <span>Payment method:</span>
+            <span className="font-bold capitalize">{paid?.payMethod === 'apple_pay' ? '🍎 Apple Pay' : paid?.payMethod === 'qr' ? '📱 Mobile QR' : '💳 Card'}</span>
+          </div>
+        </div>
+      )}
+
+      {t && t.lines.length > 0 && (
+        <div className="mt-3">
+          <button
+            type="button"
+            onClick={() => setShowItemized((v) => !v)}
+            className="flex w-full items-center justify-between py-2 text-xs font-bold text-stone-600 hover:text-stone-900"
+          >
+            <span>{showItemized ? 'Hide itemized receipt' : `View receipt details (${t.lines.length} items)`}</span>
+            <span>{showItemized ? '▲' : '▼'}</span>
+          </button>
+          {showItemized && (
+            <ul className="mt-1 space-y-1.5 rounded-2xl border border-stone-100 bg-stone-50/60 p-3 text-xs text-stone-600">
+              {t.lines.map((l) => (
+                <li key={l.id} className="flex justify-between">
+                  <span>{l.qty}× {l.name}</span>
+                  <span className="tnum font-semibold">{money(l.lineTotal)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      <div className="mt-5 rounded-2xl border border-amber-200/60 bg-amber-50/50 p-4 text-center">
+        <div className="text-xs font-bold uppercase tracking-wider text-amber-900">How was your dining experience?</div>
+        <div className="mt-2 flex justify-center gap-2">
+          {[1, 2, 3, 4, 5].map((star) => (
+            <button
+              key={star}
+              type="button"
+              onClick={() => { setRating(star); setFeedbackSent(true) }}
+              className={`text-2xl transition hover:scale-125 ${star <= rating ? 'text-amber-500' : 'text-stone-300'}`}
+              aria-label={`${star} star`}
+            >
+              ★
             </button>
           ))}
         </div>
-        <input
-          value={customTip} onChange={(e) => setCustomTip(e.target.value)} type="number" min="0" step="any"
-          placeholder="Custom tip $" className="tnum mt-2 min-h-[44px] w-full rounded-xl border border-stone-200 bg-stone-50 px-3 text-sm"
-        />
+        <div className="mt-2.5 flex flex-wrap justify-center gap-1.5">
+          {tags.map((tag) => (
+            <button
+              key={tag}
+              type="button"
+              onClick={() => { toggleTag(tag); setFeedbackSent(true) }}
+              className={`rounded-full px-2.5 py-1 text-[11px] font-bold transition ${
+                feedbackTags.includes(tag)
+                  ? 'bg-amber-500 text-stone-950 shadow-sm'
+                  : 'bg-white text-stone-600 ring-1 ring-stone-200 hover:bg-stone-50'
+              }`}
+            >
+              {tag}
+            </button>
+          ))}
+        </div>
+        {feedbackSent && (
+          <p className="mt-2 text-xs font-semibold text-emerald-700">
+            Thank you! Your feedback has been shared with our team.
+          </p>
+        )}
+      </div>
 
+      <div className="mt-5 flex items-center justify-center gap-3 rounded-2xl bg-stone-100/70 p-3">
+        <QRCodeSVG value={typeof window !== 'undefined' ? window.location.href : 'https://restora.app'} size={54} />
+        <div className="text-left text-xs text-stone-500">
+          <div className="font-bold text-stone-700">Digital Copy Saved</div>
+          <div>Scan to revisit or save your receipt.</div>
+        </div>
+      </div>
+
+      {onResetTable && (
         <button
           type="button"
-          onClick={() => {
-            dispatch({ type: 'PAY_ORDER', orderId: order.id, method: 'card', tip: Math.round(tip * 100) / 100, split: { kind: 'full', by: 'guest' }, freeTable: true })
-            onPaid()
-          }}
-          className="tnum mt-4 min-h-[52px] w-full rounded-2xl bg-amber-500 text-base font-extrabold text-stone-950 hover:bg-amber-400"
+          onClick={onResetTable}
+          className="mt-4 min-h-[46px] w-full rounded-2xl border border-stone-200 bg-white text-xs font-bold text-stone-600 hover:bg-stone-50"
         >
-          Pay {money(t.total + tip)}
+          Finished dining · Release table
         </button>
-        <p className="mt-2 text-center text-[11px] text-stone-400">Demo checkout — no card is charged.</p>
-    </Sheet>
+      )}
+    </div>
   )
 }
 
@@ -452,22 +670,14 @@ export default function GuestScreen({ tableId, allowPickup = false, onSelfSeat =
   }
 
   if (!pickup && (table.status === 'billed' || (paid && !order))) {
-    const t = paid ? orderTotals(paid, menuById, state.settings.taxPct) : null
     return shell(
-      <div className="rounded-3xl bg-white p-8 text-center shadow-sm">
-        <div className="text-4xl">🎉</div>
-        <h1 className="mt-3 text-xl font-extrabold">Thanks for dining with us!</h1>
-        <p className="mt-1 text-sm text-stone-500">{table.name} · check closed {paid?.paidAt ? new Date(paid.paidAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</p>
-        {t && (
-          <div className="tnum mt-4 rounded-2xl bg-stone-50 p-4 text-sm">
-            <div className="flex justify-between"><span>Food & tax</span><strong>{money(t.total)}</strong></div>
-            {(paid.tip || 0) > 0 && <div className="flex justify-between"><span>Tip</span><strong>{money(paid.tip)}</strong></div>}
-            <div className="flex justify-between border-t border-stone-200 pt-2 text-base font-extrabold">
-              <span>Total</span><span>{money(t.total + (paid.tip || 0))}</span>
-            </div>
-          </div>
-        )}
-      </div>,
+      <PaidCheckSummary
+        table={table}
+        paid={paid}
+        menuById={menuById}
+        taxPct={state.settings.taxPct}
+        onResetTable={() => dispatch({ type: 'BUS_TABLE', tableId: table.id })}
+      />,
     )
   }
 

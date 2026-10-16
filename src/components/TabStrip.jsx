@@ -3,7 +3,7 @@
 // double-click to rename, pin for always-open screens. Each tab carries a
 // live alert badge so the strip doubles as an at-a-glance ops board.
 
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CRITICAL_ALERTS, NAV_SECTIONS, SCREEN_ICONS, screenForAlert, allowedScreens } from '../lib/constants'
 import { translateScreenLabel, useI18n } from '../lib/i18n'
 import { useAuth } from '../lib/auth'
@@ -70,7 +70,7 @@ export default function TabStrip({ fallbackScreen }) {
   }
 
   // ── drag to reorder ───────────────────────────────────────────────
-  function gapAtPointer(clientX, dragId) {
+  const gapAtPointer = useCallback((clientX, dragId) => {
     const list = listRef.current
     if (!list) return 0
     const listLeft = list.getBoundingClientRect().left
@@ -84,7 +84,7 @@ export default function TabStrip({ fallbackScreen }) {
     const dragged = visibleTabs.find((tab) => tab.id === dragId)
     const [lo, hi] = dragged?.pinned ? [0, pinnedVisible] : [pinnedVisible, visibleTabs.length]
     return Math.min(Math.max(gap, lo), hi)
-  }
+  }, [visibleTabs, pinnedVisible])
 
   // A press only *may* become a drag: nothing is captured and nothing is
   // suppressed until the pointer really travels DRAG_THRESHOLD_PX. The old

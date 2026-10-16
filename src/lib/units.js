@@ -227,7 +227,6 @@ export function describeQty(item, qty, settings, { maxParts = 3, sep = ' + ' } =
   const stock = itemStockUnit(item)
   const stockDef = unitOf(settings, stock)
   const decimals = stockDef.decimals
-  const unitName = (name, short) => (name || short)
   if (!itemPacks(item).length) {
     return `${roundTo(total, decimals)} ${stockDef.short}`
   }

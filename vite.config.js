@@ -10,7 +10,7 @@ export default defineConfig({
       output: {
         // Split the vendored libs out of the app chunk so a code change to a
         // screen does not invalidate React/lucide in the browser cache.
-        advancedChunks: {
+        codeSplitting: {
           groups: [
             { name: 'react', test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/ },
             { name: 'icons', test: /node_modules[\\/]lucide-react[\\/]/ },

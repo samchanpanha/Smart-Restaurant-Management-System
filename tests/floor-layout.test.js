@@ -60,7 +60,7 @@ test('v4 snapshots gain a layout on migration', () => {
     locations: {
       downtown: {
         ...legacy.locations.downtown,
-        tables: legacy.locations.downtown.tables.map(({ posX, posY, ...rest }) => rest),
+        tables: legacy.locations.downtown.tables.map(({ posX: _posX, posY: _posY, ...rest }) => rest),
       },
     },
   }

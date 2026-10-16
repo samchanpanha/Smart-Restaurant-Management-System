@@ -439,7 +439,6 @@ export default function PurchasesScreen() {
   const bounds = rangeBounds('30d')
 
   const stats = useMemo(() => purchaseSummary(state, bounds), [state, bounds])
-  const openOrders = purchases.filter((purchase) => ['draft', 'ordered'].includes(purchase.status))
 
   const visible = purchases
     .filter((purchase) => FILTERS.find((entry) => entry.id === filter)?.statuses.includes(purchase.status))

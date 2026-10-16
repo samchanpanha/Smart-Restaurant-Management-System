@@ -443,6 +443,8 @@ export const APP_TRANSLATIONS = {
       },
       tabs: {
         sales: 'ការលក់',
+        buying: 'ការទិញចូល',
+        stockflow: 'ចលនាស្តុក',
         sellbuy: 'លក់ និងទិញ ចេញ/ចូល',
         pl: 'ចំណេញ និងខាត (P&L)',
         toplow: 'លក់ដាច់បំផុត និងតិចបំផុត',
@@ -897,6 +899,8 @@ export const APP_TRANSLATIONS = {
       },
       tabs: {
         sales: 'Sales',
+        buying: 'Buying',
+        stockflow: 'Stock flow',
         sellbuy: 'Sell & buy in/out',
         pl: 'Profit & loss',
         toplow: 'Top & bottom',
@@ -1377,6 +1381,8 @@ export const APP_TRANSLATIONS = {
       },
       tabs: {
         sales: '销售报表',
+        buying: '采购进货',
+        stockflow: '库存流向',
         sellbuy: '进销存汇总',
         pl: '损益表 (P&L)',
         toplow: '畅销与滞销榜',
@@ -1722,6 +1728,8 @@ function enrichLangDict(langCode, raw) {
     ...raw.reportsScreen,
     kicker: raw.reportsScreen?.eyebrow,
     salesTab: raw.reportsScreen?.tabs?.sales,
+    buyingTab: raw.reportsScreen?.tabs?.buying,
+    stockflowTab: raw.reportsScreen?.tabs?.stockflow,
     sellingSide: raw.reportsScreen?.tabs?.sellbuy,
     buyingSide: isKm ? 'ផ្នែកទិញចូល' : isZh ? '采购端' : 'Buying side',
     pnl: raw.reportsScreen?.tabs?.pl,

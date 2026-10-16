@@ -3,7 +3,7 @@
 // one photo control, one tag picker, so an item looks the same wherever
 // it is edited.
 
-import { useMemo, useState } from 'react'
+import { useId, useState } from 'react'
 import { IMAGE_ACCEPT, readImageFile } from '../lib/images'
 
 const inputCls =
@@ -12,7 +12,7 @@ const inputCls =
 export function PhotoField({ value, onChange, maxKb = 180, hint }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const inputId = useMemo(() => `photo-${Math.random().toString(36).slice(2, 9)}`, [])
+  const inputId = useId()
 
   async function pick(file) {
     if (!file) return
