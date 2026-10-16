@@ -135,6 +135,16 @@ function resolveTenant(req, res, next) {
   }
   req.tenantId = ownerId
   req.tenant = owner
+  // A staff member assigned to one branch is pinned to it: the snapshot
+  // they receive, the catalog they read, and the actions they send all
+  // stay inside that branch. Owners, super admins, and guests are free.
+  req.scopeLocationId = null
+  if (!isSuper && req.auth && req.auth.user.location_id) {
+    const locations = runtimeFor(ownerId).state.locations || {}
+    if (Object.hasOwn(locations, req.auth.user.location_id)) {
+      req.scopeLocationId = req.auth.user.location_id
+    }
+  }
   return next()
 }
 
@@ -153,15 +163,26 @@ app.get('/api/health', resolveTenant, (req, res) => {
   res.json({ ok: true, seq: runtime.seq, terminals: runtime.subscribers.size, log: logStats(runtime.ownerId) })
 })
 
+// A branch-pinned user only ever receives their own branch, so branch
+// switchers, cross-branch tabs, and "all branches" views collapse on
+// their own. Everyone else gets the whole empire.
+function scopeState(state, scopeLocationId) {
+  if (!scopeLocationId || !state?.locations || !Object.hasOwn(state.locations, scopeLocationId)) return state
+  return { ...state, locations: { [scopeLocationId]: state.locations[scopeLocationId] } }
+}
+
 app.get('/api/state', resolveTenant, (req, res) => {
   const runtime = runtimeFor(req.tenantId)
-  res.json({ state: runtime.state, seq: runtime.seq })
+  res.json({ state: scopeState(runtime.state, req.scopeLocationId), seq: runtime.seq })
 })
 
 // Relational read model for owner catalog and guest-menu displays.
 // Example: GET /api/menu?loc=downtown&q=burger&availableOnly=true&owner=joes-diner
 app.get('/api/menu', resolveTenant, (req, res) => {
-  const locationId = typeof req.query.loc === 'string' ? req.query.loc : 'downtown'
+  const locationId = typeof req.query.loc === 'string' ? req.query.loc : (req.scopeLocationId || 'downtown')
+  if (req.scopeLocationId && locationId !== req.scopeLocationId) {
+    return res.status(403).json({ error: 'your account is restricted to its assigned branch' })
+  }
   const state = runtimeFor(req.tenantId).state
   if (!Object.hasOwn(state.locations || {}, locationId)) {
     return res.status(400).json({ error: 'loc must name a configured restaurant location' })
@@ -184,7 +205,11 @@ app.get('/api/menu', resolveTenant, (req, res) => {
 // projection, so a terminal can read configuration without the snapshot.
 
 function resolveLocation(req, res) {
-  const locationId = typeof req.query.loc === 'string' ? req.query.loc : 'downtown'
+  const locationId = typeof req.query.loc === 'string' ? req.query.loc : (req.scopeLocationId || 'downtown')
+  if (req.scopeLocationId && locationId !== req.scopeLocationId) {
+    res.status(403).json({ error: 'your account is restricted to its assigned branch' })
+    return null
+  }
   const state = runtimeFor(req.tenantId).state
   if (!Object.hasOwn(state.locations || {}, locationId)) {
     res.status(400).json({ error: 'loc must name a configured restaurant location' })
@@ -262,6 +287,13 @@ app.post('/api/actions', resolveTenant, (req, res) => {
   }
   if (REJECTED.has(action.type)) {
     return res.status(400).json({ error: `${action.type} is local-only` })
+  }
+  // Branch-pinned users may only send shop actions to their own branch —
+  // never the empire-level ones (reset, branch create/remove).
+  if (req.scopeLocationId) {
+    if (action.type !== 'LOC' || String(action.locId ?? '') !== req.scopeLocationId) {
+      return res.status(403).json({ error: 'your account is restricted to its assigned branch' })
+    }
   }
   const runtime = runtimeFor(req.tenantId)
   let next
@@ -718,8 +750,17 @@ function sendEvent(res, payload) {
   res.write(`data: ${JSON.stringify(payload)}\n\n`)
 }
 
+// A branch-pinned terminal only hears events for its own branch. Applied to
+// both live broadcasts and the replay a reconnecting terminal receives.
+function eventInScope(msg, scopeLocationId) {
+  if (!scopeLocationId) return true
+  const action = msg?.action
+  return Boolean(action?.type === 'LOC' && action.locId === scopeLocationId)
+}
+
 function broadcast(runtime, msg) {
   for (const res of runtime.subscribers) {
+    if (!eventInScope(msg, res.scopeLocationId)) continue
     try {
       sendEvent(res, msg)
     } catch {
@@ -737,13 +778,17 @@ app.get('/api/events', resolveTenant, (req, res) => {
   res.flushHeaders?.()
 
   // Replay what the terminal missed; force a snapshot resync if the gap is huge.
+  const scope = req.scopeLocationId
   const gap = runtime.seq - since
   if (gap > 500) {
     sendEvent(res, { resync: true, seq: runtime.seq })
   } else if (gap > 0) {
-    for (const row of actionsSince(runtime.ownerId, since, 500)) sendEvent(res, row)
+    for (const row of actionsSince(runtime.ownerId, since, 500)) {
+      if (eventInScope(row, scope)) sendEvent(res, row)
+    }
   }
   sendEvent(res, { hello: true, seq: runtime.seq })
+  res.scopeLocationId = scope
   runtime.subscribers.add(res)
 
   const beat = setInterval(() => {

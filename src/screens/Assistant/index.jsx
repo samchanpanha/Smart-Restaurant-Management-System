@@ -12,7 +12,7 @@ import { INSIGHT_KINDS, SUGGESTED_PROMPTS } from './shared.js'
 // the server's redacted context digest and answers questions — it never
 // dispatches a reducer action, so it can never mutate the restaurant.
 function AssistantScreen() {
-  const { state, locId } = useRestora()
+  const { state, locId, aiPrompt, clearAiPrompt } = useRestora()
   const { lang, dict } = useI18n()
   const a = dict.assistant || {}
   const copy = {
@@ -83,6 +83,15 @@ function AssistantScreen() {
     if (res.ok && res.reply) push('assistant', res.reply)
     else push('assistant', failureText(res), true)
   }
+
+  // A question handed over from the Help center (or any "Ask AI" shortcut):
+  // ask it once, then clear so a re-render never repeats it.
+  useEffect(() => {
+    if (!aiPrompt) return
+    clearAiPrompt()
+    ask(aiPrompt)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aiPrompt])
 
   async function runInsight(kind) {
     if (result.loading) return

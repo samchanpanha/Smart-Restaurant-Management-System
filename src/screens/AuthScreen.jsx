@@ -3,6 +3,7 @@
 
 import { useState } from 'react'
 import LanguageSwitcher from '../components/LanguageSwitcher'
+import { ModernVisual } from '../components/ModernVisual'
 import { useAuth } from '../lib/auth'
 import { useDomTranslator, useI18n } from '../lib/i18n'
 
@@ -43,89 +44,102 @@ export default function AuthScreen() {
   }
 
   return (
-    <div className="restora-theme flex min-h-screen items-center justify-center bg-[var(--color-ink-950)] px-4 py-10 text-zinc-100">
-      <div className="w-full max-w-md">
-        <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500/10 text-amber-400 ring-1 ring-inset ring-amber-500/20">
-              <svg aria-hidden="true" width="30" height="30" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M7 19c-2.2-.4-3.5-2-3.5-4.2 0-2.5 1.8-4.4 4.1-4.7A8.8 8.8 0 0 1 16 4a8.8 8.8 0 0 1 8.4 6.1c2.3.3 4.1 2.2 4.1 4.7 0 2.2-1.3 3.8-3.5 4.2v4.5H7V19Z" />
-                <path d="M10 16.5c1.4 1.3 3.4 2 6 2s4.6-.7 6-2M12 24v4m8-4v4" />
-              </svg>
+    <div className="restora-theme relative min-h-screen bg-[var(--color-ink-950)] px-4 py-10 text-zinc-100">
+      <div className="mx-auto grid min-h-[calc(100vh-5rem)] w-full max-w-6xl items-center gap-10 lg:grid-cols-[minmax(0,26rem)_1fr]">
+        <div className="w-full max-w-md">
+          <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500/10 text-amber-400 ring-1 ring-inset ring-amber-500/20">
+                <svg aria-hidden="true" width="30" height="30" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M7 19c-2.2-.4-3.5-2-3.5-4.2 0-2.5 1.8-4.4 4.1-4.7A8.8 8.8 0 0 1 16 4a8.8 8.8 0 0 1 8.4 6.1c2.3.3 4.1 2.2 4.1 4.7 0 2.2-1.3 3.8-3.5 4.2v4.5H7V19Z" />
+                  <path d="M10 16.5c1.4 1.3 3.4 2 6 2s4.6-.7 6-2M12 24v4m8-4v4" />
+                </svg>
+              </div>
+              <div>
+                <div className="text-2xl font-bold leading-none tracking-tight">Restora</div>
+                <div className="mt-1 text-[11px] tracking-wide text-zinc-500">{dict.brandSubtitle}</div>
+              </div>
             </div>
-            <div>
-              <div className="text-2xl font-bold leading-none tracking-tight">Restora</div>
-              <div className="mt-1 text-[11px] tracking-wide text-zinc-500">{dict.brandSubtitle}</div>
-            </div>
+            <LanguageSwitcher compact testIdPrefix="auth-lang" />
           </div>
-          <LanguageSwitcher compact testIdPrefix="auth-lang" />
-        </div>
 
-        <div className="rounded-2xl border border-[var(--color-ink-700)] bg-[var(--color-ink-900)] p-6">
-          <div className="mb-5 grid grid-cols-2 gap-1 rounded-xl bg-[var(--color-ink-850)] p-1">
-            {[
-              ['login', au.signIn || 'Sign in', 'Sign in'],
-              ['register', au.register || 'Create account', 'Create account'],
-            ].map(([id, label, enLabel]) => (
+          <div className="rounded-2xl border border-[var(--color-ink-700)] bg-[var(--color-ink-900)] p-6">
+            <div className="mb-5 grid grid-cols-2 gap-1 rounded-xl bg-[var(--color-ink-850)] p-1">
+              {[
+                ['login', au.signIn || 'Sign in', 'Sign in'],
+                ['register', au.register || 'Create account', 'Create account'],
+              ].map(([id, label, enLabel]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => { setMode(id); setError('') }}
+                  className={`min-h-10 rounded-lg text-sm font-bold transition-colors ${mode === id ? 'bg-orange-500 text-white' : 'text-zinc-400 hover:bg-white/5'}`}
+                >
+                  {label}
+                  {lang !== 'en' && <span className="sr-only"> {enLabel}</span>}
+                </button>
+              ))}
+            </div>
+
+            <form onSubmit={onSubmit} className="space-y-3">
+              {mode === 'register' && (
+                <label className="block">
+                  <span className="mb-1 block text-xs font-semibold text-zinc-400">{au.restaurantName || 'Restaurant name'}</span>
+                  <input value={fields.ownerName} onChange={(event) => setField('ownerName')(event)} required placeholder="Harbor Bistro" className={INPUT} />
+                </label>
+              )}
+              {mode === 'register' && (
+                <label className="block">
+                  <span className="mb-1 block text-xs font-semibold text-zinc-400">{au.name || 'Your name'}</span>
+                  <input value={fields.name} onChange={(event) => setField('name')(event)} required placeholder="Nora Owner" className={INPUT} />
+                </label>
+              )}
+              <label className="block">
+                <span className="mb-1 block text-xs font-semibold text-zinc-400">{au.email || 'Email'}</span>
+                <input type="email" value={fields.email} onChange={(event) => setField('email')(event)} required autoComplete="username" placeholder="you@restaurant.com" className={INPUT} />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-semibold text-zinc-400">{au.password || 'Password'}</span>
+                <input
+                  type="password" value={fields.password} onChange={(event) => setField('password')(event)}
+                  required minLength={mode === 'register' ? 8 : undefined}
+                  autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
+                  placeholder="At least 8 characters" className={INPUT}
+                />
+              </label>
+
+              {error && (
+                <p role="alert" className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-300 ring-1 ring-inset ring-red-500/30">
+                  {error}
+                </p>
+              )}
+
               <button
-                key={id}
-                type="button"
-                onClick={() => { setMode(id); setError('') }}
-                className={`min-h-10 rounded-lg text-sm font-bold transition-colors ${mode === id ? 'bg-orange-500 text-white' : 'text-zinc-400 hover:bg-white/5'}`}
+                type="submit" disabled={busy}
+                className="min-h-11 w-full rounded-xl bg-orange-500 text-sm font-bold text-white hover:bg-orange-600 disabled:opacity-60"
               >
-                {label}
-                {lang !== 'en' && <span className="sr-only"> {enLabel}</span>}
+                {busy ? 'Working…' : mode === 'register' ? (au.register || 'Create account') : (au.signIn || 'Sign in')}
               </button>
-            ))}
+            </form>
           </div>
 
-          <form onSubmit={onSubmit} className="space-y-3">
-            {mode === 'register' && (
-              <label className="block">
-                <span className="mb-1 block text-xs font-semibold text-zinc-400">{au.restaurantName || 'Restaurant name'}</span>
-                <input value={fields.ownerName} onChange={(event) => setField('ownerName')(event)} required placeholder="Harbor Bistro" className={INPUT} />
-              </label>
-            )}
-            {mode === 'register' && (
-              <label className="block">
-                <span className="mb-1 block text-xs font-semibold text-zinc-400">{au.name || 'Your name'}</span>
-                <input value={fields.name} onChange={(event) => setField('name')(event)} required placeholder="Nora Owner" className={INPUT} />
-              </label>
-            )}
-            <label className="block">
-              <span className="mb-1 block text-xs font-semibold text-zinc-400">{au.email || 'Email'}</span>
-              <input type="email" value={fields.email} onChange={(event) => setField('email')(event)} required autoComplete="username" placeholder="you@restaurant.com" className={INPUT} />
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-xs font-semibold text-zinc-400">{au.password || 'Password'}</span>
-              <input
-                type="password" value={fields.password} onChange={(event) => setField('password')(event)}
-                required minLength={mode === 'register' ? 8 : undefined}
-                autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
-                placeholder="At least 8 characters" className={INPUT}
-              />
-            </label>
-
-            {error && (
-              <p role="alert" className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-300 ring-1 ring-inset ring-red-500/30">
-                {error}
-              </p>
-            )}
-
-            <button
-              type="submit" disabled={busy}
-              className="min-h-11 w-full rounded-xl bg-orange-500 text-sm font-bold text-white hover:bg-orange-600 disabled:opacity-60"
-            >
-              {busy ? 'Working…' : mode === 'register' ? (au.register || 'Create account') : (au.signIn || 'Sign in')}
-            </button>
-          </form>
+          <p className="mt-5 text-center text-xs text-zinc-500">
+            {au.subtitle || (mode === 'register'
+              ? 'Registering creates your restaurant and its owner account.'
+              : 'Sign in to open your restaurant workspace.')}
+          </p>
         </div>
 
-        <p className="mt-5 text-center text-xs text-zinc-500">
-          {au.subtitle || (mode === 'register'
-            ? 'Registering creates your restaurant and its owner account.'
-            : 'Sign in to open your restaurant workspace.')}
-        </p>
+        <div className="relative hidden overflow-hidden rounded-3xl border border-[var(--color-ink-800)] bg-gradient-to-br from-[var(--color-ink-900)] to-[var(--color-ink-950)] lg:block">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_50%_at_50%_20%,rgba(249,115,22,0.18),transparent)]" />
+          <ModernVisual className="h-[520px] w-full" variant="orbit" />
+          <div className="absolute bottom-0 left-0 right-0 p-8">
+            <h2 className="text-xl font-bold tracking-tight text-zinc-100">Run every branch from one place</h2>
+            <p className="mt-2 max-w-md text-sm text-zinc-400">
+              Live floor, kitchen, stock, and AI copilot — multi-branch, read-only AI, and offline-first terminals.
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   )

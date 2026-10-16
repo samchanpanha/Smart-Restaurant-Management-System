@@ -116,7 +116,7 @@ export default function CostingScreen() {
   const totalFoodCost = state.salesHistory.reduce((sum, day) => sum + day.sales * day.foodCostPct, 0) + dash.sales * dash.tonightCostPct
   const blendedFoodCost = foodSales ? totalFoodCost / foodSales : dash.foodCost7d
   const wasteValue = state.wasteLog.reduce((sum, item) => sum + item.qty * (skuById[item.inventoryItemId]?.lastCost || 0), 0)
-  const stockValue = state.inventory.reduce((sum, item) => sum + Math.max(0, item.onHand) * item.lastCost, 0)
+  const stockValue = state.inventory.filter((item) => item.counted !== false).reduce((sum, item) => sum + Math.max(0, item.onHand) * item.lastCost, 0)
   const sections = [
     { id: 'overview', label: 'Overview', display: lang === 'km' ? 'ទិដ្ឋភាពទូទៅ' : lang === 'zh' ? '总览' : 'Overview' },
     { id: 'menu-items', label: 'Menu items', display: lang === 'km' ? 'មុខម្ហូប' : lang === 'zh' ? '菜品' : 'Menu items' },
@@ -399,7 +399,7 @@ export default function CostingScreen() {
           <section className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm xl:col-span-8">
             <div className="flex items-center justify-between border-b border-zinc-100 px-5 py-4"><div><h2 className="text-base font-bold text-zinc-900">Inventory value by ingredient</h2><p className="mt-0.5 text-xs text-zinc-500">On-hand quantity × last recorded invoice cost · total {money(stockValue)}</p></div><button type="button" onClick={() => setScreen('inventory')} className="text-xs font-semibold text-orange-600">View stock →</button></div>
             <div className="divide-y divide-zinc-100">
-              {[...state.inventory].sort((a, b) => b.onHand * b.lastCost - a.onHand * a.lastCost).slice(0, 8).map((item) => {
+              {[...state.inventory].filter((item) => item.counted !== false).sort((a, b) => b.onHand * b.lastCost - a.onHand * a.lastCost).slice(0, 8).map((item) => {
                 const value = Math.max(0, item.onHand) * item.lastCost
                 return <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_100px] items-center gap-4 px-5 py-3"><div className="min-w-0"><div className="truncate text-sm font-semibold text-zinc-800">{item.name}</div><div className="mt-1 h-1.5 overflow-hidden rounded-full bg-zinc-100"><div className="h-full rounded-full bg-orange-500" style={{ width: `${Math.max(2, stockValue ? (value / stockValue) * 100 : 2)}%` }} /></div></div><div className="text-right"><div className="tnum text-sm font-bold text-zinc-800">{money(value)}</div><div className="text-[10px] text-zinc-500">{item.onHand} {item.unit} · {money(item.lastCost)} ea</div></div></div>
               })}

@@ -53,7 +53,7 @@ function StockTab() {
         const localName = translateInventoryName(sku, lang).toLowerCase()
         if (!`${sku.name} ${localName} ${sku.vendor}`.toLowerCase().includes(q)) return false
       }
-      if (filter === 'exceptions') return st !== 'ok' || sku.onHand < 0
+      if (filter === 'exceptions') return st !== 'not_counted' && (st !== 'ok' || sku.onHand < 0)
       if (filter === 'low') return st === 'low'
       if (filter === 'out') return st === 'out'
       return true
@@ -184,7 +184,7 @@ function StockTab() {
               header: inv.status || 'Status',
               render: ({ sku, st }) => (
                 <span>
-                  <StatusPill tone={st === 'ok' ? 'ok' : st === 'low' ? 'warn' : 'bad'} size="sm">{st === 'ok' ? (inv.inStock || 'In stock') : st === 'low' ? (inv.lowStock || 'Low stock') : (inv.outOfStock || 'Out of stock')}</StatusPill>
+                  <StatusPill tone={st === 'ok' ? 'ok' : st === 'low' ? 'warn' : st === 'not_counted' ? 'muted' : 'bad'} size="sm">{st === 'ok' ? (inv.inStock || 'In stock') : st === 'low' ? (inv.lowStock || 'Low stock') : st === 'not_counted' ? 'Not counted' : (inv.outOfStock || 'Out of stock')}</StatusPill>
                   {sku.onHand < 0 && <span className="ml-1 text-[10px] font-semibold text-red-600">Recount</span>}
                 </span>
               ),
@@ -376,7 +376,8 @@ function CountTab({ onDone }) {
     return counts[skuId] || { counted: '', reason: '' }
   }
 
-  const rows = state.inventory.map((sku) => {
+  const notCounted = state.inventory.filter((sku) => sku.counted === false).length
+  const rows = state.inventory.filter((sku) => sku.counted !== false).map((sku) => {
     const e = entry(sku.id)
     const hasCount = e.counted !== '' && !Number.isNaN(Number(e.counted))
     const variance = hasCount ? Number(e.counted) - sku.onHand : 0
@@ -416,6 +417,10 @@ function CountTab({ onDone }) {
           Save count
         </button>
       </div>
+
+      {notCounted > 0 && (
+        <p className="px-1 text-[11px] text-zinc-500">Not-counted items are hidden from this sheet.</p>
+      )}
 
       {missingReason && needsReason.length > 0 && (
         <div className="rounded-xl bg-red-500/10 px-4 py-2.5 text-sm text-red-200 ring-1 ring-inset ring-red-500/40" role="alert">
@@ -587,8 +592,8 @@ export default function InventoryScreen() {
 
   const low = state.inventory.filter((item) => stockStatusFor(item, state.settings) === 'low').length
   const out = state.inventory.filter((item) => stockStatusFor(item, state.settings) === 'out').length
-  const inventoryValue = state.inventory.reduce((sum, item) => sum + Math.max(0, item.onHand) * item.lastCost, 0)
-  const belowPar = state.inventory.filter((item) => item.onHand < item.par).length
+  const inventoryValue = state.inventory.filter((item) => item.counted !== false).reduce((sum, item) => sum + Math.max(0, item.onHand) * item.lastCost, 0)
+  const belowPar = state.inventory.filter((item) => item.counted !== false && item.onHand < item.par).length
 
   function downloadReport() {
     const header = ['Item', 'Location', 'On hand', 'Unit', 'Par', 'Last cost', 'Vendor', 'Status']

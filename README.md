@@ -228,6 +228,14 @@ see the balance a row left behind, and export the window to CSV. On-hand is the
 sum of the ledger, so the numbers a screen shows and the rows an accountant
 reads are never two different stories.
 
+Some items are bought and tracked but never counted — barware, packaging, a
+retail shelf, anything the kitchen doesn't portion. Flip **Count in stock** off
+in the item's editor (Catalog → Ingredients) and the item keeps its price,
+recipes, and purchase history but drops out of physical count sheets, low-stock
+alerts and auto-86, theoretical usage, variance, and the stock-flow numbers.
+Receiving a purchase still adds its stock and cost to the book; the flag only
+says "don't audit me".
+
 **Control → Reports** turns that into the four questions an owner actually
 asks, over *Tonight / 7 days / 30 days*:
 
@@ -432,9 +440,14 @@ and never dispatches a reducer action**, and it is **off by default**: with no
 `AI_API_KEY` every `/api/ai/*` route is a clean 503 no-op and the app is
 byte-for-byte the same.
 
-- **Providers:** `openai` (default), `anthropic`, `gemini`, `ollama` — chosen
-  with `AI_PROVIDER`; each has a default `AI_MODEL`/endpoint, all overridable
-  (`AI_MODEL`, `AI_BASE_URL`). No SDKs — just `fetch`.
+- **Providers:** `openai` (default), `anthropic`, `gemini`, `ollama`, plus the
+  OpenAI-compatible `groq`, `openrouter`, `mistral`, `cerebras`, and the Alibaba
+  Cloud Qwen family — `dashscope` / `alibaba` / `modelstudio` (DashScope
+  compatible-mode, `qwen-plus`) and `siliconcloud` (`Qwen/Qwen2.5-7B-Instruct`).
+  Pick one with `AI_PROVIDER`; each has a default `AI_MODEL`/endpoint, all
+  overridable (`AI_MODEL`, `AI_BASE_URL`). Every Qwen endpoint speaks the OpenAI
+  chat-completions shape with a Bearer key, so it needs no extra adapter. No
+  SDKs — just `fetch`.
 - **Surfaces:** the **Ops Copilot** screen (`Insight → Ops Copilot`) for chat +
   advisors + a shift briefing; the **Dashboard** AI cards (alert explainer,
   menu advisor, prep forecast, shift briefing); and the guest/mini-app **Menu
@@ -468,12 +481,19 @@ byte-for-byte the same.
   restaurant in SQLite (the key is write-only and never sent back to the
   browser) and overrides the env vars below; any field left blank falls back to
   them. The routes (`GET`/`PUT /api/ai/config`, `POST /api/ai/config/test`) are
-  owner-only and take effect without a restart.
+  owner-only and take effect without a restart. For Alibaba Cloud, paste a Model
+  Studio API key (`https://modelstudio.console.alibabacloud.com`) and pick a
+  Qwen provider — the DashScope compatible-mode endpoint is pre-filled.
+- **Guides & How-to:** the same screen has a **Guides & How-to** tab that lists
+  common tasks (take an order, bump a ticket, reorder stock …) and quick
+  prompts. Choosing one hands the question to the Ops Copilot — a small store
+  bridge opens its tab and asks — so "how do I …" always lands in the chat,
+  read-only like everything else.
 
 | Variable | Purpose | Default |
 |---|---|---|
 | `AI_API_KEY` | Provider key; absent ⇒ AI disabled | — |
-| `AI_PROVIDER` | `openai` \| `anthropic` \| `gemini` \| `ollama` | `openai` |
+| `AI_PROVIDER` | `openai` \| `anthropic` \| `gemini` \| `ollama` \| `groq` \| `openrouter` \| `mistral` \| `cerebras` \| `dashscope` \| `alibaba` \| `modelstudio` \| `siliconcloud` | `openai` |
 | `AI_MODEL` | Model id | provider default |
 | `AI_BASE_URL` | Override endpoint (self-host / proxy) | provider default |
 | `AI_TIMEOUT_MS` | Outbound timeout | `20000` |
@@ -495,6 +515,21 @@ history, and it *has* salmon). State shape v2 keeps a full shop per store:
   food cost, occupancy + combined total, tap to jump stores
 - Menus, stock, tickets, and 86 boards are fully independent per store
   (86 wings downtown — Riverside keeps selling them)
+- Branches are managed in **Settings → Branches**: create seeds a fresh shop,
+  rename is inline, and remove asks for a two-step confirm — the last branch
+  can never go, and the terminal falls back to the first survivor
+- **Push menu to all branches** copies the open branch's items, prices, and
+  categories to every other branch; 86 boards and recipes stay per branch
+- Reports gain an **All branches** tab once a second branch exists: combined
+  net sales, checks, covers, and margin plus a per-branch comparison whose
+  rows can open a branch on this terminal
+- **Staff branch assignment**: in **Users**, an owner can pin an account to one
+  branch. That terminal boots straight into its branch: the server hands it only
+  that branch's snapshot, refuses catalog reads and actions aimed anywhere else
+  (403), and scopes its SSE stream, so the switcher, tab strip, and All-branches
+  report collapse on their own. Blank = all branches; owners and super admins
+  are never pinned, and removing the branch someone was pinned to leaves them
+  unrestricted (never locked out) until reassigned
 - Old v1 snapshots (server DB + localStorage) **migrate on boot**: v1 becomes
   Downtown, Riverside seeds fresh; bare pre-LOC actions still apply to Downtown
 
@@ -533,13 +568,13 @@ Express + SQLite (`better-sqlite3`) via action log + SSE when a server is presen
 | 2 | Floor seat/dirty | ✅ Done | Live map by zone, tap-to-seat, over-cap confirm, reservations, waitlist + honest wait quotes |
 | 3 | Tickets + delivery fulfillment | ✅ Done | Composer + required mods, 86 w/ substitute, 15s undo, split/pay/void; delivery queue, kitchen-ready handoff, delivered timestamps, type filter, v5 → v6 migration |
 | 4 | KDS fire/bump/86 | ✅ Done | Station columns + expo, live SLA timers, bump-all, 60s recall, shared 86 board |
-| 5 | Theoretical inventory on fire | ✅ Done | Stock exceptions, receive w/ plate-cost impact, count sheet w/ variance reasons, waste log |
+| 5 | Theoretical inventory on fire | ✅ Done | Stock exceptions, receive w/ plate-cost impact, count sheet w/ variance reasons, waste log; items can opt out of counting (`counted: false` skips sheets, alerts, and stock-flow reports) |
 | 6 | Dashboard alerts | ✅ Done | KPIs, tappable alert rail, rush watch, sparkline, sellers/losers, SLA, floor snapshot — now fully on semantic tokens (`components/ui` primitives, sections under `src/screens/Dashboard/`), with spec §9.1 widgets and an empty "shift not started" state |
 | 7 | Recipe cost + matrix | ✅ Done | Recipe coster w/ snapshots, 86 write-through, menu matrix, ingredient shocks, in-place reprice |
 | 8 | Reports | ✅ Done | Sales/hour/category/day, service, voids audit, variance, P&L-lite — every report ends in an action |
 | 9 | Configuration, documents & catalog | ✅ Done | Settings sections (identity · money · templates · stock · POS · alerts · data), invoice/receipt/ticket/report designer + print, multi-currency, document registry, category tree, suppliers, live preview/print from Tickets & Reports |
 | 10 | Buy side, units & Telegram | ✅ Done | Purchase CRUD → stock with pack conversion, the signed movement ledger, sell/buy + P&L + top/bottom reports, units of measure, item photos, bot console + push notices + digest, and the Telegram mini app |
-| 11 | Accounts, roles & multi-tenant | ✅ Done | Owner accounts + owner-scoped users/roles, a super-admin host-owner console, per-owner isolation of every state table, read model, action log, and SSE stream (schema v3 migrates a legacy single-tenant file) |
+| 11 | Accounts, roles & multi-tenant | ✅ Done | Owner accounts + owner-scoped users/roles, a super-admin host-owner console, per-owner isolation of every state table, read model, action log, and SSE stream (schema v3 migrates a legacy single-tenant file); a user can be pinned to one branch, which locks their snapshot, catalog reads, actions, and stream to it |
 | 12 | AI ops copilot | ✅ Done | Provider-agnostic, read-only assistant (`/api/ai/*`) with the Ops Copilot screen; Dashboard advisors (alert explainer, menu advisor, prep forecast) + shift briefing cards; guest/mini-app menu concierge; Telegram briefing push. Off by default — no `AI_API_KEY`, no AI. (Smart-reorder draft on Purchases deferred.) |
 | 13 | Operations integrity, one money model & the 3D customer surface | ✅ Done | Ticket status is derived from its lines (a course fired after service puts the ticket back in the kitchen); the status machine is enforced in the reducer (a ticket is served only when nothing is cooking, a check settles once); one money model shared by the ticket, the receipt, the shift report and the sales report; a 3D dish stage on the guest menu behind a lazy chunk with photo + reduced-motion fallback; app toasts and confirm dialogs in place of every native browser dialog |
 

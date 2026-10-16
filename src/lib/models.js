@@ -61,6 +61,9 @@ export function reorderPointFor(item, settings) {
 }
 
 export function stockStatusFor(item, settings) {
+  // Not-counted items sit outside stock tracking — deliberately neutral,
+  // never low and never out.
+  if (item?.counted === false) return 'not_counted'
   const onHand = Number(item?.onHand ?? 0)
   if (onHand <= 0) return 'out'
   const threshold = reorderPointFor(item, settings)
@@ -90,7 +93,7 @@ export function applyAuto86(shop, now = null) {
     if (!recipe?.ingredients?.length) return false
     return recipe.ingredients.some((ing) => {
       const inv = invById[ing.inventoryItemId]
-      return inv ? Number(inv.onHand) <= 0 : false
+      return inv ? inv.counted !== false && Number(inv.onHand) <= 0 : false
     })
   }
   let changed = false
@@ -112,10 +115,12 @@ export function applyAuto86(shop, now = null) {
 /** Stock value at the configured valuation method (last cost or weighted avg). */
 export function stockValue(shop) {
   const method = shop?.settings?.stock?.valuationMethod || 'last_cost'
-  return roundMoney((shop?.inventory || []).reduce((sum, item) => {
-    const unitCost = method === 'weighted_average' && Number(item.avgCost) > 0 ? item.avgCost : item.lastCost
-    return sum + Math.max(0, Number(item.onHand) || 0) * (Number(unitCost) || 0)
-  }, 0))
+  return roundMoney((shop?.inventory || [])
+    .filter((item) => item.counted !== false)
+    .reduce((sum, item) => {
+      const unitCost = method === 'weighted_average' && Number(item.avgCost) > 0 ? item.avgCost : item.lastCost
+      return sum + Math.max(0, Number(item.onHand) || 0) * (Number(unitCost) || 0)
+    }, 0))
 }
 
 /** Unit cost used by the recipe book for a SKU under the current method. */

@@ -1793,6 +1793,8 @@ function enrichLangDict(langCode, raw) {
     email: isKm ? 'អ៊ីមែល' : isZh ? '电子邮箱' : 'Email',
     password: isKm ? 'ពាក្យសម្ងាត់បណ្តោះអាសន្ន' : isZh ? '临时密码' : 'Temporary password',
     role: isKm ? 'ជ្រើសរើសតួនាទី…' : isZh ? '选择角色…' : 'Choose a role…',
+    allBranches: isKm ? 'គ្រប់សាខា' : isZh ? '全部分店' : 'All branches',
+    branchFor: isKm ? 'សាខាសម្រាប់' : isZh ? '所属分店' : 'Branch for',
     active: isKm ? 'សកម្ម' : isZh ? '启用' : 'active',
     disabled: isKm ? 'បានបិទ' : isZh ? '已禁用' : 'disabled',
   }

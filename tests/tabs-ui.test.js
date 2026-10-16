@@ -56,10 +56,13 @@ const { NAV_SECTIONS, SCREEN_ICONS } = await server.ssrLoadModule('/src/lib/cons
 
 // A click may open a code-split screen, so drain macrotasks until the
 // Suspense fallback has cleared — the browser equivalent of "wait for paint".
-const flush = async () => {
-  for (let i = 0; i < 75; i += 1) {
-    await act(async () => { await new Promise((resolve) => dom.window.setTimeout(resolve, 0)) })
-    if (!dom.window.document.body.textContent.includes('Opening…')) return
+// Real-time budget, not a fixed tick count: under a parallel suite a cold
+// chunk once outlasted 75 ticks.
+const flush = async (budgetMs = 4000) => {
+  const deadline = Date.now() + budgetMs
+  await act(async () => { await new Promise((resolve) => dom.window.setTimeout(resolve, 0)) })
+  while (dom.window.document.body.textContent.includes('Opening…') && Date.now() < deadline) {
+    await act(async () => { await new Promise((resolve) => dom.window.setTimeout(resolve, 10)) })
   }
 }
 // The provider boots asynchronously: /api/state fails here, which must land

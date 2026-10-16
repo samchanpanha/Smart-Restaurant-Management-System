@@ -11,7 +11,7 @@ import { NAV_SECTIONS, ROLES, SCREEN_ICONS, allowedScreens, screenForAlert } fro
 import { useAuth } from '../lib/auth'
 import { translateScreenLabel, useDomTranslator, useI18n } from '../lib/i18n'
 import { useConfirm } from './ui/confirm-context'
-import { LOCATIONS, useNow, useRestora } from '../lib/store'
+import { useNow, useRestora } from '../lib/store'
 
 // One label per screen, everywhere: the sidebar, the tab strip and the
 // restricted-screen panel all read the same source, so a screen is never
@@ -28,7 +28,7 @@ function displayOrderId(id) {
 export default function AppShell({ children }) {
   const confirm = useConfirm()
   const {
-    state, dispatch, role, setRole, screen, setScreen, link, resync, notice, locId, setLocId,
+    state, dispatch, role, setRole, screen, setScreen, link, resync, notice, locId, setLocId, locations,
     openScreenInTab, alerts,
     tabs, activeTabId, saveTabScroll, setSelectedTableId, setSelectedDishId, setSelectedOrderId,
   } = useRestora()
@@ -43,7 +43,7 @@ export default function AppShell({ children }) {
   const [locationOpen, setLocationOpen] = useState(false)
   const allowed = allowedScreens(role, screens)
   const fallbackScreen = allowed.includes('floor') ? 'floor' : allowed[0]
-  const location = LOCATIONS.find((item) => item.id === locId) || LOCATIONS[0]
+  const location = locations.find((item) => item.id === locId) || locations[0] || { id: locId, short: locId }
   const displayName = user?.name || (role === 'owner' ? 'Maya Chen' : ROLES[role]?.name || 'Restaurant team')
   const roleTitle = user?.role?.label || dict.roles?.[role] || (role === 'owner' ? 'Restaurant Manager' : ROLES[role]?.label?.split('·')[1]?.trim() || 'Team member')
   const localeTag = lang === 'km' ? 'km-KH' : lang === 'zh' ? 'zh-CN' : 'en-US'
@@ -219,9 +219,10 @@ export default function AppShell({ children }) {
           <div className="relative">
             <button
               type="button"
-              onClick={() => setLocationOpen((open) => !open)}
-              aria-expanded={locationOpen}
-              className="flex w-full items-center gap-3 rounded-xl px-2.5 py-3 text-left hover:bg-white/5"
+              onClick={() => locations.length > 1 && setLocationOpen((open) => !open)}
+              aria-expanded={locations.length > 1 ? locationOpen : undefined}
+              disabled={locations.length <= 1}
+              className="flex w-full items-center gap-3 rounded-xl px-2.5 py-3 text-left hover:bg-white/5 disabled:cursor-default"
             >
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-300">
                 <Icon name="tables" size={18} />
@@ -230,11 +231,13 @@ export default function AppShell({ children }) {
                 <span className="block truncate text-xs font-semibold text-zinc-100">{state.settings.restaurantName || 'The Olive Restaurant'}</span>
                 <span className="mt-0.5 block text-[11px] text-zinc-500">{location.short} · {dict.branch}</span>
               </span>
-              <Icon name="chevron" size={16} className={`text-zinc-500 transition-transform ${locationOpen ? 'rotate-180' : ''}`} />
+              {locations.length > 1 && (
+                <Icon name="chevron" size={16} className={`text-zinc-500 transition-transform ${locationOpen ? 'rotate-180' : ''}`} />
+              )}
             </button>
             {locationOpen && (
               <div className="absolute bottom-full left-0 z-40 mb-2 w-full rounded-xl border border-[var(--color-ink-600)] bg-[var(--color-ink-850)] p-1.5 shadow-2xl">
-                {LOCATIONS.map((item) => (
+                {locations.map((item) => (
                   <button
                     key={item.id}
                     type="button"

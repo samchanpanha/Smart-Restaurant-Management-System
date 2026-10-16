@@ -144,6 +144,46 @@ test('roles and users are owner-scoped, and assignments stick', async () => {
   assert.equal(blocked.status, 409)
 })
 
+test('a user can be pinned to one branch, and only a real branch', async () => {
+  const owner = await api('POST', '/api/auth/login', {
+    body: { email: 'nora@harbor.test', password: 'hunter2-long' },
+  })
+  const cookie = owner.cookie
+
+  // No snapshot has been written for this tenant yet, so the assignment
+  // validates against the seed empire (downtown / riverside).
+  const pinned = await api('POST', '/api/users', {
+    cookie,
+    body: { name: 'Dana Downtown', email: 'dana@harbor.test', password: 'dana-pass-123', roleId: 'sys_server', locationId: 'downtown' },
+  })
+  assert.equal(pinned.status, 201)
+  assert.equal(pinned.data.user.locationId, 'downtown')
+
+  const ghost = await api('POST', '/api/users', {
+    cookie,
+    body: { name: 'Ghost', email: 'ghost@harbor.test', password: 'ghost-pass-123', roleId: 'sys_server', locationId: 'nowhere' },
+  })
+  assert.equal(ghost.status, 400)
+
+  // The signed-in user carries their branch, so the terminal knows it is pinned.
+  const login = await api('POST', '/api/auth/login', {
+    body: { email: 'dana@harbor.test', password: 'dana-pass-123' },
+  })
+  const me = await api('GET', '/api/auth/me', { cookie: login.cookie })
+  assert.equal(me.data.user.locationId, 'downtown')
+
+  // Reassignment and clearing both work.
+  const moved = await api('PATCH', `/api/users/${pinned.data.user.id}`, {
+    cookie, body: { locationId: 'riverside' },
+  })
+  assert.equal(moved.status, 200)
+  assert.equal(moved.data.user.locationId, 'riverside')
+  const cleared = await api('PATCH', `/api/users/${pinned.data.user.id}`, {
+    cookie, body: { locationId: '' },
+  })
+  assert.equal(cleared.data.user.locationId, null)
+})
+
 test('a role without the users screen cannot manage users', async () => {
   const owner = await api('POST', '/api/auth/login', {
     body: { email: 'nora@harbor.test', password: 'hunter2-long' },

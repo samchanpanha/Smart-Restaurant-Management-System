@@ -300,6 +300,8 @@ export function buildSeed() {
       countDueDays: 1 + (index % 7),
       notes: '',
       active: true,
+      // Every seeded SKU is stock-tracked; "not counted" is opt-in per item.
+      counted: true,
     })
   })
 

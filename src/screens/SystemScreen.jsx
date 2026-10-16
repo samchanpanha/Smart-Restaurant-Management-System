@@ -115,7 +115,10 @@ export default function SystemScreen() {
   const sys = dict.system || {}
   const alerts = getAlerts(state)
   const openOrders = state.orders.filter((o) => !['paid', 'void'].includes(o.status))
-  const outItems = state.inventory.filter((i) => stockStatusFor(i, state.settings) !== 'ok')
+  const outItems = state.inventory.filter((i) => {
+    const status = stockStatusFor(i, state.settings)
+    return status !== 'ok' && status !== 'not_counted'
+  })
   const eightSix = state.menu.filter((m) => !m.available)
 
   const census = [

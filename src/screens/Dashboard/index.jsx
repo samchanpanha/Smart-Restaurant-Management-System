@@ -9,7 +9,7 @@ import { useMemo } from 'react'
 import { ROLE_NAV } from '../../lib/constants'
 import { useI18n } from '../../lib/i18n'
 import { money } from '../../lib/models'
-import { LOCATIONS, getAlerts, getDashboard, useNow, useRestora } from '../../lib/store'
+import { getAlerts, getDashboard, useNow, useRestora } from '../../lib/store'
 import { OVERVIEW_SCREENS, QUICK_ACTIONS, activityRows, alertScreenFor, relativeTime } from './shared'
 import Hero from './sections/Hero'
 import KpiRow from './sections/KpiRow'
@@ -28,7 +28,7 @@ import ShiftBriefing from './sections/ShiftBriefing'
 import { useAiStatus } from './useAiStatus'
 
 export default function DashboardScreen() {
-  const { state, empire, setScreen, role, locId, setLocId } = useRestora()
+  const { state, empire, setScreen, role, locId, setLocId, locations } = useRestora()
   const { lang, dict } = useI18n()
   const copy = dict.dashboard || {}
   const now = useNow(15000)
@@ -36,8 +36,8 @@ export default function DashboardScreen() {
   const alerts = useMemo(() => getAlerts(state), [state])
   const ai = useAiStatus()
   const empireDash = useMemo(
-    () => LOCATIONS.map((location) => ({ ...location, dash: getDashboard(empire.locations[location.id]) })),
-    [empire],
+    () => locations.map((location) => ({ ...location, dash: getDashboard(empire.locations[location.id]) })),
+    [empire, locations],
   )
 
   const totalTables = state.tables.length
@@ -45,7 +45,7 @@ export default function DashboardScreen() {
   const freeTables = state.tables.filter((table) => table.status === 'free').length
   const activeOrders = state.orders.filter((order) => !['paid', 'void'].includes(order.status)).length
   const delayedOrders = alerts.filter((alert) => alert.type === 'late_ticket').length
-  const lowStock = state.inventory.filter((item) => item.onHand < item.par).length
+  const lowStock = state.inventory.filter((item) => item.counted !== false && item.onHand < item.par).length
   const occupancy = totalTables ? Math.round((occupiedTables / totalTables) * 100) : 0
   const foodCostOnTarget = dash.foodCost7d <= state.settings.foodCostCap
 
@@ -54,7 +54,7 @@ export default function DashboardScreen() {
   const hour = new Date(now).getHours()
   const greeting = hour < 12 ? copy.morning : hour < 17 ? copy.afternoon : copy.evening
   const roleLabel = role === 'owner' ? 'Maya' : (dict.roles?.[role] || role)
-  const locationName = LOCATIONS.find((item) => item.id === locId)?.short
+  const locationName = locations.find((item) => item.id === locId)?.short
   const recent = activityRows(state, lang, copy)
   const aiConfigured = Boolean(ai?.configured)
   const aiProvider = aiConfigured ? `${ai.provider} · ${ai.model}` : ''

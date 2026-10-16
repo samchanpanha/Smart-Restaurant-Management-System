@@ -7,15 +7,17 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { CRITICAL_ALERTS, NAV_SECTIONS, SCREEN_ICONS, screenForAlert, allowedScreens } from '../lib/constants'
 import { translateScreenLabel, useI18n } from '../lib/i18n'
 import { useAuth } from '../lib/auth'
-import { LOCATIONS, useRestora } from '../lib/store'
+import { useRestora } from '../lib/store'
 import { Icon } from './Icon'
 
 const TAB_LABELS = Object.fromEntries(NAV_SECTIONS.flatMap((s) => s.items.map((i) => [i.id, i.label])))
 const LOC_DOTS = ['bg-orange-500', 'bg-teal-500', 'bg-violet-500', 'bg-sky-500']
 const DRAG_THRESHOLD_PX = 5
 
-function locDot(locId) {
-  const index = LOCATIONS.findIndex((item) => item.id === locId)
+// The dot colour follows the branch's position in the live empire, so a
+// branch created at runtime gets the same visual identity as a seeded one.
+function locDot(locId, locations) {
+  const index = locations.findIndex((item) => item.id === locId)
   return LOC_DOTS[index < 0 ? 0 : index % LOC_DOTS.length]
 }
 
@@ -30,7 +32,7 @@ function tabIcon(tab) {
 export default function TabStrip({ fallbackScreen }) {
   const {
     role, alerts, tabs, activeTabId, activateTab, closeTab, openTab, openScreenInTab, reorderTab, renameTab,
-    togglePinTab, duplicateTab, closeOtherTabs, closeRightTabs, reopenClosedTab, canReopenClosed,
+    togglePinTab, duplicateTab, closeOtherTabs, closeRightTabs, reopenClosedTab, canReopenClosed, locations,
   } = useRestora()
   const { lang, dict } = useI18n()
   const { screens } = useAuth()
@@ -346,7 +348,7 @@ export default function TabStrip({ fallbackScreen }) {
           const badge = badges[tab.screen]
           const label = tabLabel(tab)
           const displayLabel = tab.title || (tab.screen ? translateScreenLabel(tab.screen, label, lang) : dict.newTab)
-          const locShort = LOCATIONS.find((item) => item.id === tab.locId)?.short || tab.locId
+          const locShort = locations.find((item) => item.id === tab.locId)?.short || tab.locId
           const isRenaming = renaming?.tabId === tab.id
           return (
             <Fragment key={tab.id}>
@@ -401,7 +403,7 @@ export default function TabStrip({ fallbackScreen }) {
                         size={15}
                         className={locked ? 'text-amber-500' : selected ? 'text-orange-600' : 'text-zinc-400'}
                       />
-                      <span aria-hidden="true" className={`absolute -right-1 -top-0.5 h-1.5 w-1.5 rounded-full ${locDot(tab.locId)}`} />
+                      <span aria-hidden="true" className={`absolute -right-1 -top-0.5 h-1.5 w-1.5 rounded-full ${locDot(tab.locId, locations)}`} />
                     </span>
                     {!tab.pinned && (
                       <span

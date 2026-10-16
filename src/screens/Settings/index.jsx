@@ -19,6 +19,7 @@ import { useRestora } from '../../lib/store'
 import { AiSection } from './sections/Ai'
 import { AlertsSection } from './sections/Alerts'
 import { BusinessSection } from './sections/Business'
+import { BranchesSection } from './sections/Branches'
 import { DataSection } from './sections/Data'
 import { DocumentsSection } from './sections/Documents'
 import { FoodSection } from './sections/Food'
@@ -31,21 +32,27 @@ const SETUP_STEPS = ['business', 'money', 'documents', 'stock', 'food', 'pos']
 
 const SECTIONS = [
   { id: 'business', label: 'Business profile', blurb: 'Name, address, logo, tax ID' },
+  { id: 'branches', label: 'Branches', blurb: 'Manage multiple locations/branches' },
   { id: 'money', label: 'Currency & tax', blurb: 'Base currency, rates, tax, service' },
   { id: 'documents', label: 'Documents', blurb: 'Invoice, receipt, ticket, report' },
   { id: 'stock', label: 'Stock rules', blurb: 'Valuation, reorder, auto-86' },
   { id: 'food', label: 'Food & menu', blurb: 'Tags, allergens, courses, photos, service windows' },
   { id: 'pos', label: 'Service & POS', blurb: 'Tips, splits, printers, QR' },
   { id: 'alerts', label: 'Alerts', blurb: 'What pings whom, and when' },
-  { id: 'ai', label: 'AI assistant', blurb: 'Provider, model, API key' },
+  { id: 'ai', label: 'AI assistant & Guides', blurb: 'Provider, model, API key, how-to guides' },
   { id: 'data', label: 'Data & backup', blurb: 'Registry, export, reset' },
 ]
 
 const SECTION_ICON = {
+  business: 'settings',
+  branches: 'map',
   documents: 'doc',
   money: 'costing',
   stock: 'inventory',
+  pos: 'pos',
+  alerts: 'bell',
   ai: 'sparkles',
+  food: 'dish',
   data: 'layers',
 }
 
@@ -65,13 +72,14 @@ export default function SettingsScreen({ initialSection = 'business' }) {
 
   const sectionLabels = {
     business: st.identityTab || 'Business profile',
+    branches: 'Branches',
     money: st.currencyTab || 'Currency & tax',
     documents: st.documentsTab || 'Documents',
     stock: st.inventoryTab || 'Stock rules',
     food: st.foodTab || 'Food & menu',
     pos: st.posTab || 'Service & POS',
     alerts: st.notificationsTab || 'Alerts & notifications',
-    ai: st.aiTab || 'AI assistant',
+    ai: st.aiTab || 'AI assistant & Guides',
     data: st.dataTab || 'Data & reset',
   }
 
@@ -148,6 +156,8 @@ export default function SettingsScreen({ initialSection = 'business' }) {
     switch (sectionId) {
       case 'business':
         return <BusinessSection draft={draft} patch={patch} />
+      case 'branches':
+        return <BranchesSection />
       case 'money':
         return <MoneySection draft={draft} patch={patch} dispatch={dispatch} settings={settings} state={state} locationLabel={locId} />
       case 'documents':
@@ -174,16 +184,26 @@ export default function SettingsScreen({ initialSection = 'business' }) {
   return (
     <div className="space-y-5">
       <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <div className="mb-1 text-xs font-semibold text-orange-600">{st.kicker || 'Configuration'}</div>
-          <h1 className="text-3xl font-bold tracking-tight text-zinc-900">
-            {st.title || 'Settings & Documents'}
-            {lang !== 'en' && <span className="sr-only"> Settings &amp; Documents</span>}
-          </h1>
-          <p className="mt-1 text-sm text-zinc-500">
-            {state.settings.restaurantName} · {locId}
-            {link.status === 'live' ? ' · synced to every terminal' : ' · this terminal (offline)'}
-          </p>
+        <div className="flex items-start gap-3">
+          <div className="mt-0.5 flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
+            {settings.logoUrl
+              ? <img src={settings.logoUrl} alt="Company logo" className="max-h-full max-w-full object-contain" />
+              : <Icon name="settings" size={22} className="text-orange-600" />}
+          </div>
+          <div>
+            <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-orange-600">
+              <Icon name="settings" size={14} className="text-orange-600" />
+              {st.kicker || 'Configuration Center'}
+            </div>
+            <h1 className="text-3xl font-bold tracking-tight text-zinc-900">
+              {settings.restaurantName || st.title || 'Settings & Documents'}
+              {lang !== 'en' && <span className="sr-only"> Settings &amp; Documents</span>}
+            </h1>
+            <p className="mt-1 text-sm text-zinc-500">
+              {settings.legalName || settings.restaurantName} · {locId}
+              {link.status === 'live' ? ' · synced to every terminal' : ' · this terminal (offline)'}
+            </p>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button
@@ -275,7 +295,7 @@ export default function SettingsScreen({ initialSection = 'business' }) {
 
           {/* The AI section saves itself against the server, so it does not
               use the draft-first section save bar. */}
-          {section !== 'ai' && (
+          {section !== 'ai' && section !== 'branches' && (
           <div className="sticky bottom-2 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur">
             <span className="text-xs text-zinc-500" data-testid="section-save-status">
               {sectionDirty(section) ? 'Unsaved edits in this section' : 'This section has no unsaved edits'}

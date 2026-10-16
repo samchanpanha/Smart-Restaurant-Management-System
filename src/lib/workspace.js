@@ -103,6 +103,19 @@ export function workspaceReducer(workspace, action) {
       }
     }
 
+    // A branch was removed: every tab parked on it — active or background —
+    // lands on the branch the store picked as its replacement.
+    case 'REMAP_LOCATION': {
+      if (!action.from || !action.to || action.from === action.to) return workspace
+      if (!workspace.tabs.some((tab) => tab.locId === action.from)) return workspace
+      return {
+        ...workspace,
+        tabs: workspace.tabs.map((tab) =>
+          tab.locId === action.from ? { ...tab, locId: action.to } : tab,
+        ),
+      }
+    }
+
     case 'SET_TAB_CONTEXT': {
       if (!action.patch) return workspace
       return {

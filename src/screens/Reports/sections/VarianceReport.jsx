@@ -24,7 +24,7 @@ function VarianceReport() {
     }
     return Object.entries(qtyBySku)
       .map(([skuId, qty]) => ({ sku: skuById[skuId], qty, value: qty * (skuById[skuId]?.lastCost || 0) }))
-      .filter((r) => r.sku)
+      .filter((r) => r.sku && r.sku.counted !== false)
       .sort((a, b) => b.value - a.value)
   }, [state.orders, state.recipes, skuById])
 
@@ -39,7 +39,7 @@ function VarianceReport() {
 
   const wasteTotal = wasteByReason.reduce((s, r) => s + r.value, 0)
   const usageTotal = usage.reduce((s, r) => s + r.value, 0)
-  const negatives = state.inventory.filter((i) => i.onHand < 0)
+  const negatives = state.inventory.filter((i) => i.onHand < 0 && i.counted !== false)
   const topWasteSku = useMemo(() => {
     const m = new Map()
     for (const w of state.wasteLog) m.set(w.inventoryItemId, (m.get(w.inventoryItemId) || 0) + w.qty)

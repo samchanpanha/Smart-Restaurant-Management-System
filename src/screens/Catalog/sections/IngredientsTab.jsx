@@ -26,7 +26,7 @@ function IngredientsTab() {
     .map((item) => ({ item, status: stockStatusFor(item, state.settings) }))
     .filter(({ item, status }) => {
       if (supplierId !== 'all' && (item.supplierId || '') !== supplierId) return false
-      if (exceptionsOnly && status === 'ok') return false
+      if (exceptionsOnly && (status === 'ok' || status === 'not_counted')) return false
       if (query && !`${item.name} ${item.sku} ${item.vendor}`.toLowerCase().includes(query.toLowerCase())) return false
       return true
     })
@@ -178,11 +178,11 @@ function IngredientsTab() {
               const supplier = state.suppliers.find((entry) => entry.id === item.supplierId)
               return (
                 <div>
-                  <StatusPill tone={status === 'ok' ? 'ok' : status === 'low' ? 'warn' : 'bad'} size="sm">
-                    {status === 'ok' ? 'In stock' : status === 'low' ? 'Low' : 'Out'}
+                  <StatusPill tone={status === 'ok' ? 'ok' : status === 'low' ? 'warn' : status === 'not_counted' ? 'muted' : 'bad'} size="sm">
+                    {status === 'ok' ? 'In stock' : status === 'low' ? 'Low' : status === 'not_counted' ? 'Not counted' : 'Out'}
                   </StatusPill>
-                  {item.onHand < 0 && <span className="ml-1 text-[10px] font-semibold text-red-600">Recount</span>}
-                  {supplier && status !== 'ok' && <div className="mt-1 text-[10px] text-zinc-500">order from {supplier.name}</div>}
+                  {item.onHand < 0 && status !== 'not_counted' && <span className="ml-1 text-[10px] font-semibold text-red-600">Recount</span>}
+                  {supplier && status !== 'ok' && status !== 'not_counted' && <div className="mt-1 text-[10px] text-zinc-500">order from {supplier.name}</div>}
                 </div>
               )
             },

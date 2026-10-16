@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { reducer, buildEmpire, getDashboard } from '../src/lib/reducer.js'
-import { buildReports, deliverySummary, itemRankings, movementSummary, profitAndLoss, purchaseSummary, rangeBounds, salesSummary, stockFlow } from '../src/lib/reports.js'
+import { buildEmpireReports, buildReports, deliverySummary, itemRankings, movementSummary, profitAndLoss, purchaseSummary, rangeBounds, salesSummary, stockFlow } from '../src/lib/reports.js'
 import { orderCharges } from '../src/lib/models.js'
 
 const act = (empire, action, locId = 'downtown') => reducer(empire, { type: 'LOC', locId, action })
@@ -303,4 +303,63 @@ test('buildReports returns the same shape for every range', () => {
     assert.ok(Array.isArray(reports.movements.byKind))
     assert.ok(reports.pnl.revenue >= 0)
   }
+})
+
+test('the empire report totals branches from the same sales maths', () => {
+  let empire = buildEmpire()
+  empire = reducer(empire, { type: 'CREATE_LOCATION', locId: 'airport', name: 'Airport Branch' })
+  const now = Date.now()
+  const bounds = rangeBounds('30d', now)
+  const report = buildEmpireReports(empire, '30d', now)
+
+  // One row per location, in empire order, named from its own settings.
+  assert.deepEqual(report.branches.map((row) => row.id), ['downtown', 'riverside', 'airport'])
+  assert.equal(report.branches[0].name, 'Restora · Downtown')
+
+  // Each row is exactly that branch's own summary — never a sibling's.
+  let takings = 0
+  let checks = 0
+  let covers = 0
+  let netSales = 0
+  for (const row of report.branches) {
+    const own = salesSummary(empire.locations[row.id], bounds)
+    assert.equal(row.sales.takings, own.takings)
+    assert.equal(row.sales.checks, own.checks)
+    // The top seller is the branch's highest-revenue line, grouped by item.
+    const byItem = new Map()
+    for (const line of own.lines) {
+      byItem.set(line.menuItemId, (byItem.get(line.menuItemId) || 0) + line.revenue)
+    }
+    if (own.lines.length) {
+      assert.ok(row.top, `${row.id} names a best seller`)
+      assert.equal(
+        row.top.revenue,
+        Math.round(Math.max(...byItem.values()) * 100) / 100,
+        `${row.id} top seller is the revenue leader`,
+      )
+    } else {
+      assert.equal(row.top, null)
+    }
+    takings += own.takings
+    checks += own.checks
+    covers += own.covers
+    netSales += own.netSales
+  }
+
+  // Combined is the sum: average check and margin are derived, not averaged.
+  assert.ok(near(report.combined.takings, takings))
+  assert.equal(report.combined.checks, checks)
+  assert.equal(report.combined.covers, covers)
+  assert.ok(near(report.combined.netSales, netSales))
+  assert.ok(near(report.combined.avgCheck, checks ? report.combined.takings / checks : 0))
+  assert.ok(near(report.combined.grossProfit, report.combined.netSales - report.combined.cogs))
+  assert.ok(near(report.combined.marginPct, report.combined.grossProfit / report.combined.netSales, 0.0001))
+
+  // A window with no tickets reads as zeros on every row, not as NaN.
+  const future = now + 90 * 24 * 60 * 60 * 1000
+  const empty = buildEmpireReports(empire, 'tonight', future)
+  assert.equal(empty.combined.checks, 0)
+  assert.equal(empty.combined.avgCheck, 0)
+  assert.equal(empty.combined.marginPct, 0)
+  assert.ok(empty.branches.every((row) => row.top === null))
 })

@@ -2,14 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { Icon } from '../../../components/Icon'
 import { aiGetConfig, aiSaveConfig, aiTestConfig } from '../../../lib/ai-client'
 import { Card, Field, inputCls } from '../primitives'
+import { HelpGuides } from '../../../components/HelpGuides'
 
 // Tenant AI provider config. Stored server-side (never in the synced state,
 // because guests can read /api/state). Owner / super admin only — the server
 // enforces this regardless of what this screen renders.
-//
-// The key is write-only: we load `hasKey`/`keySource`, never the key itself.
-// Leaving the key field blank on save keeps the stored key; typing replaces
-// it; the explicit "Remove" button clears it and falls back to the server env.
 
 const KEY_SOURCE_LABEL = {
   tenant: 'Saved here',
@@ -32,6 +29,7 @@ function AiSection() {
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [test, setTest] = useState(null)
+  const [mode, setMode] = useState('config') // config | guides
 
   function apply(view) {
     if (!view || view.ok === false) return
@@ -95,6 +93,27 @@ function AiSection() {
 
   return (
     <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-zinc-200 bg-white p-2 shadow-sm">
+        <button
+          type="button"
+          onClick={() => setMode('config')}
+          className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition ${mode === 'config' ? 'bg-orange-50 text-orange-700 ring-1 ring-inset ring-orange-200' : 'text-zinc-600 hover:bg-zinc-50'}`}
+        >
+          <Icon name="sparkles" size={14} /> Configuration
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode('guides')}
+          className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition ${mode === 'guides' ? 'bg-orange-50 text-orange-700 ring-1 ring-inset ring-orange-200' : 'text-zinc-600 hover:bg-zinc-50'}`}
+        >
+          <Icon name="doc" size={14} /> Guides & How-to
+        </button>
+      </div>
+
+      {mode === 'guides' ? (
+        <HelpGuides />
+      ) : (
+      <>
       <Card
         title="AI assistant"
         sub="Connect a language model so the Ops Copilot, dashboard advisors, and guest concierge work. Read-only: the model never changes your data."
@@ -208,9 +227,11 @@ function AiSection() {
           <li>The assistant is <strong>read-only</strong> — it can summarise and advise, but never edits orders, stock, or settings.</li>
           <li>Guests only ever reach the menu scope; staff get the operational view.</li>
           <li>The key is stored per restaurant and is never sent back to the browser.</li>
-          <li>With no key set anywhere, every AI surface stays hidden and the rest of Restora is unchanged.</li>
+          <li>With no key set anywhere, every AI surfaces stay hidden and the rest of Restora is unchanged.</li>
         </ul>
       </Card>
+      </>
+      )}
     </div>
   )
 }

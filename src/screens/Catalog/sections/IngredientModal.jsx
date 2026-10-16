@@ -27,6 +27,7 @@ function IngredientModal({ item, onClose, onSave }) {
     location: item?.location || 'dry',
     notes: item?.notes || '',
     imageUrl: item?.imageUrl || '',
+    counted: item?.counted !== false,
   }))
   const parents = options.filter((option) => option.depth === 0)
   const subs = options.filter((option) => option.depth === 1 && option.parentName === draft.category)
@@ -135,6 +136,21 @@ function IngredientModal({ item, onClose, onSave }) {
             {(state.settings?.stock?.storageLocations || ['dry']).map((id) => <option key={id} value={id}>{id.replace('_', ' ')}</option>)}
           </select>
         </Field>
+        <div className="sm:col-span-2">
+          <span className="mb-1 block text-[11px] font-semibold uppercase tracking-widest text-zinc-500">Stock tracking</span>
+          <label className="flex min-h-11 items-center gap-2 rounded-xl border border-zinc-200 px-3">
+            <input
+              type="checkbox"
+              checked={draft.counted}
+              onChange={(e) => setDraft((d) => ({ ...d, counted: e.target.checked }))}
+              className="h-4 w-4 accent-orange-500"
+            />
+            <span className="text-sm text-zinc-700">Count in stock</span>
+          </label>
+          <span className="mt-1 block text-[11px] text-zinc-500">
+            Not counted: hidden from count sheets, alerts, and stock-flow reports. Receiving still adds stock and cost.
+          </span>
+        </div>
       </div>
       <div className="mt-4 rounded-xl border border-zinc-200 p-3">
         <div className="flex flex-wrap items-start justify-between gap-2">
@@ -239,6 +255,7 @@ function IngredientModal({ item, onClose, onSave }) {
       </div>
       <button
         type="button"
+        data-testid="save-ingredient"
         onClick={() => onSave({
           name: draft.name.trim(),
           sku: draft.sku.trim(),
@@ -256,6 +273,7 @@ function IngredientModal({ item, onClose, onSave }) {
           location: draft.location,
           notes: draft.notes.trim(),
           imageUrl: draft.imageUrl.trim(),
+          counted: draft.counted,
         })}
         className={`${btnPrimary} mt-4`}
       >

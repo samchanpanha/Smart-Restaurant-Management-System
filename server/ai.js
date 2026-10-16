@@ -167,11 +167,13 @@ export function createAiRouter({
     }
   }
 
-  function shopFor(tenantId, locId) {
-    const empire = getState(tenantId) || {}
+  function shopFor(req, locId) {
+    const empire = getState(req.tenantId) || {}
     const locations = empire.locations || {}
-    const shop = locations[locId] || locations.downtown || Object.values(locations)[0]
-    const resolvedLoc = locations[locId] ? locId : (locations.downtown ? 'downtown' : Object.keys(locations)[0] || 'downtown')
+    // A branch-pinned terminal can only ever read its own branch.
+    const wanted = req.scopeLocationId || locId
+    const shop = locations[wanted] || locations.downtown || Object.values(locations)[0]
+    const resolvedLoc = locations[wanted] ? wanted : (locations.downtown ? 'downtown' : Object.keys(locations)[0] || 'downtown')
     return { shop, locId: resolvedLoc }
   }
 
@@ -228,7 +230,7 @@ export function createAiRouter({
     stats.requests += 1
     stats.lastAt = new Date(now()).toISOString()
 
-    const { shop, locId } = shopFor(req.tenantId, typeof body.locId === 'string' ? body.locId : '')
+    const { shop, locId } = shopFor(req, typeof body.locId === 'string' ? body.locId : '')
     const context = buildAiContext(shop, { scope, locId, now: now(), lang: body.lang })
     const { system, messages } = buildMessages({
       kind: 'chat',
@@ -269,7 +271,7 @@ export function createAiRouter({
     stats.requests += 1
     stats.lastAt = new Date(now()).toISOString()
 
-    const { shop, locId } = shopFor(req.tenantId, typeof body.locId === 'string' ? body.locId : '')
+    const { shop, locId } = shopFor(req, typeof body.locId === 'string' ? body.locId : '')
     const context = buildAiContext(shop, { scope, locId, now: now(), lang: body.lang })
     const { system, messages } = buildMessages({ kind, context, lang: body.lang })
 
@@ -305,7 +307,7 @@ export function createAiRouter({
     stats.requests += 1
     stats.lastAt = new Date(now()).toISOString()
 
-    const { shop, locId } = shopFor(req.tenantId, typeof body.locId === 'string' ? body.locId : '')
+    const { shop, locId } = shopFor(req, typeof body.locId === 'string' ? body.locId : '')
     const context = { ...buildAiContext(shop, { scope, locId, now: now(), lang: body.lang }), briefingPhase: phase }
     const { system, messages } = buildMessages({ kind: 'briefing', context, lang: body.lang })
 

@@ -209,7 +209,7 @@ function PurchaseModal({ purchase, defaultSupplierId, onClose, onSave }) {
                       <div className="mt-1 flex items-center gap-2 text-[11px] text-zinc-500">
                         <span>on hand {item.onHand} {item.unit}</span>
                         <span>· par {item.par}</span>
-                        {status && status.tone !== 'ok' && <StatusPill tone={status.tone} size="sm">{status.label}</StatusPill>}
+                        {status && status !== 'ok' && status !== 'not_counted' && <StatusPill tone={status === 'out' ? 'bad' : 'warn'} size="sm">{status === 'out' ? 'Out' : 'Low'}</StatusPill>}
                       </div>
                     )}
                   </td>
@@ -450,7 +450,7 @@ export default function PurchasesScreen() {
 
   const lowStock = (state.inventory || [])
     .map((item) => ({ item, status: stockStatusFor(item, settings), point: reorderPointFor(item, settings) }))
-    .filter((row) => row.item.onHand <= row.point)
+    .filter((row) => row.status !== 'not_counted' && row.item.onHand <= row.point)
     .sort((a, b) => (a.item.onHand / (a.point || 1)) - (b.item.onHand / (b.point || 1)))
 
   function save(draft) {

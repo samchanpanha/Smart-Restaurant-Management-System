@@ -17,9 +17,10 @@ import { BuyingReport } from './sections/BuyingReport.jsx'
 import { StockFlowReport } from './sections/StockFlowReport.jsx'
 import { TopLowReport } from './sections/TopLowReport.jsx'
 import { DeliveryReport } from './sections/DeliveryReport.jsx'
+import { BranchReport } from './sections/BranchReport.jsx'
 
 function ReportsScreen() {
-  const { state } = useRestora()
+  const { state, locations } = useRestora()
   const { lang, dict } = useI18n()
   const rep = dict.reports || {}
   const [tab, setTab] = useState('sales')
@@ -41,6 +42,7 @@ function ReportsScreen() {
 
   const reportTabLabels = {
     sales: rep.salesTab || 'Sales',
+    branches: lang === 'km' ? 'គ្រប់សាខា' : lang === 'zh' ? '全部分店' : 'All branches',
     buying: rep.buyingTab || (lang === 'km' ? 'ការទិញចូល' : lang === 'zh' ? '采购进货' : 'Buying'),
     stockflow: rep.stockflowTab || (lang === 'km' ? 'ចលនាស្តុក' : lang === 'zh' ? '库存流向' : 'Stock flow'),
     pl: lang === 'km' ? 'ចំណេញ និងខាត' : lang === 'zh' ? '损益表' : 'Profit & loss',
@@ -99,7 +101,7 @@ function ReportsScreen() {
       </p>
 
       <div className="flex gap-1.5 overflow-x-auto rounded-xl bg-[var(--color-ink-900)] p-1.5 ring-1 ring-inset ring-[var(--color-ink-700)]" role="tablist" aria-label="Reports">
-        {TABS.map((t) => (
+        {TABS.filter((t) => t.id !== 'branches' || locations.length > 1).map((t) => (
           <button
             key={t.id}
             role="tab"
@@ -117,6 +119,7 @@ function ReportsScreen() {
       </div>
 
       {tab === 'sales' && <SalesReport range={range} />}
+      {tab === 'branches' && <BranchReport range={range} />}
       {tab === 'buying' && <BuyingReport range={range} />}
       {tab === 'stockflow' && <StockFlowReport range={range} />}
       {tab === 'pl' && <ProfitLossReport range={range} />}

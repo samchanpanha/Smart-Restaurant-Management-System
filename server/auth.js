@@ -17,7 +17,8 @@
 
 import crypto from 'node:crypto'
 import express from 'express'
-import { db } from './db.js'
+import { db, loadSnapshot } from './db.js'
+import { buildEmpire } from '../src/lib/reducer.js'
 
 // ─── Schema ──────────────────────────────────────────────────────
 
@@ -50,6 +51,7 @@ db.exec(`
     role_id TEXT NOT NULL,
     is_super_admin INTEGER NOT NULL DEFAULT 0,
     status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'disabled')),
+    location_id TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     FOREIGN KEY (owner_id) REFERENCES auth_owners (id) ON DELETE CASCADE,
@@ -65,6 +67,12 @@ db.exec(`
     FOREIGN KEY (user_id) REFERENCES auth_users (id) ON DELETE CASCADE
   );
 `)
+
+// Branch assignment arrived after the first accounts shipped; add the
+// column in place on existing databases (NULL = every branch).
+if (!db.pragma('table_info(auth_users)').some((column) => column.name === 'location_id')) {
+  db.exec('ALTER TABLE auth_users ADD COLUMN location_id TEXT')
+}
 
 // ─── Vocabulary ──────────────────────────────────────────────────
 
@@ -213,6 +221,7 @@ const q = {
     (id, owner_id, email, name, password_hash, role_id, is_super_admin, status, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
   updateUser: db.prepare('UPDATE auth_users SET name = ?, role_id = ?, status = ?, updated_at = ? WHERE id = ?'),
+  setUserLocation: db.prepare('UPDATE auth_users SET location_id = ?, updated_at = ? WHERE id = ?'),
   updateUserPassword: db.prepare('UPDATE auth_users SET password_hash = ?, updated_at = ? WHERE id = ?'),
   deleteUser: db.prepare('DELETE FROM auth_users WHERE id = ?'),
   ownerUsers: db.prepare('SELECT * FROM auth_users WHERE owner_id = ? ORDER BY created_at ASC'),
@@ -262,6 +271,7 @@ function userView(row) {
     role: roleView(q.roleById.get(row.role_id)),
     isSuperAdmin: Boolean(row.is_super_admin),
     status: row.status,
+    locationId: row.location_id || null,
     createdAt: row.created_at,
   }
 }
@@ -277,7 +287,28 @@ function publicUser(user, owner) {
     role,
     owner: ownerView(owner),
     screens: role?.screens || [],
+    locationId: user.location_id || null,
   }
+}
+
+// ─── Branch assignment ───────────────────────────────────────────
+// A user can be pinned to one branch of their tenant (NULL = every
+// branch). The pin must name a branch that exists in the tenant's live
+// snapshot, so an assignment can never point at a branch that was never
+// created — or was removed.
+
+function branchExists(ownerId, locationId) {
+  const state = loadSnapshot(ownerId)?.state || buildEmpire()
+  return Object.hasOwn(state.locations || {}, locationId)
+}
+
+// null / '' / 'all' clears the pin; an unknown branch reads as undefined
+// so callers can answer 400.
+function readBranchAssignment(ownerId, raw) {
+  if (raw === undefined || raw === null) return null
+  const value = String(raw).trim()
+  if (!value || value === 'all') return null
+  return branchExists(ownerId, value) ? value : undefined
 }
 
 // ─── Sessions ────────────────────────────────────────────────────
@@ -648,9 +679,12 @@ export function createAuthRouter() {
     const role = roleForOwner(String(roleId ?? ''), ownerId) || q.roleById.get(ROLE_BY_KEY.server.id)
     if (!role) return badRequest(res, 'a valid role is required')
     if (!canGrantRole(req.auth.user, role)) return res.status(403).json({ error: 'you cannot grant a role broader than your own' })
+    const locationId = readBranchAssignment(ownerId, req.body?.locationId)
+    if (locationId === undefined) return badRequest(res, 'that branch does not exist')
     const created = nowIso()
     const id = uid('user')
     q.insertUser.run(id, ownerId, cleanEmail, cleanName, hashPassword(String(password ?? '')), role.id, 0, 'active', created, created)
+    if (locationId) q.setUserLocation.run(locationId, created, id)
     return res.status(201).json({ user: userView(q.userById.get(id)) })
   })
 
@@ -679,7 +713,14 @@ export function createAuthRouter() {
     const status = req.body?.status !== undefined ? String(req.body.status) : user.status
     if (!['active', 'disabled'].includes(status)) return badRequest(res, 'status must be active or disabled')
     if (user.id === req.auth.user.id && status === 'disabled') return badRequest(res, 'you cannot disable yourself')
+    let locationId = user.location_id || null
+    if (req.body?.locationId !== undefined) {
+      const requested = readBranchAssignment(user.owner_id || targetOwnerId(req), req.body.locationId)
+      if (requested === undefined) return badRequest(res, 'that branch does not exist')
+      locationId = requested
+    }
     q.updateUser.run(name, roleId, status, nowIso(), user.id)
+    if (locationId !== (user.location_id || null)) q.setUserLocation.run(locationId, nowIso(), user.id)
     if (req.body?.password) {
       const pass = String(req.body.password)
       if (pass.length < MIN_PASSWORD) return badRequest(res, `password must be at least ${MIN_PASSWORD} characters`)

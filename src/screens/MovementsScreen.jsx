@@ -50,10 +50,12 @@ function CountStockModal({ onClose, onSave }) {
   ))
   const [query, setQuery] = useState('')
 
-  const rows = (state.inventory || []).filter((item) => (
+  const notCounted = (state.inventory || []).filter((item) => item.counted === false).length
+  const rows = (state.inventory || []).filter((item) => item.counted !== false && (
     !query || item.name.toLowerCase().includes(query.toLowerCase()) || String(item.sku || '').toLowerCase().includes(query.toLowerCase())
   ))
   const changed = (state.inventory || []).filter((item) => {
+    if (item.counted === false) return false
     const value = Number(counts[item.id])
     return String(counts[item.id] ?? '') !== '' && Number.isFinite(value) && value !== item.onHand
   })
@@ -81,6 +83,9 @@ function CountStockModal({ onClose, onSave }) {
         <input className={inputCls} placeholder={mv.searchMovements || 'Search items…'} value={query} onChange={(e) => setQuery(e.target.value)} />
         <StatusPill tone={changed.length ? 'warn' : 'ok'} size="sm">{changed.length} variance(s)</StatusPill>
       </div>
+      {notCounted > 0 && (
+        <p className="mt-2 text-[11px] text-zinc-500">Not-counted items are hidden from this sheet.</p>
+      )}
       <div className="mt-3 max-h-[420px] overflow-auto rounded-xl border border-zinc-200">
         <table className="w-full">
           <thead className="sticky top-0 bg-zinc-50">

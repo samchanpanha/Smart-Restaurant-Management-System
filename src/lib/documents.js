@@ -346,11 +346,11 @@ export function buildShiftReport(shop, { range = 'tonight', now = Date.now() } =
     0,
   )
   const negativeStock = (shop.inventory || [])
-    .filter((item) => Number(item.onHand) < 0)
+    .filter((item) => item.counted !== false && Number(item.onHand) < 0)
     .map((item) => ({ name: item.name, onHand: item.onHand, unit: item.unit, value: roundMoney(Math.abs(item.onHand) * (item.lastCost || 0)) }))
   const stockExceptions = (shop.inventory || [])
     .map((item) => ({ item, status: stockStatusFor(item, shop.settings) }))
-    .filter((row) => row.status !== 'ok')
+    .filter((row) => row.status !== 'ok' && row.status !== 'not_counted')
 
   const bumped = (shop.orders || []).flatMap((order) => order.items || [])
     .filter((item) => item.status === 'bump' && item.firedAt && item.bumpedAt)

@@ -89,9 +89,13 @@ const settle = async (ms = 40) => {
 const text = () => document.body.textContent || ''
 // Lazy screens resolve through a Suspense fallback ("Opening…"). Poll until it
 // clears so a slow chunk (e.g. Reports, which lazy-loads its charts) can't flake.
-const flush = async () => {
-  for (let i = 0; i < 100 && text().includes('Opening…'); i++) {
-    await act(async () => { await new Promise((resolve) => dom.window.setTimeout(resolve, 0)) })
+// Real-time budget, not a fixed tick count: under a parallel test suite a cold
+// chunk once outlasted 100 ticks.
+const flush = async (budgetMs = 4000) => {
+  const deadline = Date.now() + budgetMs
+  await act(async () => { await new Promise((resolve) => dom.window.setTimeout(resolve, 0)) })
+  while (text().includes('Opening…') && Date.now() < deadline) {
+    await act(async () => { await new Promise((resolve) => dom.window.setTimeout(resolve, 10)) })
   }
 }
 const $$ = (selector) => [...document.querySelectorAll(selector)]
@@ -277,6 +281,67 @@ test('the movements screen can open the count sheet', async () => {
   assert.ok(text().includes('Count the store room'), 'count modal opened')
   const cancel = $$('button').find((entry) => entry.textContent.trim() === 'Cancel')
   act(() => { cancel.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+})
+
+test('a not-counted ingredient drops off count sheets and the flag sticks', async () => {
+  await freshApp()
+
+  const openCountSheet = () => {
+    const button = $$('button').find((entry) => (entry.textContent || '').includes('Count stock'))
+    act(() => { button.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  }
+  const closeDialog = () => {
+    const close = $$('button').find((entry) => entry.getAttribute('aria-label') === 'Close dialog')
+      || $$('button').find((entry) => entry.textContent.trim() === 'Cancel')
+    act(() => { close.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  }
+
+  // Control: the bun is on the count sheet before any flag.
+  clickNav('Stock movements')
+  await settle(60)
+  await flush()
+  openCountSheet()
+  await settle()
+  let dialog = document.querySelector('[role="dialog"]')
+  assert.ok(dialog.textContent.includes('SKU-1001'), 'the bun starts on the count sheet')
+  closeDialog()
+  await settle()
+
+  // Flag it through the catalog editor.
+  clickNav('Catalog')
+  await settle(60)
+  await flush()
+  const ingredientsTab = $$('[role="tab"]').find((entry) => (entry.textContent || '').includes('Ingredients'))
+  act(() => { ingredientsTab.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+  const bunRow = () => [...panel().querySelectorAll('tr')].find((tr) => (tr.textContent || '').includes('SKU-1001'))
+  act(() => { bunRow().querySelector('button').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+  dialog = document.querySelector('[role="dialog"]')
+  const checkbox = dialog.querySelector('input[type="checkbox"]')
+  assert.equal(checkbox.checked, true, 'items start counted')
+  act(() => { checkbox.click() })
+  act(() => { dialog.querySelector('[data-testid="save-ingredient"]').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+
+  // Reopening the editor proves the flag round-trips through save.
+  act(() => { bunRow().querySelector('button').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+  dialog = document.querySelector('[role="dialog"]')
+  assert.equal(dialog.querySelector('input[type="checkbox"]').checked, false, 'the flag persisted')
+  closeDialog()
+  await settle()
+
+  // The count sheet hides it and explains why.
+  clickNav('Stock movements')
+  await settle(60)
+  openCountSheet()
+  await settle()
+  dialog = document.querySelector('[role="dialog"]')
+  assert.equal(dialog.textContent.includes('SKU-1001'), false, 'the bun is hidden from the count sheet')
+  assert.ok(text().includes('Not-counted items are hidden from this sheet.'), 'the sheet says why rows are missing')
+  closeDialog()
   await settle()
 })
 
@@ -477,6 +542,224 @@ test('the AI section configures a provider instead of using the draft save bar',
   assert.ok(document.querySelector('[data-testid="ai-config-key"]'), 'the key field renders')
   assert.ok(document.querySelector('[data-testid="ai-config-save"]'), 'the section has its own save button')
   assert.equal(document.querySelector('[data-testid="section-save-status"]'), null, 'the draft save bar is hidden for AI')
+})
+
+test('a host owner adds a branch from Settings and opens it', async () => {
+  await freshApp()
+  clickNav('Settings')
+  await settle()
+  await flush()
+
+  const branchesTab = [...document.querySelectorAll('[aria-label="Settings sections"] button')]
+    .find((entry) => (entry.textContent || '').includes('Manage multiple locations/branches'))
+  assert.ok(branchesTab, 'Settings lists a Branches section')
+  act(() => { branchesTab.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+
+  assert.ok(document.querySelector('[data-testid="branch-downtown"]'), 'the seeded Downtown branch is listed')
+  assert.ok(document.querySelector('[data-testid="branch-riverside"]'), 'the seeded Riverside branch is listed')
+  assert.equal(document.querySelector('[data-testid="section-save-status"]'), null, 'branches has no draft save bar')
+
+  setValue(document.querySelector('[data-testid="branch-name"]'), 'Airport')
+  await settle()
+  assert.equal(document.querySelector('[data-testid="branch-id"]').value, 'airport', 'the id follows the name')
+  act(() => { document.querySelector('[data-testid="create-branch"]').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+
+  assert.ok(document.querySelector('[data-testid="branch-airport"]'), 'the new branch is listed')
+  assert.equal(
+    document.querySelector('[data-testid="branch-airport"]').getAttribute('aria-current'),
+    'true',
+    'the terminal switches to the new branch',
+  )
+  assert.ok(text().includes('Open here'), 'the current branch keeps its English badge (mirrored when translated)')
+})
+
+test('a host owner removes a branch with an inline confirm and the workspace follows', async () => {
+  await freshApp()
+  clickNav('Settings')
+  await settle()
+  await flush()
+
+  const branchesTab = [...document.querySelectorAll('[aria-label="Settings sections"] button')]
+    .find((entry) => (entry.textContent || '').includes('Manage multiple locations/branches'))
+  assert.ok(branchesTab, 'Settings lists a Branches section')
+  act(() => { branchesTab.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+
+  // Two-step confirm: the first click arms, Keep disarms.
+  assert.ok(document.querySelector('[data-testid="branch-riverside"]'), 'Riverside exists before removal')
+  act(() => { document.querySelector('[data-testid="remove-branch-riverside"]').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+  assert.ok(document.querySelector('[data-testid="confirm-remove-riverside"]'), 'the confirm step appears')
+  act(() => { document.querySelector('[data-testid="keep-branch-riverside"]').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+  assert.equal(document.querySelector('[data-testid="confirm-remove-riverside"]'), null, 'Keep disarms the confirm')
+  assert.ok(document.querySelector('[data-testid="branch-riverside"]'), 'Riverside survived Keep')
+
+  // Remove for real: only that branch drops, and the last one can never go.
+  act(() => { document.querySelector('[data-testid="remove-branch-riverside"]').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+  act(() => { document.querySelector('[data-testid="confirm-remove-riverside"]').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+  assert.equal(document.querySelector('[data-testid="branch-riverside"]'), null, 'Riverside is gone')
+  assert.ok(document.querySelector('[data-testid="branch-downtown"]'), 'Downtown stays')
+  assert.equal(
+    document.querySelector('[data-testid="remove-branch-downtown"]').disabled,
+    true,
+    'the last branch cannot be removed',
+  )
+
+  // Removing the branch the terminal stands on moves it to the first survivor.
+  setValue(document.querySelector('[data-testid="branch-name"]'), 'Airport')
+  await settle()
+  act(() => { document.querySelector('[data-testid="create-branch"]').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+  assert.equal(document.querySelector('[data-testid="branch-airport"]').getAttribute('aria-current'), 'true', 'the terminal is on the new branch')
+  act(() => { document.querySelector('[data-testid="remove-branch-airport"]').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+  act(() => { document.querySelector('[data-testid="confirm-remove-airport"]').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+  assert.equal(document.querySelector('[data-testid="branch-airport"]'), null, 'Airport is gone')
+  assert.equal(
+    document.querySelector('[data-testid="branch-downtown"]').getAttribute('aria-current'),
+    'true',
+    'the terminal landed on the first remaining branch',
+  )
+})
+
+test("the owner pushes one branch's menu to the others from Settings", async () => {
+  await freshApp()
+
+  // Downtown gets a dish the other branch has never seen.
+  clickNav('Menu & Recipes')
+  await settle()
+  await flush()
+  act(() => { document.querySelector('[data-testid="add-menu-item"]').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+  setValue(document.querySelector('[data-testid="new-item-name"]'), 'Airport Exclusive')
+  setValue(document.querySelector('[data-testid="new-item-category"]'), 'Mains')
+  setValue(document.querySelector('[data-testid="new-item-price"]'), '9')
+  await settle()
+  act(() => { document.querySelector('[data-testid="create-menu-item"]').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+  setValue(document.querySelector('[aria-label="Search dishes"]'), 'Airport Exclusive')
+  await settle()
+  assert.ok(text().includes('Airport Exclusive'), 'the new dish is on the Downtown menu')
+
+  // Settings → Branches: the push is a two-step confirm like every other
+  // destructive action, then reports how many branches took the menu.
+  clickNav('Settings')
+  await settle()
+  await flush()
+  const branchesTab = [...document.querySelectorAll('[aria-label="Settings sections"] button')]
+    .find((entry) => (entry.textContent || '').includes('Manage multiple locations/branches'))
+  act(() => { branchesTab.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+
+  assert.ok(document.querySelector('[data-testid="push-menu"]'), 'the push card is offered while another branch exists')
+  act(() => { document.querySelector('[data-testid="push-menu"]').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+  assert.ok(document.querySelector('[data-testid="confirm-push-menu"]'), 'the push asks before replacing other menus')
+  act(() => { document.querySelector('[data-testid="confirm-push-menu"]').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+  assert.ok(text().includes('Menu pushed to 1 branch.'), 'the status reports the push (English mirror while translated)')
+
+  // The receiver now carries the pushed dish: switch to Riverside and look.
+  const riversideRow = document.querySelector('[data-testid="branch-riverside"]')
+  act(() => { riversideRow.querySelector('button').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+  assert.equal(document.querySelector('[data-testid="branch-riverside"]').getAttribute('aria-current'), 'true', 'the terminal switched to Riverside')
+
+  clickNav('Menu & Recipes')
+  await settle()
+  await flush()
+  setValue(document.querySelector('[aria-label="Search dishes"]'), 'Airport Exclusive')
+  await settle()
+  assert.ok(text().includes('Airport Exclusive'), 'the pushed dish landed on the Riverside menu')
+})
+
+test('the all-branches report compares locations and switches between them', async () => {
+  await freshApp()
+  clickNav('Reports')
+  await settle()
+  await flush()
+  const reportTab = (label) => $$('[aria-label="Reports"] [role="tab"]').find((tab) => (tab.textContent || '').includes(label))
+
+  const allBranches = reportTab('All branches')
+  assert.ok(allBranches, 'the All branches tab is listed while the empire has more than one branch')
+  act(() => { allBranches.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+
+  const rows = $$('[data-testid^="branch-report-"]')
+  assert.equal(rows.length, 2, 'one row per branch')
+  const copy = text()
+  assert.ok(copy.includes('Branch comparison'), 'the comparison card renders')
+  assert.ok(copy.includes('Combined'), 'the combined totals row renders')
+  for (const label of ['Net sales', 'Checks', 'Avg check', 'Covers', 'Top seller']) {
+    assert.ok(copy.includes(label), `the table keeps its ${label} column (English mirror while translated)`)
+  }
+
+  // The row for the open branch is marked — Downtown, on a fresh boot.
+  const openRow = rows.find((row) => row.getAttribute('aria-current') === 'true')
+  assert.ok(openRow, 'the open branch is marked')
+  assert.equal(openRow.getAttribute('data-testid'), 'branch-report-downtown')
+
+  // Picking another branch moves the whole terminal there.
+  const otherRow = rows.find((row) => row !== openRow)
+  const otherId = otherRow.getAttribute('data-testid')
+  act(() => { otherRow.querySelector('button').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+  await settle()
+  assert.equal(
+    document.querySelector(`[data-testid="${otherId}"]`).getAttribute('aria-current'),
+    'true',
+    'the picked branch becomes the open one',
+  )
+})
+
+test('the Help center hands a question to the Ops Copilot', async () => {
+  const originalFetch = globalThis.fetch
+  const calls = []
+  globalThis.fetch = async (url) => {
+    const target = String(url)
+    calls.push(target)
+    if (target.includes('/api/ai/status')) {
+      return { ok: true, json: async () => ({ configured: true, provider: 'openai', model: 'gpt-4o-mini' }) }
+    }
+    if (target.includes('/api/ai/')) {
+      return { ok: true, json: async () => ({ ok: true, reply: 'Open the floor and tap a free table.' }) }
+    }
+    // Anything else (state, actions) fails — the app stays in local demo mode.
+    return { ok: false, status: 404, json: async () => ({}) }
+  }
+  try {
+    await freshApp()
+    clickNav('Settings')
+    await settle()
+
+    const aiTab = [...document.querySelectorAll('[aria-label="Settings sections"] button')]
+      .find((entry) => (entry.textContent || '').includes('Provider, model, API key'))
+    act(() => { aiTab.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+    await settle()
+
+    const guidesTab = [...document.querySelectorAll('button')]
+      .find((entry) => (entry.textContent || '').includes('Guides & How-to'))
+    assert.ok(guidesTab, 'the AI section offers a Guides tab')
+    act(() => { guidesTab.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+    await settle()
+
+    const prompt = [...document.querySelectorAll('button')]
+      .find((entry) => (entry.textContent || '').includes('What needs attention right now?'))
+    assert.ok(prompt, 'the help center lists a quick prompt')
+    act(() => { prompt.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+    await settle(80)
+    await flush()
+
+    assert.ok(text().includes('What needs attention right now?'), 'the question reached the copilot')
+    assert.ok(calls.some((target) => target.includes('/api/ai/chat')), 'the copilot asked the AI')
+  } finally {
+    globalThis.fetch = originalFetch
+  }
 })
 
 test('the setup wizard steps through sections and publishes on finish', async () => {

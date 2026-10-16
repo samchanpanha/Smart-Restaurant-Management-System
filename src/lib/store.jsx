@@ -5,7 +5,7 @@
 // shop — so every module is location-scoped with zero screen changes.
 // Actions travel wrapped ({ type:'LOC', locId, action }) to the server,
 // which runs the SAME empire reducer. Owner sees the switcher + compare;
-// staff terminals stay pinned (?loc= kiosk param or downtown).
+// staff terminals stay pinned (?loc= kiosk param or the first branch).
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { ClockProvider } from './clock'
@@ -22,10 +22,12 @@ import {
 // Re-exported so screens keep importing from one place.
 export { getAlerts, getDashboard, quoteWait, tableName } from './reducer'
 
-export const LOCATIONS = [
-  { id: 'downtown', short: 'Downtown' },
-  { id: 'riverside', short: 'Riverside' },
-]
+// Branch helpers read the live empire — a location created at runtime is a
+// first-class citizen, so nothing may hard-code the seed list. The fallback
+// only covers a malformed empire (the reducer always keeps at least one shop).
+function firstLocationId(empire) {
+  return Object.keys(empire?.locations || {})[0] || 'downtown'
+}
 
 const STORAGE_KEY = 'restora-v1'
 const WORKSPACE_KEY = 'restora-workspace-v1'
@@ -59,16 +61,19 @@ function getClientId() {
   }
 }
 
-// Kiosk mode: /?role=kitchen&screen=kitchen&loc=riverside, /?guest=t14
-function kioskParams() {
+// Kiosk mode: /?role=kitchen&screen=kitchen&loc=riverside, /?guest=t14.
+// `loc` is validated against the empire this terminal booted with, so a kiosk
+// can pin itself to any branch — not just the seeded two.
+function kioskParams(empire) {
   try {
     const q = new URLSearchParams(window.location.search)
     const role = q.get('role')
     const loc = q.get('loc')
+    const known = new Set(Object.keys(empire?.locations || {}))
     return {
       role: role && ROLE_NAV[role] ? role : null,
       screen: q.get('screen') || null,
-      loc: loc && LOCATIONS.some((l) => l.id === loc) ? loc : null,
+      loc: loc && known.has(loc) ? loc : null,
       guest: q.get('guest') || null,
     }
   } catch {
@@ -78,8 +83,8 @@ function kioskParams() {
 
 function locOfTable(empire, tableId) {
   if (!tableId) return null
-  for (const { id } of LOCATIONS) {
-    if (empire.locations[id]?.tables.some((t) => t.id === tableId)) return id
+  for (const [id, shop] of Object.entries(empire.locations || {})) {
+    if (shop?.tables?.some((t) => t.id === tableId)) return id
   }
   return null
 }
@@ -93,16 +98,19 @@ function initialScreen(kiosk) {
 
 // Tabs survive a reload (session-only storage); kiosk terminals always boot
 // fresh so a shared tablet never inherits the last operator's workspace.
-function loadWorkspace(kiosk) {
+// Tabs parked on a branch that no longer exists land on the first live one.
+function loadWorkspace(kiosk, empire) {
   if (kiosk.role) return null
   try {
     const raw = sessionStorage.getItem(WORKSPACE_KEY)
     if (!raw) return null
     const restored = normalizeWorkspace(JSON.parse(raw))
     if (!restored) return null
+    const known = new Set(Object.keys(empire?.locations || {}))
+    const fallback = firstLocationId(empire)
     const tabs = restored.tabs
       .filter((tab) => !tab.screen || VALID_SCREENS.has(tab.screen))
-      .map((tab) => (LOCATIONS.some((l) => l.id === tab.locId) ? tab : { ...tab, locId: 'downtown' }))
+      .map((tab) => (known.has(tab.locId) ? tab : { ...tab, locId: fallback }))
     if (!tabs.length) return null
     return { ...restored, tabs }
   } catch {
@@ -144,20 +152,24 @@ function withOwner(path, params = {}) {
 // never shows another shift's numbers while it syncs.
 export function RestoraProvider({ children, waitForServer = true }) {
   const empireInit = useMemo(() => loadPersisted() || buildEmpire(), [])
-  const kiosk = useMemo(kioskParams, [])
+  const kiosk = useMemo(() => kioskParams(empireInit), [empireInit])
   const [empire, rawDispatch] = useReducer(reducer, empireInit)
+  // A question handed to the Ops Copilot from somewhere else (the Help center,
+  // a dashboard card). The Assistant screen consumes it on mount, then clears
+  // it — so the bridge works whether or not its tab was already open.
+  const [aiPrompt, setAiPrompt] = useState(null)
   const [workspace, workspaceDispatch] = useReducer(
     workspaceReducer,
     null,
-    () => loadWorkspace(kiosk) || createWorkspace(
+    () => loadWorkspace(kiosk, empireInit) || createWorkspace(
       initialScreen(kiosk),
-      locOfTable(empireInit, kiosk.guest) || kiosk.loc || 'downtown',
+      locOfTable(empireInit, kiosk.guest) || kiosk.loc || firstLocationId(empireInit),
       uid('tab'),
     ),
   )
   const activeTab = activeWorkspaceTab(workspace)
   const { tabs, activeTabId } = workspace
-  const locId = activeTab?.locId || 'downtown'
+  const locId = activeTab?.locId || firstLocationId(empire)
   // A blank ("New tab") tab keeps its null screen all the way to the router,
   // which is what puts the new-tab picker on screen.
   const screen = activeTab ? (activeTab.screen || null) : 'floor'
@@ -194,6 +206,15 @@ export function RestoraProvider({ children, waitForServer = true }) {
     }
     openTab(nextScreen, options)
   }, [openTab, workspace])
+  // Send a question to the Ops Copilot: focus (or open) its tab and leave the
+  // text for the screen to ask. Read-only like every other AI surface.
+  const askAi = useCallback((text) => {
+    const question = String(text || '').trim()
+    if (!question) return
+    setAiPrompt(question)
+    openScreenInTab('assistant')
+  }, [openScreenInTab])
+  const clearAiPrompt = useCallback(() => setAiPrompt(null), [])
   const activateTab = useCallback((tabId) => {
     workspaceDispatch({ type: 'ACTIVATE_TAB', tabId })
   }, [])
@@ -247,18 +268,45 @@ export function RestoraProvider({ children, waitForServer = true }) {
   const setSelectedOrderId = useCallback((orderId) => setTabContext({ orderId }), [setTabContext])
 
   const state = useMemo(
-    () => empire.locations[locId] || empire.locations.downtown,
+    () => empire.locations[locId] || empire.locations[firstLocationId(empire)],
     [empire, locId],
   )
   // Alerts are derived once per state change and shared with the shell and
   // tab strip, instead of every chrome component re-running the scan.
   const alerts = useMemo(() => getAlerts(state), [state])
+  // The empire's shops, in insertion order, as the UI needs them (switchers,
+  // dashboards, branch management). Derived from state so a branch created at
+  // runtime shows up everywhere without a hard-coded list.
+  const locations = useMemo(
+    () => Object.entries(empire.locations || {}).map(([id, shop]) => ({
+      id,
+      short: shop?.settings?.locationShort || shop?.settings?.restaurantName || id,
+    })),
+    [empire],
+  )
+  const locationIdsRef = useRef(locations.map((location) => location.id))
+  locationIdsRef.current = locations.map((location) => location.id)
   const emperorRef = useRef(empire)
   emperorRef.current = empire
   const locShopRef = useCallback(
-    (targetLocId) => emperorRef.current.locations[targetLocId] || emperorRef.current.locations.downtown,
+    (targetLocId) => emperorRef.current.locations[targetLocId] || emperorRef.current.locations[firstLocationId(emperorRef.current)],
     [],
   )
+
+  // A branch removed here or on another terminal must not leave a tab
+  // pointing at a shop that no longer exists: every stale tab, active or
+  // background, lands on the first live branch.
+  useEffect(() => {
+    if (!tabs.length) return
+    const known = new Set(Object.keys(empire.locations || {}))
+    const fallback = firstLocationId(empire)
+    for (const tab of tabs) {
+      if (!known.has(tab.locId)) {
+        workspaceDispatch({ type: 'REMAP_LOCATION', from: tab.locId, to: fallback })
+        return
+      }
+    }
+  }, [empire, tabs])
 
   // link: { mode: 'local'|'server', status: 'starting'|'live'|'offline'|'local' }
   const [link, setLinkState] = useState({ mode: 'local', status: 'starting' })
@@ -486,7 +534,45 @@ export function RestoraProvider({ children, waitForServer = true }) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: { ...action, _lid: lid }, clientId }),
-        }).catch(() => setLink((l) => ({ ...l, status: 'offline' })))
+        })
+          .then(async (res) => {
+            const json = await res.json().catch(() => ({}))
+            if (!res.ok) {
+              flashNotice('Server kept truth. Resynced.')
+              resync()
+            } else if (typeof json.seq === 'number') {
+              seqRef.current = Math.max(seqRef.current, json.seq)
+            }
+          })
+          .catch(() => setLink((l) => ({ ...l, status: 'offline' })))
+        return
+      }
+      // Empire-level branch management: apply locally, then sync the whole
+      // empire snapshot (no LOC wrapper — the target shop may not exist yet).
+      if (action.type === 'CREATE_LOCATION' || action.type === 'REMOVE_LOCATION') {
+        rawDispatch(action)
+        if (!linked) return
+        const lid = uid('l')
+        lidAt.current.set(lid, Date.now())
+        fetch(withOwner('/api/actions'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: { ...action, _lid: lid }, clientId }),
+        })
+          .then(async (res) => {
+            const json = await res.json().catch(() => ({}))
+            if (!res.ok) {
+              flashNotice('Server kept truth. Resynced.')
+              resync()
+            } else if (typeof json.seq === 'number') {
+              seqRef.current = Math.max(seqRef.current, json.seq)
+              setLink({ mode: 'server', status: 'live' })
+            }
+          })
+          .catch(() => {
+            setLink((l) => ({ ...l, status: 'offline' }))
+            flashNotice('Link lost — changes stay on this terminal until reconnect.')
+          })
         return
       }
       sendAction(locRef.current, action)
@@ -507,7 +593,7 @@ export function RestoraProvider({ children, waitForServer = true }) {
   const dispatchEverywhere = useCallback(
     (action) => {
       if (!action || typeof action.type !== 'string') return
-      for (const location of LOCATIONS) sendAction(location.id, action)
+      for (const id of locationIdsRef.current) sendAction(id, action)
     },
     [sendAction],
   )
@@ -627,6 +713,44 @@ export function RestoraProvider({ children, waitForServer = true }) {
     return () => clearInterval(t)
   }, [])
 
+  // Create a branch (host/owner) and immediately switch this terminal to it.
+  const createLocation = useCallback((locId, name) => {
+    if (!locId) return
+    dispatch({ type: 'CREATE_LOCATION', locId, name })
+    setLocId(locId)
+  }, [dispatch, setLocId])
+
+  // Remove a branch (host/owner). The reducer refuses to drop the last shop;
+  // every tab parked on the branch — here or on another terminal, via the
+  // stale-tab effect — lands on the first remaining one.
+  const removeLocation = useCallback((targetLocId) => {
+    const ids = locationIdsRef.current
+    if (!targetLocId || !ids.includes(targetLocId) || ids.length <= 1) return
+    dispatch({ type: 'REMOVE_LOCATION', locId: targetLocId })
+    const fallback = ids.find((id) => id !== targetLocId)
+    if (fallback) workspaceDispatch({ type: 'REMAP_LOCATION', from: targetLocId, to: fallback })
+  }, [dispatch])
+
+  // Menu across branches: copy the current branch's menu and category tree to
+  // every other branch. Each target travels as its own shop action, so the
+  // server log, SSE terminals and guests all agree. Recipes stay per branch —
+  // they follow this branch's suppliers and stock, not the menu push.
+  const pushMenuToAllBranches = useCallback((sourceLocId) => {
+    const source = emperorRef.current.locations?.[sourceLocId]
+    if (!source?.menu?.length) return 0
+    let pushed = 0
+    for (const id of locationIdsRef.current) {
+      if (id === sourceLocId) continue
+      sendAction(id, {
+        type: 'REPLACE_MENU',
+        menu: source.menu,
+        categories: source.categories || [],
+      })
+      pushed += 1
+    }
+    return pushed
+  }, [sendAction])
+
   const value = useMemo(
     () => ({
       state, empire, dispatch, role, setRole, screen, setScreen, alerts,
@@ -636,9 +760,11 @@ export function RestoraProvider({ children, waitForServer = true }) {
       tabCtx: activeCtx, setTabCtx: setTabContext,
       selectedTableId, setSelectedTableId, selectedDishId, setSelectedDishId,
       selectedOrderId, setSelectedOrderId, locId, setLocId, link, resync, notice,
+      locations, createLocation, removeLocation, pushMenuToAllBranches,
+      aiPrompt, askAi, clearAiPrompt,
       settings: state.settings, dispatchTo, dispatchEverywhere, issueDocument, templateForKind,
     }),
-    [state, empire, dispatch, role, screen, setScreen, alerts, tabs, activeTabId, openTab, openScreenInTab, activateTab, closeTab, reorderTab, renameTab, togglePinTab, duplicateTab, closeOtherTabs, closeRightTabs, reopenClosedTab, workspace.closed.length, saveTabScroll, activeCtx, setTabContext, selectedTableId, setSelectedTableId, selectedDishId, setSelectedDishId, selectedOrderId, setSelectedOrderId, locId, setLocId, link, resync, notice, dispatchTo, dispatchEverywhere, issueDocument, templateForKind],
+    [state, empire, dispatch, role, screen, setScreen, alerts, tabs, activeTabId, openTab, openScreenInTab, activateTab, closeTab, reorderTab, renameTab, togglePinTab, duplicateTab, closeOtherTabs, closeRightTabs, reopenClosedTab, workspace.closed.length, saveTabScroll, activeCtx, setTabContext, selectedTableId, setSelectedTableId, selectedDishId, setSelectedDishId, selectedOrderId, setSelectedOrderId, locId, setLocId, link, resync, notice, locations, createLocation, removeLocation, pushMenuToAllBranches, aiPrompt, askAi, clearAiPrompt, dispatchTo, dispatchEverywhere, issueDocument, templateForKind],
   )
 
   if (waitForServer && link.status === 'starting') {

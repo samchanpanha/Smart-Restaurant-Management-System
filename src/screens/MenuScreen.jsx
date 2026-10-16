@@ -448,13 +448,13 @@ function NewMenuItemModal({ existingItems, onClose, onCreate }) {
     <Modal title="Add a menu item" sub="Saved to this location's SQLite catalog when the server is connected." onClose={onClose} wide>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <Field label="Item name · required">
-          <input autoFocus value={draft.name} onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))} maxLength={60} className={inputCls} />
+          <input autoFocus value={draft.name} onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))} maxLength={60} className={inputCls} data-testid="new-item-name" />
         </Field>
         <Field label="Category · required">
-          <input value={draft.category} onChange={(e) => setDraft((d) => ({ ...d, category: e.target.value }))} maxLength={40} className={inputCls} />
+          <input value={draft.category} onChange={(e) => setDraft((d) => ({ ...d, category: e.target.value }))} maxLength={40} className={inputCls} data-testid="new-item-category" />
         </Field>
         <Field label="Price $ · required">
-          <input type="number" min="0" step="0.01" value={draft.price} onChange={(e) => setDraft((d) => ({ ...d, price: e.target.value }))} className={`${inputCls} tnum`} />
+          <input type="number" min="0" step="0.01" value={draft.price} onChange={(e) => setDraft((d) => ({ ...d, price: e.target.value }))} className={`${inputCls} tnum`} data-testid="new-item-price" />
         </Field>
         <Field label="Kitchen station">
           <select value={draft.station} onChange={(e) => setDraft((d) => ({ ...d, station: e.target.value }))} className={inputCls}>
@@ -476,7 +476,7 @@ function NewMenuItemModal({ existingItems, onClose, onCreate }) {
       <div className="mt-4 rounded-xl bg-amber-500/10 px-3.5 py-3 text-xs leading-relaxed text-amber-100 ring-1 ring-inset ring-amber-500/20">
         New dishes start with an empty recipe. Add ingredients in the coster before relying on plate-cost or stock tracking.
       </div>
-      <button type="button" onClick={create} className={`${btnPrimary} mt-4`}>Add item</button>
+      <button type="button" onClick={create} data-testid="create-menu-item" className={`${btnPrimary} mt-4`}>Add item</button>
     </Modal>
   )
 }
@@ -532,7 +532,7 @@ export default function MenuScreen() {
             {mn.subtitle || (catalogSource === 'sqlite' ? 'SQLite catalog · synced for this location' : 'Local demo catalog · SQLite sync is available when the server is running')}
           </p>
         </div>
-        <button type="button" onClick={() => setNewItemOpen(true)} className="min-h-[44px] rounded-lg bg-amber-500 px-4 text-sm font-bold text-black hover:bg-amber-400">
+        <button type="button" onClick={() => setNewItemOpen(true)} data-testid="add-menu-item" className="min-h-[44px] rounded-lg bg-amber-500 px-4 text-sm font-bold text-black hover:bg-amber-400">
           {mn.addMenuItem || '+ Add menu item'}
         </button>
       </header>

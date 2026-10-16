@@ -275,7 +275,10 @@ function SupplierDetail({ supplier, onEdit, onDelete }) {
   const { invoices, total, last } = useMemo(() => supplierSpend(state, supplier), [state, supplier])
 
   const supplied = state.inventory.filter((item) => item.supplierId === supplier.id)
-  const belowPar = supplied.filter((item) => stockStatusFor(item, state.settings) !== 'ok')
+  const belowPar = supplied.filter((item) => {
+    const status = stockStatusFor(item, state.settings)
+    return status !== 'ok' && status !== 'not_counted'
+  })
 
   const reorderLines = belowPar.map((item) => ({
     item,

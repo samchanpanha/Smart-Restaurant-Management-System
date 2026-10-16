@@ -568,3 +568,108 @@ test('the store state version is the one the server and migrations expect', () =
   assert.equal(STATE_VERSION, 6)
   assert.equal(buildEmpire().version, 6)
 })
+
+test('a host owner can add and remove a branch at the empire level', () => {
+  const empire = buildEmpire()
+  assert.deepEqual(Object.keys(empire.locations), ['downtown', 'riverside'])
+
+  const withBranch = reducer(empire, { type: 'CREATE_LOCATION', locId: 'airport', name: 'Airport Branch' })
+  assert.deepEqual(Object.keys(withBranch.locations), ['downtown', 'riverside', 'airport'])
+  const branch = withBranch.locations.airport
+  // A new branch is a full shop, seeded like the others and renamed.
+  assert.equal(branch.settings.restaurantName, 'Airport Branch')
+  assert.ok(branch.tables.length > 0, 'the branch has a floor')
+  assert.ok(branch.menu.length > 0, 'the branch has a menu')
+  assert.equal(branch.settings.baseCurrency, empire.locations.downtown.settings.baseCurrency)
+
+  // A duplicate id, or a blank one, changes nothing.
+  assert.equal(reducer(withBranch, { type: 'CREATE_LOCATION', locId: 'airport', name: 'X' }), withBranch)
+  assert.equal(reducer(withBranch, { type: 'CREATE_LOCATION', locId: '', name: 'X' }), withBranch)
+
+  // Removing a branch drops only that shop.
+  const trimmed = reducer(withBranch, { type: 'REMOVE_LOCATION', locId: 'airport' })
+  assert.deepEqual(Object.keys(trimmed.locations), ['downtown', 'riverside'])
+
+  // The last remaining shop can never be removed.
+  const single = { version: STATE_VERSION, locations: { only: empire.locations.downtown } }
+  assert.equal(reducer(single, { type: 'REMOVE_LOCATION', locId: 'only' }), single)
+
+  // Shop flows keep working on a freshly added branch.
+  const seated = act(withBranch, 'airport', { type: 'UPDATE_SETTINGS', patch: { restaurantName: 'Airport · T2' } })
+  assert.equal(seated.locations.airport.settings.restaurantName, 'Airport · T2')
+})
+
+test('a pushed menu replaces a branch menu but never its recipes or its 86 board', () => {
+  let empire = buildEmpire()
+  empire = reducer(empire, { type: 'CREATE_LOCATION', locId: 'airport', name: 'Airport Branch' })
+
+  // Source: add a distinctive item, then 86 one of the seeded dishes.
+  empire = act(empire, 'downtown', {
+    type: 'ADD_MENU_ITEM',
+    item: { id: 'm_push_special', name: 'Push Special', price: 12.5, category: 'Mains' },
+  })
+  const soldOutId = shopOf(empire).menu[0].id
+  empire = act(empire, 'downtown', { type: 'UPDATE_MENU_ITEM', menuItemId: soldOutId, patch: { available: false } })
+  const downtown = shopOf(empire)
+
+  const airportBefore = shopOf(empire, 'airport')
+  const pushed = act(empire, 'airport', {
+    type: 'REPLACE_MENU',
+    menu: downtown.menu,
+    categories: downtown.categories,
+  })
+  const airport = shopOf(pushed, 'airport')
+
+  // The menu arrives whole and in order — ids, names, and prices intact.
+  assert.deepEqual(airport.menu.map((item) => item.id), downtown.menu.map((item) => item.id))
+  assert.ok(airport.menu.some((item) => item.name === 'Push Special'), 'the new item travelled')
+  // 86'd on the source, sellable on the receiver: each branch keeps its own board.
+  const copied = airport.menu.find((item) => item.id === soldOutId)
+  assert.equal(copied.available, true)
+  assert.equal(copied.auto86, false)
+  assert.equal(copied.auto86At, null)
+  assert.equal(shopOf(pushed).menu.find((item) => item.id === soldOutId).available, false, 'the source stays 86’d')
+  // The category tree travels, but recipes stay with the branch that owns them.
+  assert.deepEqual(airport.categories, downtown.categories)
+  assert.deepEqual(airport.recipes, airportBefore.recipes)
+
+  // A messy tree still lands clean: cycles break, dangling parents clear,
+  // duplicate ids drop.
+  const messy = act(empire, 'airport', {
+    type: 'REPLACE_MENU',
+    menu: downtown.menu,
+    categories: [
+      { id: 'c_a', name: 'A', parentId: 'c_a' },
+      { id: 'c_b', name: 'B', parentId: 'c_missing' },
+      { id: 'c_b', name: 'B again' },
+    ],
+  })
+  const messyCats = shopOf(messy, 'airport').categories
+  assert.deepEqual(messyCats.map((c) => c.id), ['c_a', 'c_b'])
+  assert.equal(messyCats[0].parentId, null, 'the self-cycle broke')
+  assert.equal(messyCats[1].parentId, null, 'the dangling parent cleared')
+
+  // Normalization guards still apply: duplicates collapse and prices clamp.
+  const noisy = act(empire, 'airport', {
+    type: 'REPLACE_MENU',
+    menu: [
+      { id: 'd1', name: 'Dish One', price: 1e9 },
+      { id: 'd1', name: 'Dish One again', price: 3 },
+      { id: 'd2', name: 'dish one', price: 3 },
+      { id: 'd3', name: 'Dish Two', price: -4 },
+      { id: '', name: 'No id' },
+    ],
+  })
+  const noisyMenu = shopOf(noisy, 'airport').menu
+  assert.deepEqual(noisyMenu.map((item) => item.id), ['d1', 'd3'])
+  assert.equal(noisyMenu[0].price, 999999.99, 'the hostile price clamped to the cap')
+  assert.equal(noisyMenu[1].price, 0, 'negative prices clamp to zero')
+
+  // Empty or malformed pushes change nothing at all.
+  assert.equal(act(empire, 'airport', { type: 'REPLACE_MENU', menu: [] }), empire)
+  assert.equal(act(empire, 'airport', { type: 'REPLACE_MENU', menu: 'nope' }), empire)
+  assert.equal(act(empire, 'airport', { type: 'REPLACE_MENU' }), empire)
+  // Unknown branches are ignored, exactly like every other shop action.
+  assert.equal(act(empire, 'nowhere', { type: 'REPLACE_MENU', menu: downtown.menu }), empire)
+})
+

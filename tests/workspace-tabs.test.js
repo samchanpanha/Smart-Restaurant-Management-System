@@ -26,6 +26,28 @@ test('tabs keep their own location and activation restores the tab location', ()
   assert.equal(workspace.tabs.find((tab) => tab.id === 'tab-2').locId, 'downtown')
 })
 
+test('remapping a removed branch rebinds every tab parked on it', () => {
+  let workspace = createWorkspace('floor', 'airport', 'tab-1')
+  workspace = workspaceReducer(workspace, { type: 'SET_TAB_CONTEXT', tabId: 'tab-1', patch: { tableId: 't4' } })
+  workspace = workspaceReducer(workspace, { type: 'OPEN_TAB', id: 'tab-2', screen: 'menu' })
+  workspace = workspaceReducer(workspace, { type: 'SET_LOCATION', locId: 'downtown' })
+  workspace = workspaceReducer(workspace, { type: 'OPEN_TAB', id: 'tab-3', screen: 'kitchen' })
+  workspace = workspaceReducer(workspace, { type: 'SET_LOCATION', locId: 'riverside' })
+  workspace = workspaceReducer(workspace, { type: 'ACTIVATE_TAB', tabId: 'tab-1' })
+
+  const remapped = workspaceReducer(workspace, { type: 'REMAP_LOCATION', from: 'airport', to: 'downtown' })
+  assert.equal(remapped.activeTabId, 'tab-1', 'focus stays on the same tab')
+  assert.deepEqual(remapped.tabs.map((tab) => tab.locId), ['downtown', 'downtown', 'riverside'])
+  assert.equal(remapped.tabs[0].ctx.tableId, 't4', 'the tab keeps its view context')
+  assert.equal(remapped.tabs[0].id, 'tab-1')
+
+  // No-ops keep the exact same object: equal ids, a missing branch, or an id
+  // no tab uses means there is nothing to remap.
+  assert.equal(workspaceReducer(remapped, { type: 'REMAP_LOCATION', from: 'downtown', to: 'downtown' }), remapped)
+  assert.equal(workspaceReducer(remapped, { type: 'REMAP_LOCATION', from: 'closed', to: 'riverside' }), remapped)
+  assert.equal(workspaceReducer(remapped, { type: 'REMAP_LOCATION', to: 'riverside' }), remapped)
+})
+
 test('closing tabs selects a neighbor and closing the final tab opens Floor', () => {
   let workspace = createWorkspace('floor', 'riverside', 'tab-1')
   workspace = workspaceReducer(workspace, { type: 'OPEN_TAB', id: 'tab-2', screen: 'tickets' })

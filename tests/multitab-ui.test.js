@@ -54,10 +54,13 @@ const settle = async (ms = 40) => {
 }
 // Lazy screens resolve through the dev server; wait for the Suspense
 // fallback to clear rather than guessing how long a chunk takes to load.
-const flush = async () => {
-  for (let i = 0; i < 75; i += 1) {
-    await act(async () => { await new Promise((resolve) => dom.window.setTimeout(resolve, 0)) })
-    if (!dom.window.document.body.textContent.includes('Opening…')) return
+// Real-time budget, not a fixed tick count: under a parallel test suite a
+// cold chunk once outlasted 75 ticks.
+const flush = async (budgetMs = 4000) => {
+  const deadline = Date.now() + budgetMs
+  await act(async () => { await new Promise((resolve) => dom.window.setTimeout(resolve, 0)) })
+  while (dom.window.document.body.textContent.includes('Opening…') && Date.now() < deadline) {
+    await act(async () => { await new Promise((resolve) => dom.window.setTimeout(resolve, 10)) })
   }
 }
 const $$ = (selector) => [...document.querySelectorAll(selector)]

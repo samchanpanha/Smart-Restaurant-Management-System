@@ -7,6 +7,7 @@ import { Icon } from '../components/Icon'
 import { useConfirm } from '../components/ui/confirm-context'
 import { useAuth } from '../lib/auth'
 import { useI18n } from '../lib/i18n'
+import { useRestora } from '../lib/store'
 
 const cardCls = 'rounded-2xl border border-zinc-200/80 bg-white shadow-sm'
 const input = 'min-h-10 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 outline-none transition focus:border-orange-300 focus:ring-2 focus:ring-orange-100'
@@ -32,12 +33,13 @@ export default function UsersScreen() {
   const confirm = useConfirm()
   const { user: me } = useAuth()
   const { lang, dict } = useI18n()
+  const { locations } = useRestora()
   const us = dict.users || {}
   const [users, setUsers] = useState([])
   const [roles, setRoles] = useState([])
   const [error, setError] = useState('')
   const [ready, setReady] = useState(false)
-  const [draft, setDraft] = useState({ name: '', email: '', password: '', roleId: '' })
+  const [draft, setDraft] = useState({ name: '', email: '', password: '', roleId: '', locationId: '' })
   const [busy, setBusy] = useState(false)
 
   const load = useCallback(async () => {
@@ -60,7 +62,7 @@ export default function UsersScreen() {
     setBusy(true)
     try {
       await send('POST', '/api/users', draft)
-      setDraft({ name: '', email: '', password: '', roleId: '' })
+      setDraft({ name: '', email: '', password: '', roleId: '', locationId: '' })
       await load()
     } catch (failure) {
       setError(failure.message)
@@ -134,6 +136,15 @@ export default function UsersScreen() {
                   >
                     {roles.map((role) => <option key={role.id} value={role.id}>{role.label}</option>)}
                   </select>
+                  <select
+                    aria-label={`${us.branchFor || 'Branch for'} ${entry.name}`}
+                    value={entry.locationId || ''}
+                    onChange={(event) => patch(entry.id, { locationId: event.target.value })}
+                    className="min-h-8 rounded-lg border border-zinc-200 bg-white px-2 text-xs text-zinc-700"
+                  >
+                    <option value="">{us.allBranches || 'All branches'}</option>
+                    {locations.map((location) => <option key={location.id} value={location.id}>{location.short}</option>)}
+                  </select>
                   <button
                     type="button"
                     onClick={() => patch(entry.id, { status: entry.status === 'active' ? 'disabled' : 'active' })}
@@ -159,6 +170,10 @@ export default function UsersScreen() {
             <select required value={draft.roleId} onChange={(event) => setDraft({ ...draft, roleId: event.target.value })} className={input}>
               <option value="">{us.role || 'Choose a role…'}</option>
               {roles.map((role) => <option key={role.id} value={role.id}>{role.label}</option>)}
+            </select>
+            <select value={draft.locationId} onChange={(event) => setDraft({ ...draft, locationId: event.target.value })} className={input} aria-label={us.allBranches || 'All branches'}>
+              <option value="">{us.allBranches || 'All branches'}</option>
+              {locations.map((location) => <option key={location.id} value={location.id}>{location.short}</option>)}
             </select>
             <button type="submit" disabled={busy || roles.length === 0} className={`${btnPrimary} w-full`}>
               {busy ? 'Adding…' : (us.createUser || 'Add user')}

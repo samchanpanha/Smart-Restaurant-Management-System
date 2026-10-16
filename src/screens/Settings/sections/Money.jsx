@@ -263,7 +263,7 @@ function RescaleCard({ dispatch, state, locationLabel }) {
   const and = (n) => (Math.round(n * 100) / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })
 
   const sample = state.menu.slice(0, 3)
-  const stockValueNow = state.inventory.reduce((sum, item) => sum + Math.max(0, item.onHand) * (item.lastCost || 0), 0)
+  const stockValueNow = state.inventory.filter((item) => item.counted !== false).reduce((sum, item) => sum + Math.max(0, item.onHand) * (item.lastCost || 0), 0)
 
   async function apply() {
     const confirmed = await confirm({

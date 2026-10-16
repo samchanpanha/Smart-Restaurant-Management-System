@@ -159,6 +159,7 @@ const TENANT_TABLES = {
       sub_category TEXT NOT NULL DEFAULT '',
       storage TEXT NOT NULL DEFAULT 'dry',
       active INTEGER NOT NULL DEFAULT 1,
+      counted INTEGER NOT NULL DEFAULT 1,
       updated_at TEXT NOT NULL,
       PRIMARY KEY (owner_id, location_id, id)
     );`,
@@ -234,6 +235,7 @@ if (!hasColumn('menu_categories', 'parent_id')) db.exec('ALTER TABLE menu_catego
 if (!hasColumn('menu_categories', 'description')) db.exec("ALTER TABLE menu_categories ADD COLUMN description TEXT NOT NULL DEFAULT ''")
 if (!hasColumn('menu_categories', 'station')) db.exec("ALTER TABLE menu_categories ADD COLUMN station TEXT NOT NULL DEFAULT ''")
 if (!hasColumn('menu_categories', 'active')) db.exec('ALTER TABLE menu_categories ADD COLUMN active INTEGER NOT NULL DEFAULT 1')
+if (!hasColumn('inventory_items', 'counted')) db.exec('ALTER TABLE inventory_items ADD COLUMN counted INTEGER NOT NULL DEFAULT 1')
 
 if (db.pragma('user_version', { simple: true }) < 3) {
   // FK toggles are ignored inside a transaction, so flip them off up front and
@@ -395,8 +397,8 @@ const deleteInventoryItems = db.prepare('DELETE FROM inventory_items WHERE owner
 const insertInventoryItem = db.prepare(`
   INSERT INTO inventory_items (
     owner_id, location_id, id, name, sku, unit, on_hand, par, reorder_point, daily_use,
-    last_cost, avg_cost, vendor, supplier_id, category, sub_category, storage, active, updated_at
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    last_cost, avg_cost, vendor, supplier_id, category, sub_category, storage, active, counted, updated_at
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `)
 const deleteSettings = db.prepare('DELETE FROM location_settings WHERE owner_id = ? AND location_id = ?')
 const insertSettings = db.prepare('INSERT INTO location_settings (owner_id, location_id, settings, updated_at) VALUES (?, ?, ?, ?)')
@@ -691,6 +693,7 @@ function syncConfigTx(ownerId, empire) {
           cleanText(item?.subCategory, 40),
           cleanText(item?.location, 24, 'dry') || 'dry',
           item?.active === false ? 0 : 1,
+          item?.counted === false ? 0 : 1,
           now,
         )
       }
@@ -934,7 +937,7 @@ const selectInventoryItems = db.prepare(`
          item.reorder_point AS reorderPoint, item.daily_use AS dailyUse,
          item.last_cost AS lastCost, item.avg_cost AS avgCost, item.vendor,
          item.supplier_id AS supplierId, item.category, item.sub_category AS subCategory,
-         item.storage AS location, item.active
+         item.storage AS location, item.active, item.counted
   FROM inventory_items AS item
   WHERE item.owner_id = @ownerId AND item.location_id = @locationId
     AND (@supplierId = '' OR item.supplier_id = @supplierId)
@@ -995,7 +998,13 @@ export function getInventory(ownerId, locationId, filters = {}) {
     supplierId: cleanText(filters.supplierId, 60),
     query: cleanText(filters.query, 80),
     exceptionsOnly: filters.exceptionsOnly ? 1 : 0,
-  }).map((row) => ({ ...row, onHand: Number(row.onHand), par: Number(row.par), reorderPoint: Number(row.reorderPoint) }))
+  }).map((row) => ({
+    ...row,
+    onHand: Number(row.onHand),
+    par: Number(row.par),
+    reorderPoint: Number(row.reorderPoint),
+    counted: row.counted !== 0,
+  }))
 }
 
 export function getCategories(ownerId, locationId) {

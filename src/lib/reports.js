@@ -282,7 +282,13 @@ export function purchaseSummary(shop, bounds) {
 // ─── Stock movements in and out ─────────────────────────────────────
 
 export function movementSummary(shop, bounds) {
-  const rows = (shop.movements || []).filter((movement) => inRange(movement.at, bounds))
+  // counted: false items sit outside the stock book — their movements never
+  // land in the ledger, flow, variance, or shift-report numbers.
+  const skipped = new Set(
+    (shop.inventory || []).filter((item) => item.counted === false).map((item) => item.id),
+  )
+  const rows = (shop.movements || [])
+    .filter((movement) => inRange(movement.at, bounds) && !skipped.has(movement.itemId))
   const empty = () => ({ value: 0, units: 0, count: 0 })
   const totals = { in: empty(), out: empty() }
   const byKind = {}
@@ -534,6 +540,54 @@ export function buildReports(shop, range = 'tonight', now = Date.now()) {
   const rankings = itemRankings(shop, bounds)
   const flow = stockFlow(shop, bounds)
   return { bounds, sales, delivery, purchases, movements, pnl, rankings, flow }
+}
+
+/** The best seller on a sales summary, by revenue — null when nothing sold. */
+function topSeller(sales) {
+  const byItem = new Map()
+  for (const line of sales.lines || []) {
+    const row = byItem.get(line.menuItemId) || { id: line.menuItemId, name: line.name, qty: 0, revenue: 0 }
+    row.qty += line.qty
+    row.revenue = roundMoney(row.revenue + line.revenue)
+    byItem.set(line.menuItemId, row)
+  }
+  return [...byItem.values()].sort((a, b) => b.revenue - a.revenue)[0] || null
+}
+
+/**
+ * The owner's cross-branch view: one row per shop plus the combined total,
+ * built from exactly the same ticket maths the single-branch reports use.
+ * Rows are ordered as the empire stores its locations, so the first row is
+ * the branch a fresh terminal would open.
+ */
+export function buildEmpireReports(empire, range = 'tonight', now = Date.now()) {
+  const bounds = rangeBounds(range, now)
+  const branches = Object.entries(empire?.locations || {}).map(([id, shop]) => {
+    const sales = salesSummary(shop, bounds)
+    return {
+      id,
+      name: shop?.settings?.restaurantName || shop?.settings?.locationShort || id,
+      short: shop?.settings?.locationShort || id,
+      city: shop?.settings?.city || '',
+      sales,
+      top: topSeller(sales),
+    }
+  })
+  const combined = branches.reduce(
+    (acc, branch) => {
+      acc.checks += branch.sales.checks
+      acc.covers += branch.sales.covers
+      acc.netSales = roundMoney(acc.netSales + branch.sales.netSales)
+      acc.takings = roundMoney(acc.takings + branch.sales.takings)
+      acc.cogs = roundMoney(acc.cogs + branch.sales.cogs)
+      return acc
+    },
+    { checks: 0, covers: 0, netSales: 0, takings: 0, cogs: 0 },
+  )
+  combined.avgCheck = combined.checks ? roundMoney(combined.takings / combined.checks) : 0
+  combined.grossProfit = roundMoney(combined.netSales - combined.cogs)
+  combined.marginPct = combined.netSales > 0 ? (combined.netSales - combined.cogs) / combined.netSales : 0
+  return { bounds, branches, combined }
 }
 
 export { money }

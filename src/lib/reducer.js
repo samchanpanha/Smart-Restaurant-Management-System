@@ -214,6 +214,10 @@ function normalizeInventoryItem(item, index = 0) {
     lot: String(item?.lot ?? '').trim().slice(0, 40) || null,
     notes: String(item?.notes ?? '').trim().slice(0, 240),
     active: item?.active !== false,
+    // `counted: false` items sit outside stock tracking: count sheets,
+    // low-stock alerts, auto-86, theoretical usage, and stock-flow reports
+    // skip them. Receiving still adds stock and updates cost.
+    counted: item?.counted !== false,
   }
 }
 
@@ -1088,7 +1092,10 @@ function shopReducerBase(state, action) {
       for (const item of heldItems) {
         const recipe = state.recipes[item.menuItemId]
         const dec = theoreticalDecrementFor(recipe, item.qty)
-        for (const [k, v] of Object.entries(dec)) totalDec[k] = (totalDec[k] || 0) + v
+        for (const [k, v] of Object.entries(dec)) {
+          if (inventoryById[k]?.counted === false) continue // not counted: firing never moves the book
+          totalDec[k] = (totalDec[k] || 0) + v
+        }
       }
       const orders = state.orders.map((o) => {
         if (o.id !== orderId) return o
@@ -1177,7 +1184,10 @@ function shopReducerBase(state, action) {
         const qty = Math.min(12, Math.max(1, Number(g.qty) || 1))
         const recipe = state.recipes[g.menuItemId]
         const dec = theoreticalDecrementFor(recipe, qty)
-        for (const [k, v] of Object.entries(dec)) totalDec[k] = (totalDec[k] || 0) + v
+        for (const [k, v] of Object.entries(dec)) {
+          if (inventoryById[k]?.counted === false) continue // not counted: firing never moves the book
+          totalDec[k] = (totalDec[k] || 0) + v
+        }
         newLines.push({
           id: uid('it'), menuItemId: g.menuItemId, qty,
           modifiers: g.modifiers || [], station: menuItem.station, status: 'fired',
@@ -2214,7 +2224,7 @@ function shopReducerBase(state, action) {
       // the book becomes a signed count movement so shrinkage is visible.
       const { counts } = action // { inventoryItemId: qty }
       const lines = state.inventory
-        .filter((item) => counts?.[item.id] != null)
+        .filter((item) => item.counted !== false && counts?.[item.id] != null)
         .map((item) => ({
           inventoryItemId: item.id,
           qty: roundQty(Number(counts[item.id]) - Number(item.onHand), 3),
@@ -2289,6 +2299,59 @@ function shopReducerBase(state, action) {
           : m,
       )
       return { ...state, menu }
+    }
+
+    // Cross-branch menu push (Settings → Branches): another branch's menu and
+    // category tree replace this shop's, run through the same guards as
+    // ADD_MENU_ITEM (ids unique, names unique, prices clamped). Availability is
+    // per-branch service state, so pushed items arrive sellable and each
+    // branch's own 86 board stays its own. Recipes stay per branch — they
+    // follow local suppliers and stock, so they are never pushed.
+    case 'REPLACE_MENU': {
+      const incoming = Array.isArray(action.menu) ? action.menu : null
+      if (!incoming || !incoming.length) return state
+      const seenIds = new Set()
+      const seenNames = new Set()
+      const menu = []
+      for (const raw of incoming) {
+        if (!raw || typeof raw.id !== 'string' || !raw.id.trim()) continue
+        const id = raw.id.trim()
+        if (seenIds.has(id)) continue
+        const item = normalizeMenuItem({ ...raw, id }, menu.length)
+        const name = item.name.toLocaleLowerCase()
+        if (!name || seenNames.has(name)) continue
+        seenIds.add(id)
+        seenNames.add(name)
+        menu.push({ ...item, available: true, auto86: false, auto86At: null })
+      }
+      if (!menu.length) return state
+      let categories = state.categories
+      if (Array.isArray(action.categories) && action.categories.length) {
+        const normalized = action.categories
+          .map((raw, index) => normalizeCategory(raw, index))
+          .filter(Boolean)
+        const seenCatIds = new Set()
+        // A pushed tree must stay a tree: no duplicate nodes, and every parent
+        // link points at a category that actually travelled (cycles broken).
+        const keep = normalized.filter((category) => {
+          if (seenCatIds.has(category.id)) return false
+          seenCatIds.add(category.id)
+          return true
+        })
+        const byId = new Map(keep.map((category) => [category.id, category]))
+        for (const category of keep) {
+          const seen = new Set([category.id])
+          let parent = category.parentId
+          while (parent) {
+            if (seen.has(parent)) { category.parentId = null; break }
+            seen.add(parent)
+            parent = byId.get(parent)?.parentId || null
+          }
+          if (category.parentId && !byId.has(category.parentId)) category.parentId = null
+        }
+        if (keep.length) categories = keep
+      }
+      return { ...state, menu, categories }
     }
 
     // ── Configuration: settings, templates, catalog, suppliers ──
@@ -2629,6 +2692,29 @@ export function reducer(state, action) {
   if (!action || typeof action.type !== 'string') return state
   if (action.type === 'HYDRATE') return action.state
   if (action.type === 'RESET_ALL') return buildEmpire()
+  // Empire-level branch management (host/owner only). A new location is a
+  // fresh shop seeded from the shared defaults; `locId` must be unique and
+  // URL-safe so it can travel in ?loc= and the action log.
+  if (action.type === 'CREATE_LOCATION') {
+    const locId = String(action.locId || '').trim().slice(0, 32)
+    if (!locId || state.locations?.[locId]) return state
+    const name = String(action.name || locId).trim().slice(0, 80) || locId
+    const base = action.state && typeof action.state === 'object' ? action.state : buildSeed()
+    const shop = withShopDefaults(seedCategoriesIfEmpty({
+      ...base,
+      settings: { ...(base.settings || {}), restaurantName: name, locationShort: name.slice(0, 24) },
+    }), name)
+    return { ...state, locations: { ...state.locations, [locId]: shop } }
+  }
+  if (action.type === 'REMOVE_LOCATION') {
+    const locId = String(action.locId || '').trim()
+    if (!locId || !state.locations?.[locId]) return state
+    // Never leave an empire with no shop to open.
+    if (Object.keys(state.locations).length <= 1) return state
+    const locations = { ...state.locations }
+    delete locations[locId]
+    return { ...state, locations }
+  }
   if (action.type === 'LOC') {
     const shop = state.locations?.[action.locId]
     if (!shop || !action.action) return state
@@ -2681,6 +2767,7 @@ export function getAlerts(state) {
   // Low / out stock + 86
   for (const item of state.inventory) {
     if (!notify.lowStock) break
+    if (item.counted === false) continue // not counted: never low, never out
     const st = stockStatusFor(item, state.settings)
     if (st === 'out') {
       const dishes = state.menu.filter((m) =>

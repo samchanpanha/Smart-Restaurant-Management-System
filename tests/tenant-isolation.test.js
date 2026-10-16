@@ -73,6 +73,44 @@ async function api(method, route, { body, cookie } = {}) {
   return { status: res.status, data, cookie: setCookie ? setCookie.split(';')[0] : null }
 }
 
+// Opens the SSE stream as a given session, runs `during`, and returns every
+// event the stream delivered after its opening hello — so a test can prove
+// which broadcasts a terminal actually heard.
+async function sseWindow(cookie, during, settleMs = 500) {
+  const ctrl = new AbortController()
+  const res = await fetch(`${base}/api/events`, { headers: { Cookie: cookie }, signal: ctrl.signal })
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  const chunks = []
+  const pump = (async () => {
+    try {
+      for (;;) {
+        const { value, done } = await reader.read()
+        if (done) break
+        chunks.push(decoder.decode(value, { stream: true }))
+      }
+    } catch { /* stream aborted */ }
+  })()
+  await new Promise((resolve) => setTimeout(resolve, 400))
+  const mark = chunks.join('').length
+  await during()
+  await new Promise((resolve) => setTimeout(resolve, settleMs))
+  ctrl.abort()
+  await pump
+  return chunks.join('').slice(mark)
+}
+
+const alphaMenuItem = (id, name) => ({
+  id, name, description: '', category: 'Mains', price: 8, station: 'grill',
+  available: true, active: true, dietaryTags: [], allergens: [], imageUrl: '',
+  sortOrder: 97, substituteId: null, modifiers: [],
+})
+
+const locAction = (locId, itemId, name) => ({
+  clientId: 'branch-test',
+  action: { type: 'LOC', locId, action: { type: 'ADD_MENU_ITEM', item: alphaMenuItem(itemId, name) } },
+})
+
 const ADD_ALPHA = {
   clientId: 'alpha-1',
   action: {
@@ -93,6 +131,7 @@ const hasAlpha = (state) => (state?.locations?.downtown?.menu || []).some((item)
 
 let alpha = null
 let bravo = null
+let patCookie = null
 
 test('two owners can register and stay isolated', async () => {
   const a = await api('POST', '/api/auth/register', {
@@ -201,4 +240,73 @@ test('naming a tenant that does not exist is a 404, never a new tenant', async (
   assert.equal(ghost.status, 404)
   const badSlug = await api('GET', '/api/state?owner=no-such-diner')
   assert.equal(badSlug.status, 404)
+})
+
+test('a user assigned to a branch is pinned to it everywhere', async () => {
+  const created = await api('POST', '/api/users', {
+    cookie: alpha.cookie,
+    body: { name: 'Pat Pin', email: 'pat@alpha.test', password: 'password-1', roleId: 'sys_manager', locationId: 'downtown' },
+  })
+  assert.equal(created.status, 201)
+  assert.equal(created.data.user.locationId, 'downtown')
+
+  const login = await api('POST', '/api/auth/login', {
+    body: { email: 'pat@alpha.test', password: 'password-1' },
+  })
+  patCookie = login.cookie
+
+  // The snapshot they receive carries only their branch, so switchers and
+  // cross-branch tabs have nothing to switch to.
+  const state = await api('GET', '/api/state', { cookie: login.cookie })
+  assert.deepEqual(Object.keys(state.data.state.locations), ['downtown'])
+
+  // Catalog reads for the other branch are refused; their own branch reads.
+  const otherMenu = await api('GET', '/api/menu?loc=riverside', { cookie: login.cookie })
+  assert.equal(otherMenu.status, 403)
+  const ownMenu = await api('GET', '/api/menu?loc=downtown', { cookie: login.cookie })
+  assert.equal(ownMenu.status, 200)
+  const otherStock = await api('GET', '/api/inventory?loc=riverside', { cookie: login.cookie })
+  assert.equal(otherStock.status, 403)
+  const ownStock = await api('GET', '/api/inventory?loc=downtown', { cookie: login.cookie })
+  assert.equal(ownStock.status, 200)
+
+  // Actions outside the branch — and empire-level ones — are refused.
+  const foreign = await api('POST', '/api/actions', {
+    cookie: login.cookie, body: locAction('riverside', 'm_pat_riv', 'Pat Riverside'),
+  })
+  assert.equal(foreign.status, 403)
+  const empire = await api('POST', '/api/actions', {
+    cookie: login.cookie, body: { clientId: 'pat', action: { type: 'RESET_ALL' } },
+  })
+  assert.equal(empire.status, 403)
+  const own = await api('POST', '/api/actions', {
+    cookie: login.cookie, body: locAction('downtown', 'm_pat_dt', 'Pat Downtown'),
+  })
+  assert.equal(own.status, 200)
+})
+
+test('a branch-pinned terminal hears only its own branch on SSE', async () => {
+  const seen = await sseWindow(patCookie, async () => {
+    await api('POST', '/api/actions', {
+      cookie: alpha.cookie, body: locAction('riverside', 'm_riv_sse', 'Riverside SSE'),
+    })
+    await api('POST', '/api/actions', {
+      cookie: alpha.cookie, body: locAction('downtown', 'm_dt_sse', 'Downtown SSE'),
+    })
+  })
+  assert.ok(seen.includes('m_dt_sse'), 'own-branch events reach the pinned terminal')
+  assert.equal(seen.includes('m_riv_sse'), false, 'other-branch events are filtered')
+})
+
+test('clearing the assignment hands the whole empire back', async () => {
+  const list = await api('GET', '/api/users', { cookie: alpha.cookie })
+  const pat = list.data.users.find((user) => user.email === 'pat@alpha.test')
+  const cleared = await api('PATCH', `/api/users/${pat.id}`, { cookie: alpha.cookie, body: { locationId: '' } })
+  assert.equal(cleared.status, 200)
+  assert.equal(cleared.data.user.locationId, null)
+
+  const state = await api('GET', '/api/state', { cookie: patCookie })
+  assert.equal(Object.keys(state.data.state.locations).length, 2)
+  const otherMenu = await api('GET', '/api/menu?loc=riverside', { cookie: patCookie })
+  assert.equal(otherMenu.status, 200)
 })
