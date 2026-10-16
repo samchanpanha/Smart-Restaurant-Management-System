@@ -140,6 +140,7 @@ function Composer({ order }) {
                     key={`${tag}-${m.id}`}
                     type="button"
                     data-testid="quick-add-chip"
+                    data-dish={m.id}
                     onClick={() => tap(m)}
                     title={tag === '★' ? 'Bestseller' : 'Recent'}
                     className="flex min-h-[44px] items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 text-sm font-semibold text-amber-100 transition-colors hover:bg-amber-500/20"

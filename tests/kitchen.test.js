@@ -50,6 +50,13 @@ const settle = async (ms = 40) => {
 const click = (el) => act(() => {
   el.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }))
 })
+// Lazy screens resolve through a Suspense fallback ("Opening…"). Poll until it
+// clears so a slow chunk (the Menu screen is code-split) cannot flake.
+const flush = async () => {
+  for (let i = 0; i < 200 && (container?.textContent || '').includes('Opening…'); i++) {
+    await act(async () => { await new Promise((resolve) => dom.window.setTimeout(resolve, 10)) })
+  }
+}
 
 let root = null
 let container = null
@@ -198,6 +205,7 @@ test('Global language switcher defaults to Khmer and translates menus, tabs, and
     .find((b) => b.textContent.includes('Menu & Recipes'))
   click(menuNavBtn)
   await settle()
+  await flush()
   assert.match(container.textContent, /菜单与配方/, 'Menu screen title is in Chinese')
   assert.match(container.textContent, /招牌牛肉汉堡/, 'Dish names on Menu screen are in Chinese')
 

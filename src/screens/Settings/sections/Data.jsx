@@ -4,11 +4,15 @@ import { formatMoney } from '../../../lib/currency'
 import { printHtml, renderDocumentHtml } from '../../../lib/documents'
 import { DOC_KIND_META, sanitizeSettings } from '../../../lib/settings'
 import { migrateToEmpire } from '../../../lib/reducer'
+import { useToast } from '../../../components/ui/toast-context'
+import { useConfirm } from '../../../components/ui/confirm-context'
 import { Card } from '../primitives'
 
 function DataSection({ state, draft, dispatch, empire, locId, link, resync }) {
   const [importError, setImportError] = useState('')
   const importRef = useRef(null)
+  const { notify } = useToast()
+  const confirm = useConfirm()
   const documents = useMemo(() => [...(state.documents || [])].reverse(), [state.documents])
 
   function exportState() {
@@ -32,9 +36,11 @@ function DataSection({ state, draft, dispatch, empire, locId, link, resync }) {
         if (!migrated) throw new Error('Not a Restora snapshot')
         dispatch({ type: 'HYDRATE', state: migrated })
         setImportError('')
-        window.alert('Snapshot restored on this terminal. Use Resync or press Reset on other terminals to align them.')
+        notify('Snapshot restored on this terminal. Use Resync or press Reset on other terminals to align them.', 'success')
       } catch (error) {
-        setImportError(error.message || 'Could not read that file.')
+        const message = error.message || 'Could not read that file.'
+        setImportError(message)
+        notify(message, 'error')
       }
     }
     reader.readAsText(file)
@@ -123,10 +129,13 @@ function DataSection({ state, draft, dispatch, empire, locId, link, resync }) {
             <button
               key={section}
               type="button"
-              onClick={() => {
-                if (window.confirm(`Reset the ${section} section to the Restora defaults for this store?`)) {
-                  dispatch({ type: 'RESET_SETTINGS', section: section === 'alerts' ? 'notifications' : section })
-                }
+              onClick={async () => {
+                const ok = await confirm({
+                  title: `Reset the ${section} section?`,
+                  body: 'This section goes back to the Restora defaults for this store.',
+                  confirmLabel: 'Reset section',
+                })
+                if (ok) dispatch({ type: 'RESET_SETTINGS', section: section === 'alerts' ? 'notifications' : section })
               }}
               className="min-h-10 rounded-xl border border-zinc-200 px-3.5 text-sm font-semibold text-zinc-700 hover:bg-zinc-50"
             >
@@ -135,10 +144,14 @@ function DataSection({ state, draft, dispatch, empire, locId, link, resync }) {
           ))}
           <button
             type="button"
-            onClick={() => {
-              if (window.confirm('Reset every setting on this store back to defaults? Retail data is untouched.')) {
-                dispatch({ type: 'RESET_SETTINGS', section: 'all' })
-              }
+            onClick={async () => {
+              const ok = await confirm({
+                title: 'Reset every setting?',
+                body: 'Every setting on this store goes back to the defaults. Retail data is untouched.',
+                confirmLabel: 'Reset everything',
+                tone: 'danger',
+              })
+              if (ok) dispatch({ type: 'RESET_SETTINGS', section: 'all' })
             }}
             className="min-h-10 rounded-xl border border-red-200 px-3.5 text-sm font-semibold text-red-600 hover:bg-red-50"
           >

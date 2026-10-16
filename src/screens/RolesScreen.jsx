@@ -4,6 +4,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { Icon } from '../components/Icon'
+import { useConfirm } from '../components/ui/confirm-context'
 import { ALL_SCREENS } from '../lib/auth'
 import { NAV_SECTIONS } from '../lib/constants'
 import { translateScreenLabel, useI18n } from '../lib/i18n'
@@ -33,6 +34,7 @@ async function send(method, route, body) {
 }
 
 export default function RolesScreen() {
+  const confirm = useConfirm()
   const { lang, dict } = useI18n()
   const rl = dict.rolesScreen || {}
   const [roles, setRoles] = useState([])
@@ -79,7 +81,13 @@ export default function RolesScreen() {
   }
 
   async function remove(id) {
-    if (typeof window !== 'undefined' && !window.confirm('Delete this role?')) return
+    const ok = await confirm({
+      title: 'Delete this role?',
+      body: 'Anyone holding it needs another role before it goes.',
+      confirmLabel: 'Delete role',
+      tone: 'danger',
+    })
+    if (!ok) return
     try { await send('DELETE', `/api/roles/${id}`); await load() } catch (failure) { setError(failure.message) }
   }
 

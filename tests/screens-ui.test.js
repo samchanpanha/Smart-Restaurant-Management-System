@@ -37,6 +37,17 @@ dom.window.print = () => {}
 dom.window.open = () => null
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
+// The app answers with its own dialogs now. A native alert/confirm/prompt
+// anywhere in the screen walk is a regression: they freeze a tablet and
+// cannot be styled.
+const nativeDialogs = []
+for (const name of ['alert', 'confirm', 'prompt']) {
+  dom.window[name] = () => {
+    nativeDialogs.push(name)
+    return false
+  }
+}
+
 const React = (await import('react')).default
 const { act } = await import('react')
 const { createRoot } = await import('react-dom/client')
@@ -152,6 +163,7 @@ for (const section of NAV_SECTIONS) {
         )
       }
       assert.equal(panel().textContent.includes('Something went wrong'), false)
+      assert.deepEqual(nativeDialogs, [], `${item.id} used a native browser dialog`)
     })
   }
 }
@@ -376,6 +388,18 @@ test('the composer quick-add and keyboard fire commit a ticket', async () => {
   assert.ok(chip, 'a quick-add chip is offered')
   act(() => { chip.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
   await settle()
+  // A dish with required modifiers opens the picker before the line lands.
+  const picker = document.querySelector('[role="dialog"]')
+  if (picker) {
+    for (const option of picker.querySelectorAll('[data-testid="modifier-option"]')) {
+      act(() => { option.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+    }
+    await settle()
+    const add = document.querySelector('[data-testid="modifier-add"]')
+    assert.ok(add, 'the modifier picker can confirm the line')
+    act(() => { add.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+    await settle()
+  }
   assert.ok(text().includes('Held · not yet sent'), 'the quick-added line is held')
 
   // F fires the held lines to the kitchen without touching the mouse.

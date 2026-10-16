@@ -376,6 +376,45 @@ loads the full tenant snapshot, then renders only the scanned table — a demo
 convenience. A production deployment should serve guests a scoped projection
 (menu + that table's ticket) instead of the whole snapshot.
 
+### Toasts and confirmations
+
+The back office never blocks on a browser dialog. One toast host serves the
+whole app (`useToast()`), and one confirm host asks before anything that
+cannot be undone (`useConfirm()`):
+
+```js
+const confirm = useConfirm()
+if (!(await confirm({ title: 'Delete this table?', body: '…', tone: 'danger' }))) return
+```
+
+Both live in `src/components/ui/`, both are mounted in `src/App.jsx`, and
+neither can be triggered outside a host — a screen with no provider answers
+"no" and does nothing. `tests/screens-ui.test.js` walks every screen with
+the native dialogs stubbed out, so a new one cannot creep back in.
+
+### The 3D dish stage
+
+Opening a dish on the guest menu can show a plate the guest can turn with
+their finger, instead of a flat photo. It is deliberately conservative:
+
+- **It is a lazy chunk.** `three` and `@react-three/fiber` live in
+  `src/components/three/DishStage.jsx`, which is only fetched when a guest
+  opens a dish on a browser that can actually draw it. The staff workspace
+  never loads it — `dist` shows the 3D in its own chunk, and the main
+  bundle is unchanged.
+- **It is disposable.** No WebGL, `prefers-reduced-motion: reduce`, a failed
+  chunk download, or a scene that throws — every one of those falls back to
+  the dish photo, and the menu keeps working. The photo is always in the
+  DOM underneath, so the guest never sees an empty box.
+- **It is decorative.** The scene is plain geometry with no textures and no
+  3D fonts, so the km/en/zh labels stay real, translatable HTML, and the
+  canvas is hidden from screen readers.
+- **It is cheap.** The stage stops drawing when it scrolls out of view, and
+  the device pixel ratio is capped.
+
+Feature detection lives in `src/components/three/capabilities.js` and is
+covered by `tests/three-fallback.test.js`.
+
 The guest page (and the Telegram mini app, which reuses it) can also offer an
 **✨ Menu help** sheet — a menu-only concierge that recommends dishes and answers
 questions about ingredients, allergens, spice, dietary tags, and price, built on
@@ -493,6 +532,7 @@ Express + SQLite (`better-sqlite3`) via action log + SSE when a server is presen
 | 10 | Buy side, units & Telegram | ✅ Done | Purchase CRUD → stock with pack conversion, the signed movement ledger, sell/buy + P&L + top/bottom reports, units of measure, item photos, bot console + push notices + digest, and the Telegram mini app |
 | 11 | Accounts, roles & multi-tenant | ✅ Done | Owner accounts + owner-scoped users/roles, a super-admin host-owner console, per-owner isolation of every state table, read model, action log, and SSE stream (schema v3 migrates a legacy single-tenant file) |
 | 12 | AI ops copilot | ✅ Done | Provider-agnostic, read-only assistant (`/api/ai/*`) with the Ops Copilot screen; Dashboard advisors (alert explainer, menu advisor, prep forecast) + shift briefing cards; guest/mini-app menu concierge; Telegram briefing push. Off by default — no `AI_API_KEY`, no AI. (Smart-reorder draft on Purchases deferred.) |
+| 13 | Operations integrity, one money model & the 3D customer surface | ✅ Done | Ticket status is derived from its lines (a course fired after service puts the ticket back in the kitchen); the status machine is enforced in the reducer (a ticket is served only when nothing is cooking, a check settles once); one money model shared by the ticket, the receipt, the shift report and the sales report; a 3D dish stage on the guest menu behind a lazy chunk with photo + reduced-motion fallback; app toasts and confirm dialogs in place of every native browser dialog |
 
 ## Key rules (from spec — enforced in code)
 
@@ -501,3 +541,5 @@ Express + SQLite (`better-sqlite3`) via action log + SSE when a server is presen
 - Send = commit: 15s undo, then kitchen owns the item; bump recall 60s
 - Status is color + word, never color alone; 44px targets on Floor/Kitchen
 - Plate cost uses last invoice cost; contribution bands high ≥70 / ok 55–70 / low 10–55 / loss <10
+- Ticket status follows the food, not the clock: `sent → in prep → ready → served → paid`, and a course fired after service puts the ticket back in the kitchen. The transitions are enforced in the reducer — a ticket is served only when nothing is cooking, and a check settles exactly once
+- One money model: `order.total` is the check value (goods − discount + service + tax, no tip), `order.tip` rides on top, `order.payments` sums to what was actually collected, and the ticket, the receipt, the shift report and the sales report all read the same charge sheet

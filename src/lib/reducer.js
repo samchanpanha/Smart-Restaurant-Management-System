@@ -8,12 +8,14 @@ import { packFactor, sanitizePackList, slugUnitId } from './units.js'
 import {
   applyAuto86,
   assertTableTransition,
+  canTicketTransition,
   costingFor,
   findAvailableTablesForSlot,
   isTableAvailable,
   minutesBetween,
   money,
-  orderSubtotal,
+  orderCharges,
+  orderStatusFromItems,
   plateCostFor,
   quoteWaitMinutes,
   reorderPointFor,
@@ -1102,7 +1104,9 @@ function shopReducerBase(state, action) {
               : null,
           }
         })
-        const status = o.status === 'open' ? 'sent' : o.status === 'sent' ? 'in_prep' : o.status
+        // The status follows the food: firing a course onto a ticket that was
+        // already ready or handed over puts it back into production.
+        const status = orderStatusFromItems(items, o.status)
         const deliveryUpdate = o.type === 'delivery' && o.deliveryStatus === 'queued'
           ? { deliveryStatus: 'preparing', deliveryStatusAt: nowIso, preparingAt: nowIso }
           : {}
@@ -1183,11 +1187,11 @@ function shopReducerBase(state, action) {
         })
       }
       if (!newLines.length) return state.orders === orders ? state : { ...state, orders, tables }
-      orders = orders.map((o) =>
-        o.id === order.id
-          ? { ...o, items: [...o.items, ...newLines], status: o.status === 'open' ? 'sent' : o.status === 'sent' ? 'in_prep' : o.status, sentAt: o.sentAt || nowIso }
-          : o,
-      )
+      orders = orders.map((o) => {
+        if (o.id !== order.id) return o
+        const items = [...o.items, ...newLines]
+        return { ...o, items, status: orderStatusFromItems(items, o.status), sentAt: o.sentAt || nowIso }
+      })
       const sale = applyStockLines(state, saleMovements(state, totalDec, {
         ref: order.id,
         note: `${newLines.reduce((sum, line) => sum + line.qty, 0)} line(s) from the QR menu`,
@@ -1280,10 +1284,9 @@ function shopReducerBase(state, action) {
             ? { ...i, status: 'bump', bumpedAt: nowIso }
             : i,
         )
-        // Derive order progress
-        let status = o.status
-        if (items.length && items.every((i) => i.status === 'bump')) status = 'ready'
-        else if (items.some((i) => i.status === 'fired')) status = o.status === 'sent' ? 'in_prep' : o.status
+        // The status follows the food: the last line bumped makes the ticket
+        // ready, and a voided line no longer holds it back.
+        const status = orderStatusFromItems(items, o.status)
         const deliveryUpdate = o.type === 'delivery' && status === 'ready' && o.deliveryStatus === 'preparing'
           ? { deliveryStatus: 'ready', deliveryStatusAt: nowIso, readyAt: nowIso }
           : {}
@@ -1309,7 +1312,8 @@ function shopReducerBase(state, action) {
         const deliveryUpdate = o.type === 'delivery' && o.deliveryStatus === 'ready'
           ? { deliveryStatus: 'preparing', deliveryStatusAt: nowIso, readyAt: null }
           : {}
-        return { ...o, items, status: 'in_prep', ...deliveryUpdate }
+        // A recalled line is back in the pan, so the ticket is in prep again.
+        return { ...o, items, status: orderStatusFromItems(items, o.status), ...deliveryUpdate }
       })
       const recalls = { ...state.recalls }
       delete recalls[key]
@@ -1325,8 +1329,15 @@ function shopReducerBase(state, action) {
     // ── Pay / void / comp ──────────────────────────────────
     case 'SERVE_ORDER': {
       const { orderId } = action
+      const order = state.orders.find((o) => o.id === orderId)
+      if (!order) return state
+      // The machine is the only door: a ticket that is not ready cannot be
+      // served, and nothing may still be in the pan when the plate lands.
+      if (!canTicketTransition(order.status, 'served')) return state
+      const stillCooking = (order.items || []).some((i) => !i.voided && i.status === 'fired')
+      if (stillCooking) return state
       const orders = state.orders.map((o) =>
-        o.id === orderId && o.status === 'ready' ? { ...o, status: 'served' } : o,
+        o.id === orderId ? { ...o, status: 'served', servedAt: new Date().toISOString() } : o,
       )
       return { ...state, orders }
     }
@@ -1365,12 +1376,22 @@ function shopReducerBase(state, action) {
     case 'PAY_ORDER': {
       const { orderId, method = 'card', split = null, tip = 0, freeTable = false, tenderDetails = null, payments = null } = action
       const order = state.orders.find((o) => o.id === orderId)
-      if (!order || !['ready', 'served', 'in_prep', 'sent'].includes(order.status)) return state
+      if (!order) return state
+      // One settlement per check. The machine is the only door into "paid",
+      // so a second tap, a replayed action, or a second terminal cannot
+      // move the money twice.
+      if (!canTicketTransition(order.status, 'paid')) return state
       const menuById = Object.fromEntries(state.menu.map((m) => [m.id, m]))
-      const total = roundMoney(orderSubtotal(order, menuById) + (Number(order.deliveryFee) || 0))
+      const tipAmount = roundMoney(Number(tip) || 0)
+      // One charge sheet for the whole product: the same numbers the guest
+      // saw at the till, the receipt prints, and the Sales Report reads.
+      const charges = orderCharges(order, menuById, state.settings || {}, { tip: tipAmount })
+      // `total` is the check value — goods, discount, service, tax, delivery.
+      // The tip rides on top of it and is collected with it.
+      const total = charges.total
       const finalPayments = Array.isArray(payments) && payments.length > 0
         ? payments
-        : [{ method, amount: roundMoney(total + (Number(tip) || 0)), at: new Date().toISOString() }]
+        : [{ method, amount: roundMoney(total + tipAmount), at: new Date().toISOString() }]
       const orders = state.orders.map((o) =>
         o.id === orderId
           ? {
@@ -1379,8 +1400,18 @@ function shopReducerBase(state, action) {
               paidAt: new Date().toISOString(),
               payMethod: method,
               split,
-              tip: Number(tip) || 0,
+              tip: tipAmount,
               total,
+              charges: {
+                subtotal: charges.subtotal,
+                discount: charges.discount,
+                service: charges.service,
+                tax: charges.tax,
+                delivery: charges.delivery,
+                total: charges.total,
+                tip: tipAmount,
+                grandTotal: charges.grandTotal,
+              },
               tenderDetails,
               payments: finalPayments,
               billRequested: null,
@@ -1410,7 +1441,9 @@ function shopReducerBase(state, action) {
     case 'VOID_ORDER': {
       const { orderId, reason } = action
       const order = state.orders.find((o) => o.id === orderId)
-      if (!order || ['paid', 'void'].includes(order.status)) return state
+      if (!order) return state
+      // A closed check is closed for good; a live one can be voided.
+      if (!canTicketTransition(order.status, 'void')) return state
       const nowIso = new Date().toISOString()
       const orders = state.orders.map((o) => o.id === orderId
         ? {
@@ -2735,7 +2768,7 @@ export function getAlerts(state) {
         type: 'bill_request',
         severity: 'med',
         label: `Bill requested · Table ${tableName(state, order.tableId)}`,
-        detail: `${money(orderSubtotal(order, menuById))} due — guest is ready to pay`,
+        detail: `${money(orderCharges(order, menuById, state.settings || {}).total)} due — guest is ready to pay`,
         entityId: order.id,
       })
     }
@@ -2772,7 +2805,11 @@ export function getDashboard(state, now = Date.now()) {
   const todayOrders = state.orders.filter((order) => isToday(order.paidAt || order.createdAt))
   const menuById = Object.fromEntries(state.menu.map((m) => [m.id, m]))
   const paid = todayOrders.filter((o) => o.status === 'paid')
-  const sales = paid.reduce((s, o) => s + (o.total ?? orderSubtotal(o, menuById)), 0)
+  // Takings are the money actually collected — the same figure the Sales
+  // Report and the shift report read, so the dashboard cannot disagree
+  // with the books.
+  const takingsFor = (order) => orderCharges(order, menuById, state.settings || {}).grandTotal
+  const sales = paid.reduce((s, o) => s + takingsFor(o), 0)
   const covers = paid.reduce((s, o) => s + (o.covers ?? 2), 0)
   const avgCheck = paid.length ? sales / paid.length : 0
   const occupied = state.tables.filter((t) => ['seated', 'ordered', 'billed'].includes(t.status)).length
@@ -2790,9 +2827,14 @@ export function getDashboard(state, now = Date.now()) {
       tonightFood += plate * (it.qty || 0)
     }
   }
+  // Food cost is a margin ratio, so it is measured against net sales —
+  // menu sales less discounts, plus service. Tax and tips are not revenue.
   const tonightSales = todayOrders
     .filter((o) => o.status !== 'void')
-    .reduce((s, o) => s + (o.total ?? orderSubtotal(o, menuById)), 0)
+    .reduce((s, o) => {
+      const charges = orderCharges(o, menuById, state.settings || {})
+      return s + (charges.subtotal - charges.discount + charges.service)
+    }, 0)
   const tonightCostPct = tonightSales ? tonightFood / tonightSales : 0
   const hist = state.salesHistory.map((d) => d.foodCostPct)
   const foodCost7d = [...hist, tonightCostPct].reduce((a, b) => a + b, 0) / (hist.length + 1)

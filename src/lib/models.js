@@ -330,12 +330,45 @@ export function orderTotals(order, menuById, taxPct = 0) {
   }
 }
 
-export function orderStatusFromItems(items) {
-  // Derive ticket progress from item states (held/fired/bump).
-  if (!items.length) return 'open'
-  if (items.every((i) => i.status === 'bump')) return 'ready'
-  if (items.some((i) => i.status === 'fired')) return 'in_prep'
-  return 'open'
+/**
+ * Where a ticket stands, given the lines it holds.
+ *
+ * The status can never run ahead of the kitchen:
+ *
+ * - Voided lines are excluded. A void takes the line out of production, so
+ *   it must not hold the ticket out of "ready" forever.
+ * - Food in the pan owns the ticket. A ticket that was already declared
+ *   ready or handed to the guest drops back to "in prep" the moment new
+ *   food is fired for it — a dessert fired after the main course is
+ *   cooking, not ready.
+ * - "Served" is a server action, not a kitchen one, so it survives a bump
+ *   but not a re-fire.
+ *
+ * `current` is the status the ticket holds now; the derivation only demotes
+ * it when the kitchen has taken the ticket back, and only promotes it when
+ * the last live line was bumped.
+ */
+export function orderStatusFromItems(items, current = 'open') {
+  if (current === 'paid' || current === 'void') return current
+  const live = (items || []).filter((item) => !item.voided)
+  if (!live.length) return current
+
+  const anyHeld = live.some((item) => item.status === 'held')
+  const anyFired = live.some((item) => item.status === 'fired')
+  const allBumped = live.every((item) => item.status === 'bump')
+
+  // Something is in the pan.
+  if (anyFired) {
+    if (current === 'ready' || current === 'served') return 'in_prep'
+    if (current === 'open') return 'sent'
+    return 'in_prep'
+  }
+  // Everything produced is done.
+  if (allBumped) return current === 'served' ? 'served' : 'ready'
+  // Nothing in the pan, and lines are still held back: the ticket keeps the
+  // stage it reached, but it can never claim to be further along than "sent".
+  if (anyHeld && current === 'in_prep') return 'sent'
+  return current
 }
 
 // ─── Booking & Table Availability Helpers ─────────────────────────

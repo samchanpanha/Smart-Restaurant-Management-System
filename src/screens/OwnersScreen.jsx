@@ -4,6 +4,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { Icon } from '../components/Icon'
+import { useConfirm } from '../components/ui/confirm-context'
 import { useI18n } from '../lib/i18n'
 
 const cardCls = 'rounded-2xl border border-zinc-200/80 bg-white shadow-sm'
@@ -27,6 +28,7 @@ async function send(method, route, body) {
 }
 
 export default function OwnersScreen() {
+  const confirm = useConfirm()
   const { lang, dict } = useI18n()
   const ow = dict.owners || {}
   const [owners, setOwners] = useState([])
@@ -73,7 +75,13 @@ export default function OwnersScreen() {
   }
 
   async function remove(id) {
-    if (typeof window !== 'undefined' && !window.confirm('Delete this restaurant and all its data?')) return
+    const ok = await confirm({
+      title: 'Delete this restaurant?',
+      body: 'Every menu, ticket, invoice and user of this restaurant goes with it.',
+      confirmLabel: 'Delete restaurant',
+      tone: 'danger',
+    })
+    if (!ok) return
     try { await send('DELETE', `/api/admin/owners/${id}`); await load() } catch (failure) { setError(failure.message) }
   }
 

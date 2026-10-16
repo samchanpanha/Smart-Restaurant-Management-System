@@ -10,6 +10,7 @@ import { Icon } from './Icon'
 import { NAV_SECTIONS, ROLES, SCREEN_ICONS, allowedScreens, screenForAlert } from '../lib/constants'
 import { useAuth } from '../lib/auth'
 import { translateScreenLabel, useDomTranslator, useI18n } from '../lib/i18n'
+import { useConfirm } from './ui/confirm-context'
 import { LOCATIONS, useNow, useRestora } from '../lib/store'
 
 // One label per screen, everywhere: the sidebar, the tab strip and the
@@ -25,6 +26,7 @@ function displayOrderId(id) {
 }
 
 export default function AppShell({ children }) {
+  const confirm = useConfirm()
   const {
     state, dispatch, role, setRole, screen, setScreen, link, resync, notice, locId, setLocId,
     openScreenInTab, alerts,
@@ -256,10 +258,15 @@ export default function AppShell({ children }) {
           </div>
           <button
             type="button"
-            onClick={() => {
-              if (window.confirm(`Reset demo data to the Friday-night seed on ${link.mode === 'server' ? 'ALL terminals' : 'this terminal'}?`)) {
-                dispatch({ type: 'RESET_ALL' })
-              }
+            onClick={async () => {
+              const where = link.mode === 'server' ? 'ALL terminals' : 'this terminal'
+              const ok = await confirm({
+                title: 'Reset demo data?',
+                body: `This puts the Friday-night seed back on ${where}.`,
+                confirmLabel: 'Reset demo data',
+                tone: 'danger',
+              })
+              if (ok) dispatch({ type: 'RESET_ALL' })
             }}
             className="mt-2 w-full rounded-lg px-2.5 py-2 text-left text-[11px] text-zinc-500 transition-colors hover:bg-red-500/10 hover:text-red-300"
           >
@@ -347,7 +354,7 @@ export default function AppShell({ children }) {
                       </select>
                     </>
                   )}
-                  <button type="button" onClick={() => { setProfileOpen(false); if (window.confirm(`Reset demo data to the Friday-night seed on ${link.mode === 'server' ? 'ALL terminals' : 'this terminal'}?`)) dispatch({ type: 'RESET_ALL' }) }} className="mt-2 w-full rounded-lg px-3 py-2 text-left text-xs text-red-600 hover:bg-red-50">{dict.resetDemoData}</button>
+                  <button type="button" onClick={async () => { setProfileOpen(false); const where = link.mode === 'server' ? 'ALL terminals' : 'this terminal'; const ok = await confirm({ title: 'Reset demo data?', body: `This puts the Friday-night seed back on ${where}.`, confirmLabel: 'Reset demo data', tone: 'danger' }); if (ok) dispatch({ type: 'RESET_ALL' }) }} className="mt-2 w-full rounded-lg px-3 py-2 text-left text-xs text-red-600 hover:bg-red-50">{dict.resetDemoData}</button>
                 </div>
               )}
             </div>

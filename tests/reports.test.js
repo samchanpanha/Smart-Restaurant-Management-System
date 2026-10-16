@@ -29,6 +29,7 @@ test('dashboard shift metrics include only orders from the local day', () => {
   const yesterday = new Date(2026, 9, 14, 11, 0)
   const today = new Date(2026, 9, 15, 11, 0)
   const now = new Date(2026, 9, 15, 18, 0).getTime()
+  const menuById = Object.fromEntries(shop.menu.map((item) => [item.id, item]))
   shop.orders = [
     {
       id: 'yesterday', status: 'paid', createdAt: yesterday.toISOString(), paidAt: yesterday.toISOString(),
@@ -48,12 +49,19 @@ test('dashboard shift metrics include only orders from the local day', () => {
 
   const dashboard = getDashboard(shop, now)
 
-  assert.equal(dashboard.sales, 80)
+  // Takings are read off the same charge sheet the Sales Report reads, so
+  // the dashboard can never quote a different night's money.
+  const todayCharges = orderCharges(shop.orders[1], menuById, shop.settings)
+  const yesterdayCharges = orderCharges(shop.orders[0], menuById, shop.settings)
+  assert.equal(dashboard.sales, todayCharges.grandTotal)
+  assert.notEqual(dashboard.sales, todayCharges.grandTotal + yesterdayCharges.grandTotal)
   assert.equal(dashboard.covers, 2)
   assert.equal(dashboard.checks, 1)
-  assert.equal(dashboard.avgCheck, 80)
+  assert.equal(dashboard.avgCheck, todayCharges.grandTotal)
   assert.equal(dashboard.avgTicketMin, 25)
-  assert.equal(dashboard.tonightCostPct, 0.25)
+  // Food cost is a margin ratio, so it is measured against net sales.
+  const netSales = todayCharges.subtotal - todayCharges.discount + todayCharges.service
+  assert.equal(dashboard.tonightCostPct, 20 / netSales)
   assert.equal(dashboard.topSellers[0].qty, 2)
 })
 

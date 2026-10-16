@@ -5,7 +5,7 @@
 // Salmon 86'd mid-service.
 
 import { defaultSettings, documentNumber } from './settings.js'
-import { plateCostFor } from './models.js'
+import { orderCharges, plateCostFor } from './models.js'
 import {
   buildInvoiceDocument, buildPurchaseOrderDocument, buildReceiptDocument,
   buildReportDocument, buildShiftReport, buildTicketDocument,
@@ -525,16 +525,16 @@ export function buildSeed() {
     },
   ]
 
-  // Earlier paid checks tonight (avg check ≈ $48)
+  // Earlier paid checks tonight (avg check ≈ $48 collected)
   const paidSeed = [
-    { total: 52, covers: 2, items: [['m_burger', 2], ['m_soda', 2], ['m_icecream', 1]], min: 175 },
-    { total: 44, covers: 2, items: [['m_chickenpasta', 2], ['m_coffee', 2]], min: 160 },
-    { total: 61, covers: 4, items: [['m_steak', 1], ['m_burger', 1], ['m_salad', 2], ['m_soda', 4]], min: 140 },
-    { total: 38, covers: 2, items: [['m_fishchips', 2], ['m_soda', 2]], min: 120 },
-    { total: 47, covers: 3, items: [['m_burger', 1], ['m_vegbowl', 1], ['m_wings', 1], ['m_soda', 3]], min: 100 },
-    { total: 55, covers: 4, items: [['m_chickenpasta', 2], ['m_soup', 2], ['m_cake', 2]], min: 80 },
-    { total: 42, covers: 2, items: [['m_steak', 1], ['m_salad', 1], ['m_coffee', 2]], min: 65 },
-    { total: 49, covers: 3, items: [['m_burger', 2], ['m_wings', 1], ['m_soda', 3]], min: 50 },
+    { covers: 2, items: [['m_burger', 2], ['m_soda', 2]], min: 175 },
+    { covers: 2, items: [['m_chickenpasta', 1], ['m_burger', 1], ['m_coffee', 1]], min: 160 },
+    { covers: 3, items: [['m_burger', 1], ['m_vegbowl', 1], ['m_soda', 2]], min: 140 },
+    { covers: 2, items: [['m_steak', 1], ['m_salad', 2]], min: 120 },
+    { covers: 2, items: [['m_fishchips', 2]], min: 100 },
+    { covers: 3, items: [['m_burger', 1], ['m_wings', 1], ['m_soup', 1], ['m_soda', 1]], min: 80 },
+    { covers: 4, items: [['m_chickenpasta', 1], ['m_soup', 1], ['m_cake', 1], ['m_soda', 2]], min: 65 },
+    { covers: 2, items: [['m_burger', 1], ['m_wings', 1], ['m_coffee', 2]], min: 50 },
   ]
   paidSeed.forEach((p, i) => {
     orders.push({
@@ -549,14 +549,12 @@ export function buildSeed() {
       voidReason: null,
       compTotal: 0,
       covers: p.covers,
-      total: p.total,
+      // The money is filled in below, from the lines themselves, so a
+      // settled check always agrees with what it actually sold.
+      total: 0,
       payMethod: i % 4 === 3 ? 'cash' : 'card',
-      tip: Math.round(p.total * 0.18 * 100) / 100,
-      payments: [{
-        method: i % 4 === 3 ? 'cash' : 'card',
-        amount: Math.round(p.total * 1.18 * 100) / 100,
-        at: minAgo(p.min),
-      }],
+      tip: 0,
+      payments: [],
       items: p.items.map(([menuItemId, qty], j) => ({
         id: `op${i}_${j}`, menuItemId, qty, modifiers: [],
         station: 'expo', status: 'bump', course: 'main', notes: '',
@@ -724,6 +722,32 @@ export function buildSeed() {
     rushHour: 18,
     taxPct: 0.0875,
     servicePct: 0,
+  }
+
+  // A settled check carries the money a real settlement would: its own
+  // lines priced, plus tax, plus the tip that was collected. A demo whose
+  // dashboard and its sales report disagree teaches the wrong thing, so
+  // the seed prices the paid checks from the same charge sheet the till
+  // and the reports use.
+  const seedMenuById = Object.fromEntries(menuWithDetail.map((item) => [item.id, item]))
+  for (const order of orders) {
+    if (order.status !== 'paid') continue
+    const charges = orderCharges(order, seedMenuById, settings)
+    const tip = Math.round(charges.subtotal * 0.18 * 100) / 100
+    const grandTotal = Math.round((charges.total + tip) * 100) / 100
+    order.total = charges.total
+    order.tip = tip
+    order.payments = [{ method: order.payMethod, amount: grandTotal, at: order.paidAt }]
+    order.charges = {
+      subtotal: charges.subtotal,
+      discount: charges.discount,
+      service: charges.service,
+      tax: charges.tax,
+      delivery: charges.delivery,
+      total: charges.total,
+      tip,
+      grandTotal,
+    }
   }
 
   // Plate cost is recorded when a dish leaves the kitchen. Without this,

@@ -7,6 +7,7 @@ import assert from 'node:assert/strict'
 import test, { after, before } from 'node:test'
 import express from 'express'
 import { buildEmpire, reducer } from '../src/lib/reducer.js'
+import { rangeBounds, salesSummary } from '../src/lib/reports.js'
 import {
   TELEGRAM_COMMANDS,
   commandsFor,
@@ -19,6 +20,8 @@ import {
 import { createTelegramRouter, parseChatRoles, sendTelegramMessage } from '../server/telegram.js'
 
 const shopOf = (empire) => empire.locations.downtown
+// Money as a regular-expression fragment: "$310.00".
+const usd = (n) => '\\$' + Number(n).toFixed(2).replace('.', '\\.')
 
 // ─── The engine ────────────────────────────────────────────────────
 
@@ -59,7 +62,8 @@ test('manager-only commands are gated and every reply is plain text', () => {
 test('the numbers come from the same reports engine the screens use', () => {
   const shop = shopOf(buildEmpire())
   const today = runTelegramCommand('/today', { shop, role: 'staff' })
-  assert.match(today.reply, /Net sales \$425\.00/)
+  const sales = salesSummary(shop, rangeBounds('tonight'))
+  assert.match(today.reply, new RegExp(`Net sales ${usd(sales.netSales)}`))
   assert.match(today.reply, /Top seller: Restora Burger/)
   assert.match(today.reply, /86’d: 1/)
 
@@ -116,7 +120,7 @@ test('/buy and /digest are the manager’s view of the same numbers', () => {
 
   const digest = runTelegramCommand('/digest', { shop, role: 'manager' })
   assert.match(digest.reply, /Close of day · Restora/)
-  assert.match(digest.reply, /Net sales \$425\.00/)
+  assert.match(digest.reply, new RegExp(`Net sales ${usd(salesSummary(shop, rangeBounds('tonight')).netSales)}`))
   assert.match(digest.reply, /Needs ordering: OUT Salmon fillet/)
 })
 
@@ -259,7 +263,7 @@ test('a staff chat can look but not touch', async () => {
   assert.equal(body.ok, true)
   assert.equal(body.role, 'staff')
   assert.equal(body.command, 'today')
-  assert.match(body.reply, /Net sales \$425\.00/)
+  assert.match(body.reply, new RegExp(`Net sales ${usd(salesSummary(shopOf(buildEmpire()), rangeBounds('tonight')).netSales)}`))
   assert.equal(body.applied, 0)
   assert.equal(body.delivery, 'skipped', 'no token configured in tests')
   assert.equal(applied.length, 0)

@@ -20,6 +20,7 @@ function ModifierModal({ item, course, onAdd, onClose }) {
                 <button
                   key={opt}
                   type="button"
+                  data-testid="modifier-option"
                   onClick={() => setPicks((p) => ({ ...p, [g.id]: opt }))}
                   className={`min-h-[44px] rounded-lg px-3.5 text-sm font-semibold ring-1 ring-inset transition-colors ${
                     picks[g.id] === opt
@@ -46,6 +47,7 @@ function ModifierModal({ item, course, onAdd, onClose }) {
         </Field>
         <button
           type="button"
+          data-testid="modifier-add"
           disabled={!ready}
           onClick={() =>
             onAdd({
