@@ -278,14 +278,17 @@ export function buildShiftReport(shop, { range = 'tonight', now = Date.now() } =
   const menuById = Object.fromEntries((shop.menu || []).map((item) => [item.id, item]))
   const invById = Object.fromEntries((shop.inventory || []).map((item) => [item.id, item]))
   const paid = (shop.orders || []).filter((order) => order.status === 'paid')
-  const liveTotals = (shop.orders || [])
-    .filter((order) => order.status !== 'void')
-    .reduce((sum, order) => sum + computeOrderTotals(order, menuById, shop.settings || {}).total, 0)
-  const paidSales = paid.reduce((sum, order) => sum + (Number(order.total) || 0), 0)
+  // Takings are what the guest actually paid: goods + service + tax + tip.
+  // The Sales Report and the dashboard read the same charge sheet, so the
+  // shift report and the sales report can never report two different nights.
+  const paidSales = paid.reduce(
+    (sum, order) => sum + computeOrderTotals(order, menuById, shop.settings || {}).grandTotal,
+    0,
+  )
   const periodDays = range === '7d' ? 7 : range === '30d' ? 30 : 1
   const history = (shop.salesHistory || []).slice(-periodDays)
   const historySales = history.reduce((sum, day) => sum + (Number(day.sales) || 0), 0)
-  const sales = range === 'tonight' ? Math.max(liveTotals, paidSales) : historySales + paidSales
+  const sales = range === 'tonight' ? paidSales : historySales + paidSales
   const covers = paid.reduce((sum, order) => sum + (Number(order.covers) || 2), 0)
   const avgCheck = paid.length ? sales / paid.length : 0
 
@@ -293,7 +296,11 @@ export function buildShiftReport(shop, { range = 'tonight', now = Date.now() } =
   for (const order of shop.orders || []) {
     if (order.status === 'void') continue
     const hour = new Date(order.createdAt || Date.now()).getHours()
-    const value = order.status === 'paid' ? Number(order.total) || 0 : computeOrderTotals(order, menuById, shop.settings || {}).total
+    // A paid check contributes what was collected; an open one contributes
+    // what it would come to. Same sheet either way.
+    const value = order.status === 'paid'
+      ? computeOrderTotals(order, menuById, shop.settings || {}).grandTotal
+      : computeOrderTotals(order, menuById, shop.settings || {}).total
     hourly[hour] = (hourly[hour] || 0) + value
   }
 

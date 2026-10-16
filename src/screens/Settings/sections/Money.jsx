@@ -3,8 +3,10 @@ import StatusPill from '../../../components/StatusPill'
 import { CURRENCIES, ROUNDING_RULES, currencyMeta, formatMoney, normalizeCurrencyEntry } from '../../../lib/currency'
 import { money } from '../../../lib/models'
 import { Field, Toggle, Card, inputCls } from '../primitives'
+import { useConfirm } from '../../../components/ui/confirm-context'
 
 function MoneySection({ draft, patch, dispatch, settings, state, locationLabel }) {
+  const confirm = useConfirm()
   const [newCode, setNewCode] = useState('')
 
   const rows = draft.currencies || []
@@ -49,10 +51,12 @@ function MoneySection({ draft, patch, dispatch, settings, state, locationLabel }
           <button
             type="button"
             disabled={draft.baseCurrency === settings.baseCurrency}
-            onClick={() => {
-              const confirmed = window.confirm(
-                `Re-base the ledger on ${draft.baseCurrency}? Every rate is recomputed relative to it. Catalog prices stay as entered — use "Rescale catalog" separately if the numbers themselves must change.`,
-              )
+            onClick={async () => {
+              const confirmed = await confirm({
+                title: `Re-base the ledger on ${draft.baseCurrency}?`,
+                body: 'Every rate is recomputed relative to it. Catalog prices stay as entered — use "Revalue the catalog" separately if the numbers themselves must change.',
+                confirmLabel: 'Re-base the ledger',
+              })
               if (!confirmed) return
               dispatch({ type: 'SET_BASE_CURRENCY', code: draft.baseCurrency })
             }}
@@ -250,6 +254,7 @@ function MoneySection({ draft, patch, dispatch, settings, state, locationLabel }
 // ─── Deliberate catalog revaluation ────────────────────────────────
 
 function RescaleCard({ dispatch, state, locationLabel }) {
+  const confirm = useConfirm()
   const [factor, setFactor] = useState('')
   const [armed, setArmed] = useState(false)
   const [info, setInfo] = useState('')
@@ -260,10 +265,13 @@ function RescaleCard({ dispatch, state, locationLabel }) {
   const sample = state.menu.slice(0, 3)
   const stockValueNow = state.inventory.reduce((sum, item) => sum + Math.max(0, item.onHand) * (item.lastCost || 0), 0)
 
-  function apply() {
-    const confirmed = window.confirm(
-      `Revalue ${state.menu.length} menu prices and ${state.inventory.length} stock costs on ${locationLabel} by ×${value}? This is not a conversion — use it when the numbers themselves change (new price list, re-denomination, bulk inflation).`,
-    )
+  async function apply() {
+    const confirmed = await confirm({
+      title: `Revalue the catalog by ×${value}?`,
+      body: `${state.menu.length} menu prices and ${state.inventory.length} stock costs on ${locationLabel} change. This is not a conversion — use it when the numbers themselves change (new price list, re-denomination, bulk inflation).`,
+      confirmLabel: 'Revalue the catalog',
+      tone: 'danger',
+    })
     if (!confirmed) return
     dispatch({ type: 'RESCALE_CATALOG', factor: value })
     setInfo(`Catalog revalued ×${value} on ${locationLabel}.`)

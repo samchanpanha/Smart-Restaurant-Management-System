@@ -7,7 +7,8 @@
 import { useMemo, useState } from 'react'
 import { Icon } from '../components/Icon'
 import StatusPill from '../components/StatusPill'
-import { Field, Modal, btnGhost, btnPrimary } from '../components/ui'
+import { Field, Modal, Select, btnGhost, btnPrimary } from '../components/ui'
+import { useToast } from '../components/ui/toast-context'
 import { useI18n } from '../lib/i18n'
 import { money, reorderPointFor, stockStatusFor, suggestedOrderQty, uid } from '../lib/models'
 import { CURRENCIES } from '../lib/currency'
@@ -436,6 +437,68 @@ function SupplierDetail({ supplier, onEdit, onDelete }) {
   )
 }
 
+// ─── Delete a supplier ─────────────────────────────────────────────
+// Deleting a vendor that still owns stock is a real decision, so it gets a
+// real dialog: it says how many items move, lets the operator pick where
+// they go, and refuses plainly when there is nowhere to put them.
+
+function DeleteSupplierModal({ supplier, used, others, onClose, onConfirm }) {
+  const [reassignTo, setReassignTo] = useState(others[0]?.id || '')
+  const blocked = used.length > 0 && others.length === 0
+
+  return (
+    <Modal
+      title={`Delete ${supplier.name}?`}
+      sub={used.length ? `${used.length} stock item${used.length === 1 ? '' : 's'} point at this supplier.` : 'This supplier has no stock items.'}
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" onClick={onClose} className="min-h-10 rounded-xl border border-zinc-200 px-4 text-sm font-semibold text-zinc-700 hover:bg-zinc-50">
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={blocked}
+            onClick={() => onConfirm(reassignTo || null)}
+            className="min-h-10 rounded-xl bg-red-600 px-4 text-sm font-bold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Delete supplier
+          </button>
+        </>
+      }
+    >
+      {blocked ? (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm leading-relaxed text-amber-900">
+          This is the only supplier and it still owns stock items. Reassign them in{' '}
+          <strong>Catalog → Ingredients</strong> before deleting it.
+        </p>
+      ) : (
+        <>
+          {used.length > 0 && (
+            <div className="mb-4">
+              <Field label={`Move ${used.length} stock item${used.length === 1 ? '' : 's'} to`}>
+                <Select value={reassignTo} onChange={(event) => setReassignTo(event.target.value)}>
+                  {others.map((other) => (
+                    <option key={other.id} value={other.id}>
+                      {other.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <p className="mt-1.5 text-[11px] leading-relaxed text-zinc-500">
+                The items keep their on-hand quantity and reorder point; only the vendor behind them changes.
+              </p>
+            </div>
+          )}
+          <p className="text-sm leading-relaxed text-zinc-600">
+            Delivery history and invoices stay on file. The supplier disappears from order and reorder lists.
+          </p>
+        </>
+      )}
+    </Modal>
+  )
+}
+
 // ─── Screen ────────────────────────────────────────────────────────
 
 export default function SuppliersScreen() {
@@ -447,6 +510,8 @@ export default function SuppliersScreen() {
   const [status, setStatus] = useState('all')
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState(false)
+  const [deleting, setDeleting] = useState(null)
+  const { notify } = useToast()
 
   const suppliers = state.suppliers.filter((supplier) => {
     if (status !== 'all' && supplier.status !== status) return false
@@ -532,26 +597,7 @@ export default function SuppliersScreen() {
             <SupplierDetail
               supplier={selected}
               onEdit={() => setEditing(true)}
-              onDelete={() => {
-                const used = state.inventory.filter((item) => item.supplierId === selected.id)
-                const others = state.suppliers.filter((supplier) => supplier.id !== selected.id)
-                if (used.length && !others.length) {
-                  window.alert('This is the only supplier and it still owns stock items. Reassign them first.')
-                  return
-                }
-                const target = used.length
-                  ? window.prompt(`Move ${used.length} SKU(s) to which supplier? Enter a name:\n${others.map((s) => s.name).join(', ')}`, others[0]?.name || '')
-                  : null
-                if (used.length && !target) return
-                const match = others.find((supplier) => supplier.name.toLowerCase() === String(target).toLowerCase())
-                if (used.length && !match) {
-                  window.alert('No supplier by that name — nothing changed.')
-                  return
-                }
-                if (!window.confirm(`Delete ${selected.name}?`)) return
-                dispatch({ type: 'DELETE_SUPPLIER', supplierId: selected.id, reassignTo: match?.id || null })
-                setSelectedId(others[0]?.id || null)
-              }}
+              onDelete={() => setDeleting(selected)}
             />
           ) : (
             <div className={`${cardCls} p-10 text-center`}>
@@ -579,6 +625,21 @@ export default function SuppliersScreen() {
           onSave={(supplier) => {
             dispatch({ type: 'UPSERT_SUPPLIER', supplier })
             setEditing(false)
+          }}
+        />
+      )}
+      {deleting && (
+        <DeleteSupplierModal
+          supplier={deleting}
+          used={state.inventory.filter((item) => item.supplierId === deleting.id)}
+          others={state.suppliers.filter((supplier) => supplier.id !== deleting.id)}
+          onClose={() => setDeleting(null)}
+          onConfirm={(reassignTo) => {
+            const others = state.suppliers.filter((supplier) => supplier.id !== deleting.id)
+            dispatch({ type: 'DELETE_SUPPLIER', supplierId: deleting.id, reassignTo: reassignTo || null })
+            setDeleting(null)
+            setSelectedId(others[0]?.id || null)
+            notify(`${deleting.name} deleted.`, 'success')
           }}
         />
       )}

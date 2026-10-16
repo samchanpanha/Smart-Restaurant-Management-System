@@ -6,6 +6,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import LanguageSwitcher from '../components/LanguageSwitcher'
 import MenuConcierge from '../components/MenuConcierge'
+import DishShowcase from '../components/three/DishShowcase'
 import { Sheet } from '../components/ui'
 import { QRCodeSVG } from 'qrcode.react'
 import {
@@ -191,7 +192,11 @@ function DishModal({ item, onAdd, onClose, showImages = true }) {
   return (
     <Sheet onClose={onClose} label={item.name}>
       {showImages && item.imageUrl && (
-        <DishImage src={item.imageUrl} className="mb-4 h-44 w-full rounded-2xl" />
+        <DishShowcase
+          dish={item}
+          className="mb-4 h-44 w-full rounded-2xl"
+          photo={<DishImage src={item.imageUrl} className="h-full w-full" />}
+        />
       )}
         <h2 className="text-xl font-extrabold text-stone-900">
           {dishTitle}

@@ -45,12 +45,28 @@ export const TABLE_STATUS_META = {
 
 export const TICKET_STATUSES = ['open', 'sent', 'in_prep', 'ready', 'served', 'paid', 'void']
 
+// The ticket state machine. It is enforced by the reducer (`canTicketTransition`),
+// not just drawn on the System screen — an action that would move a ticket
+// outside this graph is rejected.
+//
+//   open ──send──▶ sent ──fire again──▶ in_prep ──bump──▶ ready ──serve──▶ served ──pay──▶ paid
+//     │               │                   │                  │               │
+//     └───────────────┴───────────────────┴──────────────────┴───────────────┘
+//                    void (manager, from any live ticket)
+//
+// Two edges are not obvious and are the ones that bite in a busy room:
+//
+// - `sent → paid` / `in_prep → paid`: a guest who is leaving settles before
+//   the kitchen finishes. Legal, and written down rather than implied.
+// - `ready → in_prep` / `served → in_prep`: a course fired onto a ticket that
+//   was already handed over. The ticket goes back into production instead of
+//   claiming to be ready while food is in the pan.
 export const TICKET_TRANSITIONS = {
   open: ['sent', 'void'],
-  sent: ['in_prep', 'void'],
-  in_prep: ['ready', 'void'],
-  ready: ['served', 'void'],
-  served: ['paid', 'void'],
+  sent: ['in_prep', 'paid', 'void'],
+  in_prep: ['ready', 'paid', 'void'],
+  ready: ['served', 'in_prep', 'paid', 'void'],
+  served: ['paid', 'in_prep', 'void'],
   paid: [],
   void: [],
 }

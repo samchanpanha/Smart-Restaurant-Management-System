@@ -11,6 +11,8 @@ import NewTabPicker from './components/NewTabPicker'
 import GuestScreen from './screens/GuestScreen'
 import AuthScreen from './screens/AuthScreen'
 import { AuthProvider, useAuth } from './lib/auth'
+import { ToastProvider } from './components/ui'
+import { ConfirmProvider } from './components/ui/ConfirmProvider'
 
 // The shift-critical surfaces stay in the main bundle: they are what a
 // terminal opens first and must paint with no fallback flash. Everything
@@ -178,28 +180,40 @@ export default function App() {
   // The Telegram mini app is the guest menu with the platform chrome on top.
   if (miniApp) {
     return (
-      <RestoraProvider waitForServer={false}>
-        <MiniAppFrame tableId={guest} />
-      </RestoraProvider>
+      <ToastProvider>
+        <ConfirmProvider>
+          <RestoraProvider waitForServer={false}>
+            <MiniAppFrame tableId={guest} />
+          </RestoraProvider>
+        </ConfirmProvider>
+      </ToastProvider>
     )
   }
   // Guests get their own light app — same provider, same live ticket.
   if (guest) {
     return (
-      <RestoraProvider waitForServer={false}>
-        <GuestScreen tableId={guest} />
-      </RestoraProvider>
+      <ToastProvider>
+        <ConfirmProvider>
+          <RestoraProvider waitForServer={false}>
+            <GuestScreen tableId={guest} />
+          </RestoraProvider>
+        </ConfirmProvider>
+      </ToastProvider>
     )
   }
   return (
-    <AuthProvider>
-      <AuthGate>
-        <RestoraProvider>
-          <AppShell>
-            <Router />
-          </AppShell>
-        </RestoraProvider>
-      </AuthGate>
-    </AuthProvider>
+    <ToastProvider>
+      <ConfirmProvider>
+        <AuthProvider>
+          <AuthGate>
+            <RestoraProvider>
+              <AppShell>
+                <Router />
+              </AppShell>
+            </RestoraProvider>
+          </AuthGate>
+        </AuthProvider>
+      </ConfirmProvider>
+    </ToastProvider>
   )
 }

@@ -21,6 +21,7 @@ import {
   buildPurchaseOrderDocument, documentFileName, downloadHtml, printHtml, renderDocumentHtml,
 } from '../lib/documents'
 import { purchaseSummary, rangeBounds } from '../lib/reports'
+import { useConfirm } from '../components/ui/confirm-context'
 import { useRestora } from '../lib/store'
 
 const cardCls = 'rounded-2xl border border-zinc-200/80 bg-white shadow-sm'
@@ -425,6 +426,7 @@ function ReceiveModal({ purchase, onClose, onReceive }) {
 // ─── Screen ─────────────────────────────────────────────────────────
 
 export default function PurchasesScreen() {
+  const confirm = useConfirm()
   const { state, dispatch, issueDocument, role } = useRestora()
   const { lang, dict } = useI18n()
   const pur = dict.purchases || {}
@@ -474,8 +476,16 @@ export default function PurchasesScreen() {
     setReceiving(null)
   }
 
-  function remove(purchase) {
-    if (purchase.status === 'received' && !window.confirm(`${purchase.number} was received. Delete the paperwork anyway? The stock it booked stays in the ledger.`)) return
+  async function remove(purchase) {
+    if (purchase.status === 'received') {
+      const ok = await confirm({
+        title: `Delete ${purchase.number}?`,
+        body: 'This order was already received. The paperwork goes, but the stock it booked stays in the ledger.',
+        confirmLabel: 'Delete the paperwork',
+        tone: 'danger',
+      })
+      if (!ok) return
+    }
     dispatch({ type: 'DELETE_PURCHASE', purchaseId: purchase.id, force: purchase.status === 'received' })
     setFlash(`${purchase.number || 'Purchase order'} deleted.`)
   }

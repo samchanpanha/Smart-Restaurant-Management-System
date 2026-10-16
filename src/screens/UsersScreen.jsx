@@ -4,6 +4,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { Icon } from '../components/Icon'
+import { useConfirm } from '../components/ui/confirm-context'
 import { useAuth } from '../lib/auth'
 import { useI18n } from '../lib/i18n'
 
@@ -28,6 +29,7 @@ async function send(method, route, body) {
 }
 
 export default function UsersScreen() {
+  const confirm = useConfirm()
   const { user: me } = useAuth()
   const { lang, dict } = useI18n()
   const us = dict.users || {}
@@ -72,7 +74,13 @@ export default function UsersScreen() {
   }
 
   async function remove(id) {
-    if (typeof window !== 'undefined' && !window.confirm('Remove this user?')) return
+    const ok = await confirm({
+      title: 'Remove this user?',
+      body: 'They lose access to the workspace straight away.',
+      confirmLabel: 'Remove user',
+      tone: 'danger',
+    })
+    if (!ok) return
     try { await send('DELETE', `/api/users/${id}`); await load() } catch (failure) { setError(failure.message) }
   }
 

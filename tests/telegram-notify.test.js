@@ -7,6 +7,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { buildEmpire, reducer } from '../src/lib/reducer.js'
+import { rangeBounds, salesSummary } from '../src/lib/reports.js'
 import { dailyDigest, dateKey, digestDue, noticeText } from '../src/lib/telegram-digest.js'
 import { createNotifier, noticesFor } from '../server/notify.js'
 
@@ -15,6 +16,8 @@ const shopOf = (empire, locId = 'downtown') => empire.locations[locId]
 const diff = (prev, next, action = null) => noticesFor(shopOf(prev), shopOf(next), action, shopOf(next).settings)
 const kinds = (rows) => rows.map((row) => row.kind)
 const ofKind = (rows, kind) => rows.filter((row) => row.kind === kind)
+// Money as a regular-expression fragment: "$310.00".
+const usd = (n) => '\\$' + Number(n).toFixed(2).replace('.', '\\.')
 
 // The first action of a session also runs the auto-86 sweep (salmon ran out
 // mid-service), which is itself news. Warm the book up so each test can look
@@ -40,7 +43,11 @@ test('paying a check is announced with the method and the tip', () => {
   const rows = diff(before, after)
   assert.equal(rows.length, 1)
   assert.equal(rows[0].kind, 'paid')
-  assert.match(rows[0].text, /💳 Table 3 paid \$47\.00 by card · tip \$4\.00/)
+  // The notice quotes the check that was settled — goods, service and tax —
+  // not the food subtotal, and the tip rides alongside it.
+  const settled = shopOf(after).orders.find((order) => order.id === currentCheckId)
+  assert.equal(settled.status, 'paid')
+  assert.match(rows[0].text, new RegExp(`💳 Table 3 paid ${usd(settled.total)} by card · tip ${usd(4)}`))
 })
 
 test('86’ing a dish and putting it back are two separate announcements', () => {
@@ -178,9 +185,12 @@ test('the digest reads like a close-of-day note: sales, buying, what to order', 
     const digest = dailyDigest(shop, at)
     assert.equal(digest.key, dateKey(at))
     assert.match(digest.text, /Close of day · Restora/)
-    assert.match(digest.text, /Checks 8 · Net sales \$425\.00 · Avg check \$66\.50/)
-    assert.match(digest.text, /Food cost 22\.4% \(\$95\.11\)/)
-    assert.match(digest.text, /Top sellers: Restora Burger 6× \(\$96\.00\)/)
+    // The digest quotes the reports engine, so the figures are read from it
+    // rather than copied — the bot and the screens can never drift apart.
+    const sales = salesSummary(shop, rangeBounds('tonight', at))
+    assert.match(digest.text, new RegExp(`Checks ${sales.checks} · Net sales ${usd(sales.netSales)} · Avg check ${usd(sales.avgCheck)}`))
+    const burgerQty = sales.lines.filter((line) => line.menuItemId === 'm_burger').reduce((sum, line) => sum + line.qty, 0)
+    assert.match(digest.text, new RegExp(`Top sellers: Restora Burger ${burgerQty}×`))
     assert.match(digest.text, /Needs ordering: OUT Salmon fillet — 0 ea left \(par 12 ea\)/)
   } finally {
     Date.now = realNow

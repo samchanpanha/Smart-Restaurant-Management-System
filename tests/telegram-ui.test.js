@@ -6,6 +6,11 @@ import assert from 'node:assert/strict'
 import test, { after, before } from 'node:test'
 import { JSDOM } from 'jsdom'
 import { createServer } from 'vite'
+import { buildEmpire } from '../src/lib/reducer.js'
+import { rangeBounds, salesSummary } from '../src/lib/reports.js'
+
+// Money as a regular-expression fragment: "$310.00".
+const usd = (n) => '\\$' + Number(n).toFixed(2).replace('.', '\\.')
 
 const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', {
   url: 'http://localhost:5173/?screen=telegram',
@@ -123,7 +128,8 @@ test('the console answers a command like the bot would', async () => {
 
   const transcript = document.querySelector('[data-testid="telegram-transcript"]').textContent
   assert.match(transcript, /\/today/)
-  assert.match(transcript, /Net sales \$425\.00/)
+  const sales = salesSummary(buildEmpire().locations.downtown, rangeBounds('tonight'))
+  assert.match(transcript, new RegExp(`Net sales ${usd(sales.netSales)}`))
   assert.match(transcript, /Top seller: Restora Burger/)
 })
 

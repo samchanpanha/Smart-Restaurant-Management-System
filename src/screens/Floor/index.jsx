@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { TABLE_STATUS_META } from '../../lib/constants'
 import { translateTableStatus, translateZone, useI18n } from '../../lib/i18n'
+import { useConfirm } from '../../components/ui/confirm-context'
 import { useRestora } from '../../lib/store'
 import { SeatDialog } from './sections/SeatDialog.jsx'
 import { TableCard } from './sections/TableCard.jsx'
@@ -11,6 +12,7 @@ import { TableEditorModal } from './sections/TableEditorModal.jsx'
 import { FloorMap } from './sections/FloorMap.jsx'
 
 function FloorScreen() {
+  const confirm = useConfirm()
   const { state, dispatch, selectedTableId, setSelectedTableId, tabCtx, setTabCtx } = useRestora()
   const { lang, dict } = useI18n()
   const f = dict.floor || {}
@@ -34,7 +36,7 @@ function FloorScreen() {
   const zones = [...new Set(state.tables.map((t) => t.zone))]
   const pendingTransfers = state.tables.filter((t) => t.pendingTransfer && t.pendingTransfer.status === 'pending')
 
-  function removeTable(table) {
+  async function removeTable(table) {
     const hasOpenCheck = state.orders.some(
       (o) => o.tableId === table.id && !['paid', 'void'].includes(o.status),
     )
@@ -42,7 +44,13 @@ function FloorScreen() {
       flash(`${table.name} still has an open check or party — clear it before deleting.`)
       return
     }
-    if (typeof window !== 'undefined' && !window.confirm(`Delete ${table.name}?`)) return
+    const ok = await confirm({
+      title: `Delete ${table.name}?`,
+      body: 'The table leaves the floor plan. Its seats and history go with it.',
+      confirmLabel: 'Delete table',
+      tone: 'danger',
+    })
+    if (!ok) return
     dispatch({ type: 'DELETE_TABLE', tableId: table.id })
   }
 
