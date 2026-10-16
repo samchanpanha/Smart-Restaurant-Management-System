@@ -98,8 +98,11 @@ export function useI18n() {
 export const APP_TRANSLATIONS = {
   km: {
     brandSubtitle: 'គ្រប់គ្រង · បម្រើ · រីកចម្រើន',
-    searchPlaceholder: 'ស្វែងរកការកម្មង់ តុ មុខម្ហូប...',
-    noSearchResults: 'រកមិនឃើញការកម្មង់ តុ ឬមុខម្ហូបដែលត្រូវគ្នាទេ។',
+    searchPlaceholder: 'ស្វែងរកទំព័រ ការកម្មង់ តុ និងមុខម្ហូប...',
+    searchInputLabel: 'ស្វែងរកទំព័រ ការកម្មង់ តុ និងមុខម្ហូប',
+    searchResultsLabel: 'លទ្ធផលស្វែងរក',
+    noSearchResults: 'រកមិនឃើញទំព័រ ការកម្មង់ តុ ឬមុខម្ហូបដែលត្រូវគ្នាទេ។',
+    openScreen: 'បើកទំព័រ',
     openResult: 'បើក',
     notifications: 'ការជូនដំណឹង',
     activeCount: (n) => `${n} សកម្ម`,
@@ -580,8 +583,11 @@ export const APP_TRANSLATIONS = {
 
   en: {
     brandSubtitle: 'Manage · Serve · Grow',
-    searchPlaceholder: 'Search orders, tables, menu...',
-    noSearchResults: 'No matching orders, tables, or menu items.',
+    searchPlaceholder: 'Search pages, orders, tables, and menu...',
+    searchInputLabel: 'Search pages, orders, tables, and menu',
+    searchResultsLabel: 'Search results',
+    noSearchResults: 'No matching pages, orders, tables, or menu items.',
+    openScreen: 'Open screen',
     openResult: 'Open',
     notifications: 'Notifications',
     activeCount: (n) => `${n} active`,
@@ -1036,8 +1042,11 @@ export const APP_TRANSLATIONS = {
 
   zh: {
     brandSubtitle: '管理 · 服务 · 增长',
-    searchPlaceholder: '搜索订单、餐桌、菜单...',
-    noSearchResults: '未找到匹配的订单、餐桌或菜品。',
+    searchPlaceholder: '搜索页面、订单、餐桌和菜单...',
+    searchInputLabel: '搜索页面、订单、餐桌和菜单',
+    searchResultsLabel: '搜索结果',
+    noSearchResults: '未找到匹配的页面、订单、餐桌或菜品。',
+    openScreen: '打开页面',
     openResult: '打开',
     notifications: '通知提醒',
     activeCount: (n) => `${n} 条提醒`,
