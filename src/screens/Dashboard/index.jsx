@@ -28,7 +28,7 @@ import ShiftBriefing from './sections/ShiftBriefing'
 import { useAiStatus } from './useAiStatus'
 
 export default function DashboardScreen() {
-  const { state, empire, setScreen, role, locId, setLocId, locations } = useRestora()
+  const { state, empire, setScreen, role, locId, setLocId, locations, dispatch } = useRestora()
   const { lang, dict } = useI18n()
   const copy = dict.dashboard || {}
   const now = useNow(15000)
@@ -142,7 +142,7 @@ export default function DashboardScreen() {
           </div>
 
           {role === 'owner' && (
-            <BranchOverview copy={copy} locations={empireDash} locId={locId} onPick={setLocId} />
+            <BranchOverview copy={copy} locations={empireDash} locId={locId} onPick={setLocId} empire={empire} dispatch={dispatch} />
           )}
 
           <QuickOverview copy={copy} items={overviewItems} onOpen={setScreen} />

@@ -12,6 +12,7 @@ import { useMemo, useState } from 'react'
 import { Icon } from '../components/Icon'
 import StatusPill from '../components/StatusPill'
 import { Field, Modal, btnGhost, btnPrimary, inputCls } from '../components/ui'
+import FilterPresetsBar from '../components/FilterPresetsBar'
 import { translateInventoryName, useI18n } from '../lib/i18n'
 import { money, reorderPointFor, stockStatusFor, suggestedOrderQty, uid } from '../lib/models'
 import { PURCHASE_STATUS_META, PURCHASE_STATUSES } from '../lib/reducer'
@@ -606,21 +607,31 @@ export default function PurchasesScreen() {
       )}
 
       <div className={`${cardCls} overflow-hidden`}>
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-100 px-4 py-3">
-          <div className="flex flex-wrap gap-1.5">
-            {FILTERS.map((entry) => {
-              const count = purchases.filter((purchase) => entry.statuses.includes(purchase.status)).length
-              return (
-                <button
-                  key={entry.id}
-                  type="button"
-                  onClick={() => setFilter(entry.id)}
-                  className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${filter === entry.id ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'}`}
-                >
-                  {filterLabels[entry.id] || entry.label} · {count}
-                </button>
-              )
-            })}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 px-4 py-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap gap-1.5">
+              {FILTERS.map((entry) => {
+                const count = purchases.filter((purchase) => entry.statuses.includes(purchase.status)).length
+                return (
+                  <button
+                    key={entry.id}
+                    type="button"
+                    onClick={() => setFilter(entry.id)}
+                    className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${filter === entry.id ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'}`}
+                  >
+                    {filterLabels[entry.id] || entry.label} · {count}
+                  </button>
+                )
+              })}
+            </div>
+            <FilterPresetsBar
+              screenKey="purchases"
+              currentFilters={{ filter, supplierFilter }}
+              onApply={(f) => {
+                if (f.filter) setFilter(f.filter)
+                if (f.supplierFilter !== undefined) setSupplierFilter(f.supplierFilter)
+              }}
+            />
           </div>
           <select className={inputCls} value={supplierFilter} onChange={(e) => setSupplierFilter(e.target.value)} style={{ maxWidth: 240 }}>
             <option value="all">All suppliers</option>

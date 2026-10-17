@@ -268,11 +268,30 @@ function DishPhotoModal({ dish, initialIndex = 0, recipe, invById, lang, dict, o
 // One card = one order's fired lines for this column. Oldest first.
 
 const TicketCard = memo(function TicketCard({ order, tableName, server, lines, lang, dict, showImages, tables, dispatch, onInspectDish }) {
+  const [pointerStart, setPointerStart] = useState(null)
   const oldest = lines.reduce((a, b) => (new Date(a.firedAt) < new Date(b.firedAt) ? a : b))
   const firedLines = lines.filter((l) => l.status === 'fired')
 
   function bumpAll() {
     for (const l of firedLines) dispatch({ type: 'BUMP_ITEM', orderId: order.id, itemId: l.id })
+  }
+
+  function handlePointerDown(e) {
+    if (e.target.closest('button')) return
+    setPointerStart({ x: e.clientX, y: e.clientY, time: Date.now() })
+  }
+
+  function handlePointerUp(e) {
+    if (!pointerStart) return
+    const dx = e.clientX - pointerStart.x
+    const dy = e.clientY - pointerStart.y
+    const dt = Date.now() - pointerStart.time
+    setPointerStart(null)
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5 && dt < 600) {
+      if (dx < 0 && firedLines.length > 0) {
+        bumpAll()
+      }
+    }
   }
 
   const prevTable = order?.transferredFromTableId
@@ -281,7 +300,11 @@ const TicketCard = memo(function TicketCard({ order, tableName, server, lines, l
   const prevTableName = prevTable ? translateTableName(prevTable.name, lang) : order?.transferredFromTableId
 
   return (
-    <article className="relative rounded-xl border border-transparent bg-[var(--color-ink-900)]">
+    <article
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
+      className="relative rounded-xl border border-transparent bg-[var(--color-ink-900)] select-none touch-pan-y animate-kds-in"
+    >
       <AgeRing firedAt={oldest.firedAt} />
       <header className="flex items-center justify-between gap-2 border-b border-white/5 px-3 py-2">
         <div className="min-w-0">

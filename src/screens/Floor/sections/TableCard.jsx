@@ -1,17 +1,43 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import StatusPill from '../../../components/StatusPill'
 import { TABLE_STATUS_META, TARGETS } from '../../../lib/constants'
 import { formatClock, minutesBetween } from '../../../lib/models'
 import { quoteWait, useNow, useRestora } from '../../../lib/store'
 
-function TableCard({ table, onOpen }) {
+function TableCard({ table, onOpen, isSelected, onToggleSelect }) {
   const { state, dispatch } = useRestora()
+  const [pointerStart, setPointerStart] = useState(null)
   useNow(15000)
   const meta = TABLE_STATUS_META[table.status] || { label: table.status, tone: 'muted' }
   const occupied = table.status === 'seated' || table.status === 'ordered' || table.status === 'occupied'
   const mins = table.seatedAt ? minutesBetween(table.seatedAt) : 0
   const turnRatio = occupied ? mins / table.targetTurnMinutes : 0
   const longTurn = turnRatio >= TARGETS.turnAlertRatio
+
+  function handlePointerDown(e) {
+    setPointerStart({ x: e.clientX, y: e.clientY, time: Date.now() })
+  }
+
+  function handlePointerUp(e) {
+    if (!pointerStart) return
+    const dx = e.clientX - pointerStart.x
+    const dy = e.clientY - pointerStart.y
+    const dt = Date.now() - pointerStart.time
+    setPointerStart(null)
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5 && dt < 600) {
+      if (dx > 0) {
+        // Swipe right: open / seat table
+        onOpen(table)
+      } else {
+        // Swipe left: mark clean / dirty toggle
+        if (table.status === 'dirty' || table.status === 'cleaning') {
+          dispatch({ type: 'FLOOR_MARK_TABLE_AVAILABLE', payload: { tableId: table.id } })
+        } else if (table.status === 'free' || table.status === 'available') {
+          dispatch({ type: 'SET_TABLE_STATUS', tableId: table.id, to: 'dirty', force: true })
+        }
+      }
+    }
+  }
 
   // Predicted next free from today's actual turns for this party size
   const predictedFree = useMemo(() => {
@@ -28,13 +54,43 @@ function TableCard({ table, onOpen }) {
     <button
       type="button"
       onClick={() => onOpen(table)}
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
       aria-label={`${table.name}, ${table.seats} seats, ${meta.label}${occupied ? `, party of ${table.partySize}, seated ${mins} minutes` : ''}`}
-      className={`min-h-[118px] rounded-2xl border p-3 text-left transition-transform active:scale-[0.98] ${sizeCls} ${
-        longTurn
-          ? 'border-amber-500/60 bg-[var(--color-ink-850)] ring-2 ring-amber-500/30'
-          : 'border-[var(--color-ink-700)] bg-[var(--color-ink-900)] hover:border-[var(--color-ink-600)]'
+      className={`min-h-[118px] relative rounded-2xl border p-3 text-left transition-transform active:scale-[0.98] select-none touch-pan-y ${sizeCls} ${
+        isSelected
+          ? 'border-amber-500 bg-amber-500/10 ring-2 ring-amber-500'
+          : longTurn
+            ? 'border-amber-500/60 bg-[var(--color-ink-850)] ring-2 ring-amber-500/30'
+            : 'border-[var(--color-ink-700)] bg-[var(--color-ink-900)] hover:border-[var(--color-ink-600)]'
       }`}
     >
+      {onToggleSelect && (
+        <span
+          role="checkbox"
+          aria-checked={isSelected}
+          tabIndex={0}
+          onClick={(e) => {
+            e.stopPropagation()
+            onToggleSelect(table.id)
+          }}
+          onKeyDown={(e) => {
+            if (e.key === ' ' || e.key === 'Enter') {
+              e.stopPropagation()
+              e.preventDefault()
+              onToggleSelect(table.id)
+            }
+          }}
+          className={`absolute top-2.5 right-2.5 flex h-5 w-5 items-center justify-center rounded-md border text-xs font-bold transition-all ${
+            isSelected
+              ? 'border-amber-500 bg-amber-500 text-stone-950'
+              : 'border-white/20 bg-black/40 text-transparent hover:border-white/40'
+          }`}
+          title="Select table"
+        >
+          ✓
+        </span>
+      )}
       <div className="flex items-start justify-between gap-2">
         <div>
           <div className="text-base font-bold leading-tight">{table.name}</div>

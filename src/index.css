@@ -99,7 +99,10 @@
   --fs-label: 0.75rem;
   --fs-caption: 0.6875rem;
 
-  /* Motion */
+  /* Motion scale (Wave 7.2) */
+  --motion-quick: 120ms;
+  --motion-standard: 240ms;
+  --motion-elaborate: 400ms;
   --duration-fast: 120ms;
   --duration-base: 180ms;
   --duration-slow: 280ms;
@@ -113,7 +116,9 @@
   --z-toast: 70;
 }
 
-.surface-dark {
+.surface-dark,
+.dark,
+[data-theme="dark"] {
   --surface-page: #131416;
   --surface: #17181a;
   --surface-raised: #1e2022;
@@ -193,6 +198,33 @@ body {
 }
 .animate-status-in {
   animation: restora-pulse-in 0.25s ease-out;
+}
+
+@keyframes kds-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes kds-slide-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+}
+.animate-kds-in {
+  animation: kds-slide-in var(--motion-standard) var(--ease-standard);
+}
+.animate-kds-out {
+  animation: kds-slide-out var(--motion-standard) var(--ease-standard);
 }
 
 /* ─── Restora web-ops light theme ─────────────────────────────────── */

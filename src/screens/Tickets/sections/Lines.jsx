@@ -4,29 +4,42 @@ import { formatClock, money } from '../../../lib/models'
 import { useRestora } from '../../../lib/store'
 import { COURSES } from '../shared.js'
 
-function HeldLine({ order, item }) {
+function HeldLine({ order, item, isSelected, onToggleSelect }) {
   const { dispatch } = useRestora()
   const { state } = useRestora()
   const { lang } = useI18n()
   const menu = state.menu.find((m) => m.id === item.menuItemId)
   return (
-    <li className="rounded-xl bg-[var(--color-ink-800)] p-3 ring-1 ring-inset ring-[var(--color-ink-600)]">
+    <li className={`rounded-xl p-3 ring-1 ring-inset transition-colors ${
+      isSelected ? 'bg-amber-500/15 ring-amber-500/60' : 'bg-[var(--color-ink-800)] ring-[var(--color-ink-600)]'
+    }`}>
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="text-sm font-semibold text-zinc-100">
-            {translateDishName(menu, lang)}
-            {item.by === 'guest' && (
-              <span className="ml-1.5 rounded bg-violet-500/20 px-1.5 py-0.5 align-middle text-[10px] font-bold text-violet-300 ring-1 ring-inset ring-violet-500/40">
-                QR{item.guest ? ` · ${item.guest}` : ''}
-              </span>
-            )}
-          </div>
-          <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-400">
-            <span className="rounded bg-black/40 px-1.5 py-0.5 font-semibold uppercase tracking-wide">{translateCourse(item.course, lang)}</span>
-            {item.modifiers?.map((m) => (
-              <span key={m.id} className="rounded bg-black/40 px-1.5 py-0.5">{translateModifier(m.value, lang)}</span>
-            ))}
-            {item.notes && <span className="italic">“{item.notes}”</span>}
+        <div className="flex items-start gap-2.5 min-w-0">
+          {onToggleSelect && (
+            <input
+              type="checkbox"
+              checked={!!isSelected}
+              onChange={() => onToggleSelect(item.id)}
+              aria-label={`Select ${menu?.name || 'item'}`}
+              className="mt-0.5 h-4 w-4 rounded border-zinc-600 bg-zinc-800 text-amber-500 focus:ring-0 cursor-pointer shrink-0"
+            />
+          )}
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-zinc-100">
+              {translateDishName(menu, lang)}
+              {item.by === 'guest' && (
+                <span className="ml-1.5 rounded bg-violet-500/20 px-1.5 py-0.5 align-middle text-[10px] font-bold text-violet-300 ring-1 ring-inset ring-violet-500/40">
+                  QR{item.guest ? ` · ${item.guest}` : ''}
+                </span>
+              )}
+            </div>
+            <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-400">
+              <span className="rounded bg-black/40 px-1.5 py-0.5 font-semibold uppercase tracking-wide">{translateCourse(item.course, lang)}</span>
+              {item.modifiers?.map((m) => (
+                <span key={m.id} className="rounded bg-black/40 px-1.5 py-0.5">{translateModifier(m.value, lang)}</span>
+              ))}
+              {item.notes && <span className="italic">“{item.notes}”</span>}
+            </div>
           </div>
         </div>
         <span className="tnum shrink-0 text-sm font-bold text-zinc-200">{money((menu?.price ?? 0) * item.qty)}</span>
@@ -73,23 +86,35 @@ function HeldLine({ order, item }) {
   )
 }
 
-function FiredLine({ order, item, onComp, onVoid }) {
+function FiredLine({ order, item, onComp, onVoid, isSelected, onToggleSelect }) {
   const { state } = useRestora()
   const { lang } = useI18n()
   const menu = state.menu.find((m) => m.id === item.menuItemId)
   const bumped = item.status === 'bump'
   return (
-    <li className={`rounded-xl p-3 ring-1 ring-inset ${item.voided ? 'bg-black/30 opacity-70 ring-[var(--color-ink-700)]' : 'bg-[var(--color-ink-800)] ring-[var(--color-ink-600)]'}`}>
+    <li className={`rounded-xl p-3 ring-1 ring-inset transition-colors ${
+      isSelected ? 'bg-amber-500/15 ring-amber-500/60' : item.voided ? 'bg-black/30 opacity-70 ring-[var(--color-ink-700)]' : 'bg-[var(--color-ink-800)] ring-[var(--color-ink-600)]'
+    }`}>
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className={`text-sm font-semibold ${item.voided ? 'text-zinc-500 line-through' : 'text-zinc-100'}`}>
-            {item.qty}× {translateDishName(menu, lang)}
-            {item.by === 'guest' && (
-              <span className="ml-1.5 rounded bg-violet-500/20 px-1.5 py-0.5 align-middle text-[10px] font-bold text-violet-300 ring-1 ring-inset ring-violet-500/40">
-                QR{item.guest ? ` · ${item.guest}` : ''}
-              </span>
-            )}
-          </div>
+        <div className="flex items-start gap-2.5 min-w-0">
+          {onToggleSelect && !item.voided && (
+            <input
+              type="checkbox"
+              checked={!!isSelected}
+              onChange={() => onToggleSelect(item.id)}
+              aria-label={`Select ${menu?.name || 'item'}`}
+              className="mt-0.5 h-4 w-4 rounded border-zinc-600 bg-zinc-800 text-amber-500 focus:ring-0 cursor-pointer shrink-0"
+            />
+          )}
+          <div className="min-w-0">
+            <div className={`text-sm font-semibold ${item.voided ? 'text-zinc-500 line-through' : 'text-zinc-100'}`}>
+              {item.qty}× {translateDishName(menu, lang)}
+              {item.by === 'guest' && (
+                <span className="ml-1.5 rounded bg-violet-500/20 px-1.5 py-0.5 align-middle text-[10px] font-bold text-violet-300 ring-1 ring-inset ring-violet-500/40">
+                  QR{item.guest ? ` · ${item.guest}` : ''}
+                </span>
+              )}
+            </div>
           <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-400">
             <span className="rounded bg-black/40 px-1.5 py-0.5 font-semibold uppercase tracking-wide">{translateCourse(item.course, lang)}</span>
             {item.modifiers?.map((m) => (
@@ -100,6 +125,7 @@ function FiredLine({ order, item, onComp, onVoid }) {
             {item.voided && <span className="text-red-300">void · {item.voidReason}</span>}
           </div>
         </div>
+      </div>
         <div className="flex shrink-0 flex-col items-end gap-1.5">
           {!item.voided && !item.comped && (
             <StatusPill tone={bumped ? 'ok' : 'warn'} size="sm">

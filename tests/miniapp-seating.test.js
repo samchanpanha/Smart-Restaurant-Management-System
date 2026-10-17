@@ -598,3 +598,44 @@ test('GUEST_SEND from an occupied (mini-app seated) table fires and shows on Ord
   // The Orders page "Active" tab matches exactly these statuses.
   assert.ok(['open', 'sent', 'in_prep'].includes(order.status), 'ticket is on the Active tab')
 })
+
+test('GUEST_SEND off-table: delivery and takeout create active orders without requiring a table', () => {
+  const shop = freshDowntown()
+  const menuItem = shop.menu.find((m) => m.available && m.active !== false)
+
+  // Delivery order: tableId is null, orderType is 'delivery'
+  const deliveryFired = reducer(shop, {
+    type: 'GUEST_SEND',
+    orderType: 'delivery',
+    customer: { name: 'Dara', phone: '012345678', address: 'Building B, Floor 4' },
+    deliveryAddress: 'Building B, Floor 4',
+    items: [{ menuItemId: menuItem.id, qty: 1 }],
+  })
+
+  const delOrder = deliveryFired.orders.find((o) => o.type === 'delivery')
+  assert.ok(delOrder, 'delivery order created')
+  assert.equal(delOrder.tableId, null, 'delivery order has no tableId')
+  assert.equal(delOrder.type, 'delivery')
+  assert.equal(delOrder.status, 'sent')
+  assert.equal(delOrder.deliveryStatus, 'queued')
+  assert.equal(delOrder.deliveryAddress, 'Building B, Floor 4')
+  assert.equal(delOrder.customer.name, 'Dara')
+  assert.equal(delOrder.items.length, 1)
+  assert.equal(delOrder.items[0].status, 'fired')
+
+  // Takeout order: tableId is null, orderType is 'takeout'
+  const takeoutFired = reducer(shop, {
+    type: 'GUEST_SEND',
+    orderType: 'takeout',
+    customer: { name: 'Bopha', phone: '098765432' },
+    items: [{ menuItemId: menuItem.id, qty: 2 }],
+  })
+
+  const toOrder = takeoutFired.orders.find((o) => o.type === 'takeout')
+  assert.ok(toOrder, 'takeout order created')
+  assert.equal(toOrder.tableId, null, 'takeout order has no tableId')
+  assert.equal(toOrder.type, 'takeout')
+  assert.equal(toOrder.status, 'sent')
+  assert.equal(toOrder.customer.name, 'Bopha')
+  assert.equal(toOrder.items.length, 1)
+})

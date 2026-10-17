@@ -766,6 +766,9 @@ function sendEvent(res, payload) {
 function eventInScope(msg, scopeLocationId) {
   if (!scopeLocationId) return true
   const action = msg?.action
+  if (action?.type === 'TRANSFER_STOCK') {
+    return action.fromLocId === scopeLocationId || action.toLocId === scopeLocationId
+  }
   return Boolean(action?.type === 'LOC' && action.locId === scopeLocationId)
 }
 

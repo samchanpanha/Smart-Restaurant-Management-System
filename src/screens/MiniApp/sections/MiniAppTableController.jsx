@@ -484,6 +484,14 @@ function MiniAppTableController({ onTableReady, activeTable, onSelectTable }) {
           >
             📅 Reschedule
           </button>
+          <button
+            type="button"
+            className="miniapp-btn-seat"
+            style={{ background: 'rgba(245, 158, 11, 0.85)', color: '#1c1917' }}
+            onClick={() => window.dispatchEvent(new CustomEvent('restora:order-mode', { detail: { mode: 'delivery' } }))}
+          >
+            🛵 Delivery
+          </button>
         </div>
       </div>
 

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Field, Modal, Stepper, inputCls } from '../../../components/ui'
+import QrPrintModal from '../../../components/QrPrintModal'
 import { useI18n } from '../../../lib/i18n'
 import { useRestora } from '../../../lib/store'
 
@@ -11,6 +12,7 @@ function TableEditorModal({ table = null, zones, onClose }) {
   const [seats, setSeats] = useState(table?.seats || 2)
   const [zone, setZone] = useState(table?.zone || zones[0] || 'Main')
   const [error, setError] = useState('')
+  const [showQr, setShowQr] = useState(false)
 
   function save() {
     if (!name.trim()) {
@@ -75,7 +77,21 @@ function TableEditorModal({ table = null, zones, onClose }) {
           {editing ? (lang === 'km' ? 'រក្សាទុកតុ' : lang === 'zh' ? '保存餐桌' : 'Save table') : (lang === 'km' ? 'បន្ថែមតុ' : lang === 'zh' ? '添加餐桌' : 'Add table')}
           {lang !== 'en' && <span className="sr-only"> {editing ? 'Save table' : 'Add table'}</span>}
         </button>
+
+        {editing && (
+          <button
+            type="button"
+            onClick={() => setShowQr(true)}
+            className="flex min-h-[40px] w-full items-center justify-center gap-1.5 rounded-lg border border-[var(--color-ink-600)] bg-[var(--color-ink-800)] py-2 text-xs font-bold text-zinc-200 hover:bg-white/5"
+          >
+            <span>📱 Print Table QR Tent (Self-order)</span>
+          </button>
+        )}
       </div>
+
+      {showQr && (
+        <QrPrintModal table={table} onClose={() => setShowQr(false)} />
+      )}
     </Modal>
   )
 }

@@ -22,6 +22,13 @@ function FloorScreen() {
   const [view, setView] = useState('map')
   const [managing, setManaging] = useState(false)
   const [editor, setEditor] = useState(null) // { table } to edit, {} to add
+  const [selectedTableIds, setSelectedTableIds] = useState([])
+
+  function toggleSelectTable(id) {
+    setSelectedTableIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    )
+  }
 
 
   function flash(msg) {
@@ -227,7 +234,17 @@ function FloorScreen() {
                         ))}
                       </ul>
                     ) : (
-                      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">{tables.map((table) => <TableCard key={table.id} table={table} onOpen={openTable} />)}</div>
+                      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                        {tables.map((table) => (
+                          <TableCard
+                            key={table.id}
+                            table={table}
+                            onOpen={openTable}
+                            isSelected={selectedTableIds.includes(table.id)}
+                            onToggleSelect={toggleSelectTable}
+                          />
+                        ))}
+                      </div>
                     )}
                   </section>
                 )
@@ -279,6 +296,61 @@ function FloorScreen() {
       )}
       {editor && (
         <TableEditorModal table={editor.table || null} zones={zones} onClose={() => setEditor(null)} />
+      )}
+
+      {selectedTableIds.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex flex-wrap items-center gap-2 rounded-2xl bg-zinc-950/95 px-4 py-2.5 text-white shadow-2xl ring-1 ring-white/10 backdrop-blur">
+          <span className="text-xs font-bold text-amber-400">
+            {selectedTableIds.length} {selectedTableIds.length === 1 ? 'table' : 'tables'} selected
+          </span>
+          <div className="h-4 w-px bg-white/20 mx-1" />
+          {selectedTableIds.length === 1 && (
+            <button
+              type="button"
+              onClick={() => {
+                const t = state.tables.find((tbl) => tbl.id === selectedTableIds[0])
+                if (t) openTable(t)
+                setSelectedTableIds([])
+              }}
+              className="rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-orange-400"
+            >
+              Open / Seat
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              for (const tid of selectedTableIds) {
+                dispatch({ type: 'FLOOR_MARK_TABLE_AVAILABLE', payload: { tableId: tid } })
+              }
+              flash(`${selectedTableIds.length} table(s) marked clean & available`)
+              setSelectedTableIds([])
+            }}
+            className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-500"
+          >
+            Mark Clean
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              for (const tid of selectedTableIds) {
+                dispatch({ type: 'SET_TABLE_STATUS', tableId: tid, to: 'dirty', force: true })
+              }
+              flash(`${selectedTableIds.length} table(s) marked dirty`)
+              setSelectedTableIds([])
+            }}
+            className="rounded-lg bg-zinc-800 px-3 py-1.5 text-xs font-bold text-zinc-200 hover:bg-zinc-700"
+          >
+            Mark Dirty
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedTableIds([])}
+            className="text-xs text-zinc-400 hover:text-white px-2 py-1"
+          >
+            Clear (✕)
+          </button>
+        </div>
       )}
     </div>
   )

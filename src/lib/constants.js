@@ -176,13 +176,15 @@ export const SCREEN_ICONS = {
   roles: 'shield',
   owners: 'building',
   assistant: 'sparkles',
+  schedule: 'calendar',
+  waste: 'trash',
 }
 
 export const ROLE_NAV = {
-  owner: ['dashboard', 'floor', 'tickets', 'kitchen', 'menu', 'catalog', 'inventory', 'movements', 'suppliers', 'purchases', 'reports', 'costing', 'assistant', 'users', 'roles', 'settings', 'system', 'telegram'],
+  owner: ['dashboard', 'floor', 'tickets', 'kitchen', 'menu', 'catalog', 'inventory', 'movements', 'suppliers', 'purchases', 'schedule', 'waste', 'reports', 'costing', 'assistant', 'users', 'roles', 'settings', 'system', 'telegram'],
   server: ['floor', 'tickets'],
-  kitchen: ['kitchen'],
-  host: ['floor', 'dashboard', 'assistant'],
+  kitchen: ['kitchen', 'waste'],
+  host: ['floor', 'dashboard', 'assistant', 'schedule'],
 }
 
 // The one place that answers "which screens may this operator open?". A
@@ -215,6 +217,8 @@ export const NAV_SECTIONS = [
       { id: 'movements', label: 'Stock movements', step: 5 },
       { id: 'purchases', label: 'Purchases', step: 9 },
       { id: 'suppliers', label: 'Suppliers', step: 9 },
+      { id: 'schedule', label: 'Shift schedule', step: 10 },
+      { id: 'waste', label: 'Waste tracking', step: 5 },
     ],
   },
   {

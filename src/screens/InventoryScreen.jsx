@@ -8,6 +8,7 @@ import StatusPill from '../components/StatusPill'
 import { DataTable, Field, btnPrimary, inputCls } from '../components/ui'
 import { translateInventoryName, useI18n } from '../lib/i18n'
 import { money, plateCostFor, stockStatusFor } from '../lib/models'
+import { FilterPresetsBar } from '../components/FilterPresetsBar'
 import { useRestora } from '../lib/store'
 
 const TABS = [
@@ -99,6 +100,17 @@ function StockTab() {
 
   return (
     <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
+      <div className="border-b border-zinc-100 bg-zinc-50/50 px-4 py-2">
+        <FilterPresetsBar
+          screenKey="inventory"
+          currentFilters={{ filter, loc, query }}
+          onApply={(f) => {
+            if (f.filter) setFilter(f.filter)
+            if (f.loc) setLoc(f.loc)
+            if (f.query !== undefined) setQuery(f.query)
+          }}
+        />
+      </div>
       <div className="flex flex-col gap-3 border-b border-zinc-100 p-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex gap-1 overflow-x-auto" role="tablist" aria-label="Stock filter">
           {filters.map(([id, label]) => <button key={id} role="tab" aria-selected={filter === id} type="button" onClick={() => setFilter(id)} className={`shrink-0 rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${filter === id ? 'bg-orange-500 text-white shadow-sm' : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-800'}`}>{label}</button>)}

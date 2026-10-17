@@ -6,14 +6,14 @@ import { ChipPicker, PhotoField } from '../../../components/ItemPhotoField'
 import { useRestora } from '../../../lib/store'
 import { smallInput } from '../shared.js'
 
-function ProductModal({ dish, categories, onClose, onSave }) {
+function ProductModal({ dish, categories, initialCategory, initialSubCategory, onClose, onSave }) {
   const { state } = useRestora()
   const food = state.settings.food
   const [draft, setDraft] = useState(() => ({
     name: dish?.name || '',
     description: dish?.description || '',
-    category: dish?.category || 'Mains',
-    subCategory: dish?.subCategory || '',
+    category: dish?.category || initialCategory || 'Mains',
+    subCategory: dish?.subCategory || initialSubCategory || '',
     price: dish ? String(dish.price) : '',
     station: dish?.station || food.stations[0] || 'grill',
     sku: dish?.sku || '',

@@ -549,9 +549,9 @@ export function RestoraProvider({ children, waitForServer = true }) {
           .catch(() => setLink((l) => ({ ...l, status: 'offline' })))
         return
       }
-      // Empire-level branch management: apply locally, then sync the whole
-      // empire snapshot (no LOC wrapper — the target shop may not exist yet).
-      if (action.type === 'CREATE_LOCATION' || action.type === 'REMOVE_LOCATION') {
+      // Empire-level branch management and stock transfers: apply locally, then sync the whole
+      // empire snapshot (no LOC wrapper — applies across shops).
+      if (action.type === 'CREATE_LOCATION' || action.type === 'REMOVE_LOCATION' || action.type === 'TRANSFER_STOCK') {
         rawDispatch(action)
         if (!linked) return
         const lid = uid('l')

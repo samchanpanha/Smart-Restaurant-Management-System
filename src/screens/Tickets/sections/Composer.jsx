@@ -3,6 +3,7 @@ import StatusPill from '../../../components/StatusPill'
 import { inputCls } from '../../../components/ui'
 import { translateCategory, translateCourse, translateDishName, useI18n } from '../../../lib/i18n'
 import { money } from '../../../lib/models'
+import { categoryTree } from '../../../lib/settings'
 import { useRestora } from '../../../lib/store'
 import { COURSES } from '../shared.js'
 import { ModifierModal } from './ModifierModal.jsx'
@@ -10,12 +11,15 @@ import { ModifierModal } from './ModifierModal.jsx'
 function Composer({ order }) {
   const { state, dispatch } = useRestora()
   const [category, setCategory] = useState('Mains')
+  const [subCategory, setSubCategory] = useState('')
+  const [expandedParent, setExpandedParent] = useState(null)
   const [query, setQuery] = useState('')
   const [course, setCourse] = useState('main')
   const [modFor, setModFor] = useState(null)
 
   const activeMenu = useMemo(() => state.menu.filter((m) => m.active !== false), [state.menu])
-  const categories = useMemo(() => [...new Set(activeMenu.map((m) => m.category))], [activeMenu])
+  const menuTree = useMemo(() => categoryTree(state.categories, 'menu'), [state.categories])
+  const distinctCategories = useMemo(() => [...new Set(activeMenu.map((m) => m.category))], [activeMenu])
   const menuById = useMemo(() => Object.fromEntries(state.menu.map((m) => [m.id, m])), [state.menu])
 
   // Quick-add: the bestsellers across the night plus what the last few tickets
@@ -52,12 +56,20 @@ function Composer({ order }) {
 
   const { lang, dict } = useI18n()
   const tk = dict.tickets || {}
+
   const items = activeMenu.filter((m) => {
     if (query.trim()) {
       const q = query.trim().toLowerCase()
       return m.name.toLowerCase().includes(q) || translateDishName(m, lang).toLowerCase().includes(q)
     }
-    return m.category === category
+    if (category === 'All') return true
+    if (subCategory) {
+      return (
+        m.category?.toLowerCase() === category.toLowerCase() &&
+        m.subCategory?.toLowerCase() === subCategory.toLowerCase()
+      )
+    }
+    return m.category?.toLowerCase() === category.toLowerCase()
   })
 
   function addDirect(menuItem, extra = {}) {
@@ -92,6 +104,11 @@ function Composer({ order }) {
       tap(items[0])
     }
   }
+
+  // Categories list to render: use menuTree if populated, else distinct categories
+  const parentNodes = menuTree.length > 0
+    ? menuTree
+    : distinctCategories.map((name) => ({ id: `cat_${name}`, name, children: [] }))
 
   return (
     <div className="rounded-2xl border border-[var(--color-ink-700)] bg-[var(--color-ink-900)] p-4">
@@ -154,21 +171,117 @@ function Composer({ order }) {
             </div>
           )}
 
-          <div className="mt-2 flex gap-1.5 overflow-x-auto pb-1" role="tablist" aria-label="Menu categories">
-            {categories.map((c) => (
+          {/* Grouped Accordion Category Rail */}
+          <div className="mt-3 space-y-1.5">
+            <div className="flex gap-1.5 overflow-x-auto pb-1" role="tablist" aria-label="Menu categories">
               <button
-                key={c}
                 role="tab"
-                aria-selected={category === c}
+                aria-selected={category === 'All'}
                 type="button"
-                onClick={() => setCategory(c)}
-                className={`min-h-[44px] shrink-0 rounded-lg px-3.5 text-sm font-semibold transition-colors ${
-                  category === c ? 'bg-white/10 text-zinc-100 ring-1 ring-inset ring-white/20' : 'text-zinc-500 hover:text-zinc-200'
+                onClick={() => { setCategory('All'); setSubCategory(''); setExpandedParent(null) }}
+                className={`min-h-[42px] shrink-0 rounded-lg px-3.5 text-xs font-bold uppercase tracking-wider transition-colors ${
+                  category === 'All' ? 'bg-amber-500 text-stone-950 shadow-sm' : 'bg-white/5 text-zinc-400 hover:text-zinc-100'
                 }`}
               >
-                {translateCategory(c, lang)}
+                All
               </button>
-            ))}
+
+              {parentNodes.map((root) => {
+                const hasChildren = root.children && root.children.length > 0
+                const isSelected = category.toLowerCase() === root.name.toLowerCase()
+                const isExpanded = expandedParent === root.id
+
+                return (
+                  <button
+                    key={root.id}
+                    role="tab"
+                    aria-selected={isSelected}
+                    type="button"
+                    onClick={() => {
+                      if (hasChildren) {
+                        setExpandedParent((cur) => (cur === root.id ? null : root.id))
+                        setCategory(root.name)
+                        setSubCategory('')
+                      } else {
+                        setCategory(root.name)
+                        setSubCategory('')
+                        setExpandedParent(null)
+                      }
+                    }}
+                    className={`flex min-h-[42px] shrink-0 items-center gap-1.5 rounded-lg px-3.5 text-sm font-semibold transition-colors ${
+                      isSelected
+                        ? 'bg-white/15 text-zinc-100 ring-1 ring-inset ring-white/25 font-bold'
+                        : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5'
+                    }`}
+                  >
+                    <span>{translateCategory(root.name, lang)}</span>
+                    {hasChildren && (
+                      <span className="text-[10px] text-zinc-400" aria-hidden="true">
+                        {isExpanded ? '▲' : '▼'}
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Sub-category drawer / pills when a parent is expanded */}
+            {expandedParent && (() => {
+              const root = parentNodes.find((n) => n.id === expandedParent)
+              if (!root || !root.children?.length) return null
+
+              return (
+                <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-white/10 bg-black/20 p-2 text-xs">
+                  <span className="font-bold uppercase tracking-wider text-zinc-400 px-1">
+                    {translateCategory(root.name, lang)}:
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setSubCategory('')}
+                    className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors ${
+                      !subCategory ? 'bg-amber-500/20 text-amber-200 ring-1 ring-amber-500/40' : 'text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    All {translateCategory(root.name, lang)}
+                  </button>
+                  {root.children.map((child) => {
+                    const isChildSelected = subCategory.toLowerCase() === child.name.toLowerCase()
+                    return (
+                      <button
+                        key={child.id}
+                        type="button"
+                        onClick={() => setSubCategory(child.name)}
+                        className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors ${
+                          isChildSelected
+                            ? 'bg-amber-500 text-stone-950 font-bold shadow-sm'
+                            : 'bg-white/5 text-zinc-300 hover:bg-white/10'
+                        }`}
+                      >
+                        {translateCategory(child.name, lang)}
+                      </button>
+                    )
+                  })}
+                </div>
+              )
+            })()}
+
+            {/* Breadcrumb chip if sub-category or specific category is selected */}
+            {subCategory && (
+              <div className="flex items-center gap-2 pt-1 text-xs text-zinc-400">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-2.5 py-1 font-semibold text-amber-200 ring-1 ring-amber-500/30">
+                  <span>🏷 {translateCategory(category, lang)} › {translateCategory(subCategory, lang)}</span>
+                  <button
+                    type="button"
+                    onClick={() => setSubCategory('')}
+                    className="ml-1 text-amber-300 hover:text-white"
+                    aria-label="Clear sub-category filter"
+                  >
+                    ×
+                  </button>
+                </span>
+                <span className="text-[11px] text-zinc-500">Showing {items.length} dishes</span>
+              </div>
+            )}
           </div>
         </>
       )}

@@ -13,6 +13,8 @@ import { useBrand } from '../lib/branding'
 import { translateScreenLabel, useDomTranslator, useI18n } from '../lib/i18n'
 import { useConfirm } from './ui/confirm-context'
 import { useNow, useRestora } from '../lib/store'
+import { CommandPalette } from './CommandPalette'
+import { ShortcutOverlay } from './ShortcutOverlay'
 
 // One label per screen, everywhere: the sidebar, the tab strip and the
 // restricted-screen panel all read the same source, so a screen is never
@@ -40,6 +42,8 @@ export default function AppShell({ children }) {
   useDomTranslator(null, lang)
   const [search, setSearch] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
+  const [shortcutOverlayOpen, setShortcutOverlayOpen] = useState(false)
   const [noticeOpen, setNoticeOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const [locationOpen, setLocationOpen] = useState(false)
@@ -107,6 +111,24 @@ export default function AppShell({ children }) {
     }
     document.addEventListener('pointerdown', closeMenusOnOutsideClick)
     return () => document.removeEventListener('pointerdown', closeMenusOnOutsideClick)
+  }, [])
+
+  // Global keyboard shortcuts: ⌘+K / Ctrl+K for command palette, ? for shortcuts
+  useEffect(() => {
+    function onGlobalKeyDown(e) {
+      const inInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target?.tagName)
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setCommandPaletteOpen((prev) => !prev)
+        return
+      }
+      if (e.key === '?' && !inInput && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        setShortcutOverlayOpen((prev) => !prev)
+      }
+    }
+    window.addEventListener('keydown', onGlobalKeyDown)
+    return () => window.removeEventListener('keydown', onGlobalKeyDown)
   }, [])
 
   // Each tab keeps its own scroll offset, like a browser tab does.
@@ -301,6 +323,14 @@ export default function AppShell({ children }) {
                 aria-label="Search orders, tables, and menu"
                 className="h-full min-w-0 flex-1 border-0 bg-transparent p-0 text-sm text-zinc-800 outline-none placeholder:text-zinc-400 focus:ring-0"
               />
+              <button
+                type="button"
+                onClick={() => setCommandPaletteOpen(true)}
+                className="hidden sm:inline-flex items-center gap-0.5 rounded border border-zinc-200 bg-white px-1.5 py-0.5 text-[10px] font-mono font-medium text-zinc-500 shadow-xs hover:bg-zinc-50"
+                title="Open Command Palette (⌘K)"
+              >
+                ⌘K
+              </button>
               {search && <button type="button" aria-label={dict.clearSearch} onClick={() => setSearch('')} className="text-zinc-400 hover:text-zinc-700">×</button>}
             </div>
             {searchOpen && search.trim() && (
@@ -379,6 +409,19 @@ export default function AppShell({ children }) {
           </div>
         </div>
       </main>
+
+      <CommandPalette
+        isOpen={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+        onOpenShortcuts={() => {
+          setCommandPaletteOpen(false)
+          setShortcutOverlayOpen(true)
+        }}
+      />
+      <ShortcutOverlay
+        isOpen={shortcutOverlayOpen}
+        onClose={() => setShortcutOverlayOpen(false)}
+      />
     </div>
   )
 }

@@ -22,6 +22,13 @@ function TicketWorkspace({ orderId, onError }) {
   const [banner, setBanner] = useState(null)
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [reasonCtx, setReasonCtx] = useState(null) // { kind: 'comp'|'voidItem'|'voidOrder', item? }
+  const [selectedItemIds, setSelectedItemIds] = useState([])
+
+  function toggleSelectItem(id) {
+    setSelectedItemIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    )
+  }
 
   const order = state.orders.find((o) => o.id === orderId)
   const menuById = useMemo(() => Object.fromEntries(state.menu.map((m) => [m.id, m])), [state.menu])
@@ -296,7 +303,15 @@ function TicketWorkspace({ orderId, onError }) {
             </h3>
           </div>
           <ul className="mt-3 space-y-2">
-            {held.map((i) => <HeldLine key={i.id} order={order} item={i} />)}
+            {held.map((i) => (
+              <HeldLine
+                key={i.id}
+                order={order}
+                item={i}
+                isSelected={selectedItemIds.includes(i.id)}
+                onToggleSelect={toggleSelectItem}
+              />
+            ))}
           </ul>
           <div className="mt-3 flex flex-wrap gap-2">
             {heldByCourse.length > 1 && heldByCourse.map((c) => (
@@ -328,11 +343,74 @@ function TicketWorkspace({ orderId, onError }) {
                 key={i.id}
                 order={order}
                 item={i}
+                isSelected={selectedItemIds.includes(i.id)}
+                onToggleSelect={toggleSelectItem}
                 onComp={(item) => setReasonCtx({ kind: 'comp', item })}
                 onVoid={(item) => setReasonCtx({ kind: 'voidItem', item })}
               />
             ))}
           </ul>
+        </div>
+      )}
+
+      {selectedItemIds.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex flex-wrap items-center gap-2 rounded-2xl bg-zinc-950/95 px-4 py-2.5 text-white shadow-2xl ring-1 ring-white/10 backdrop-blur">
+          <span className="text-xs font-bold text-amber-400">
+            {selectedItemIds.length} {selectedItemIds.length === 1 ? 'item' : 'items'} selected
+          </span>
+          <div className="h-4 w-px bg-white/20 mx-1" />
+          <select
+            onChange={(e) => {
+              const course = e.target.value
+              if (!course) return
+              for (const id of selectedItemIds) {
+                dispatch({ type: 'UPDATE_ITEM', orderId: order.id, itemId: id, patch: { course } })
+              }
+              flash(`Moved ${selectedItemIds.length} item(s) to ${course}`)
+              setSelectedItemIds([])
+            }}
+            defaultValue=""
+            className="h-8 rounded-lg border border-white/20 bg-zinc-900 px-2 text-xs text-zinc-200"
+            aria-label="Move selected items to course"
+          >
+            <option value="" disabled>Course…</option>
+            {COURSES.map((c) => (
+              <option key={c.id} value={c.id}>{c.label}</option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => {
+              for (const id of selectedItemIds) {
+                dispatch({ type: 'VOID_ITEM', orderId: order.id, itemId: id, reason: 'Batch void' })
+              }
+              flash(`Voided ${selectedItemIds.length} item(s)`)
+              setSelectedItemIds([])
+            }}
+            className="rounded-lg bg-red-600/80 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-red-500"
+          >
+            Void
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              for (const id of selectedItemIds) {
+                dispatch({ type: 'COMP_ITEM', orderId: order.id, itemId: id, reason: 'Batch comp' })
+              }
+              flash(`Comped ${selectedItemIds.length} item(s)`)
+              setSelectedItemIds([])
+            }}
+            className="rounded-lg bg-amber-600/80 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-amber-500"
+          >
+            Comp
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedItemIds([])}
+            className="text-xs text-zinc-400 hover:text-white px-1.5 py-1"
+          >
+            Clear (✕)
+          </button>
         </div>
       )}
 

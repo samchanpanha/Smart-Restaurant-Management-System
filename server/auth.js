@@ -85,7 +85,7 @@ const MIN_PASSWORD = 8
 export const ALL_SCREENS = [
   'dashboard', 'floor', 'tickets', 'kitchen', 'menu', 'catalog', 'inventory',
   'movements', 'purchases', 'suppliers', 'reports', 'costing', 'settings',
-  'telegram', 'system', 'users', 'roles', 'owners',
+  'telegram', 'system', 'users', 'roles', 'owners', 'assistant', 'schedule', 'waste',
 ]
 
 // System roles are shared by every host owner (owner_id NULL, is_system 1).

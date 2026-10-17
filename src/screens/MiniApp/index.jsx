@@ -16,6 +16,8 @@ function MiniAppScreen({ tableId }) {
   useDomTranslator(null, lang)
   const [inTelegram, setInTelegram] = useState(false)
   const [toast, setToast] = useState('')
+  // orderMode: 'dine_in' | 'pickup' | 'delivery'
+  const [orderMode, setOrderMode] = useState('dine_in')
   const [picked, setPicked] = useState(() => {
     const fromUrl = tableId ? state.tables.find((t) => t.id === tableId) : null
     if (fromUrl) return fromUrl.id
@@ -81,9 +83,25 @@ function MiniAppScreen({ tableId }) {
     return () => window.removeEventListener('restora:order-sent', onSent)
   }, [dict.miniapp])
 
+  // The MiniAppTableController's "Delivery" button fires this event to switch
+  // the order mode without prop-drilling through the controller.
+  useEffect(() => {
+    function onOrderMode(e) {
+      const mode = e?.detail?.mode
+      if (mode === 'delivery' || mode === 'pickup' || mode === 'dine_in') {
+        setOrderMode(mode)
+        setPickerOpen(false)
+      }
+    }
+    window.addEventListener('restora:order-mode', onOrderMode)
+    return () => window.removeEventListener('restora:order-mode', onOrderMode)
+  }, [])
+
   const table = state.tables.find((entry) => entry.id === picked) || null
   const waitMin = quoteWait(state, 2)
-  const showPicker = pickerOpen || (!table && state.tables.length > 0)
+  // Delivery and pickup skip the table picker entirely.
+  const offTable = orderMode === 'delivery' || orderMode === 'pickup'
+  const showPicker = !offTable && (pickerOpen || (!table && state.tables.length > 0))
 
   function seatHere(next) {
     // One action per tap: the claim already marks the table occupied, sets
@@ -121,15 +139,18 @@ function MiniAppScreen({ tableId }) {
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-bold">{state.settings?.restaurantName || 'The Olive Restaurant'}</div>
             <div className="text-[11px] text-white/60">
-              {table
-                ? `${translateTableName(table.name, lang)} · ${translateZone(table.zone, lang)}`
-                : state.tables.length > 0 ? (dict.miniapp?.noTableSelected || 'No table selected') : (dict.miniapp?.tableNotFound || 'Table not found')}
-              {table && lang !== 'en' && <span className="sr-only"> {table.name}</span>}
-              {!table && lang !== 'en' && <span className="sr-only"> {state.tables.length > 0 ? 'No table selected' : 'Table not found'}</span>}
+              {orderMode === 'delivery'
+                ? (dict.miniapp?.deliveryOrder || '🛵 Delivery order')
+                : orderMode === 'pickup'
+                  ? (dict.miniapp?.pickupOrder || '🍽 Pickup order')
+                  : table
+                    ? `${translateTableName(table.name, lang)} · ${translateZone(table.zone, lang)}`
+                    : state.tables.length > 0 ? (dict.miniapp?.noTableSelected || 'No table selected') : (dict.miniapp?.tableNotFound || 'Table not found')}
+              {table && orderMode === 'dine_in' && lang !== 'en' && <span className="sr-only"> {table.name}</span>}
             </div>
           </div>
           <LanguageSwitcher compact testIdPrefix="miniapp-lang" className="shrink-0" />
-          {state.tables.length > 0 && (
+          {state.tables.length > 0 && orderMode === 'dine_in' && (
             <button
               type="button"
               onClick={() => setPickerOpen((open) => !open)}
@@ -153,6 +174,33 @@ function MiniAppScreen({ tableId }) {
           <span className="sr-only">Telegram mini app</span>
         </div>
       </header>
+
+      {/* Order type selector: Dine-in / Pickup / Delivery */}
+      <div className="mx-auto max-w-md px-4 pt-3">
+        <div className="flex gap-2 rounded-2xl bg-white/60 p-1 shadow-sm backdrop-blur" role="tablist" aria-label="Order type">
+          {[
+            ['dine_in', '🪑', dict.miniapp?.dineIn || 'Dine-in'],
+            ['pickup', '🍽', dict.miniapp?.pickup || 'Pickup'],
+            ['delivery', '🛵', dict.miniapp?.delivery || 'Delivery'],
+          ].map(([mode, icon, label]) => (
+            <button
+              key={mode}
+              type="button"
+              role="tab"
+              aria-selected={orderMode === mode}
+              onClick={() => { setOrderMode(mode); if (mode !== 'dine_in') setPickerOpen(false) }}
+              className={`flex min-h-[40px] flex-1 items-center justify-center gap-1.5 rounded-xl text-xs font-bold transition-all ${
+                orderMode === mode
+                  ? 'bg-amber-500 text-stone-950 shadow-sm'
+                  : 'text-stone-600 hover:bg-white/80'
+              }`}
+            >
+              <span aria-hidden="true">{icon}</span>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* MiniAppTableController: Self-seating sticky bar, 1-tap service bar & interactive drawer */}
       <div className="mx-auto max-w-md">
@@ -190,8 +238,9 @@ function MiniAppScreen({ tableId }) {
           />
         ) : (
           <GuestScreen
-            tableId={picked || ''}
-            allowPickup
+            tableId={offTable ? '' : (picked || '')}
+            allowPickup={true}
+            initialOrderMode={offTable ? orderMode : null}
             onSelfSeat={table && isFreeTableStatus(table.status) ? () => seatHere(table) : null}
           />
         )}

@@ -318,6 +318,8 @@ function withShopDefaults(shop, locationLabel = 'Downtown') {
     purchases, movements, settings,
     tables: normalizeTablePositions(shop.tables),
     orders,
+    shifts: (Array.isArray(shop.shifts) ? shop.shifts : []).slice(-500),
+    wasteLog: (Array.isArray(shop.wasteLog) ? shop.wasteLog : []).slice(-500),
     dismissedAlerts: (Array.isArray(shop.dismissedAlerts) ? shop.dismissedAlerts : []).slice(-MAX_DISMISSED_ALERTS),
   }
 }
@@ -366,6 +368,7 @@ export const MOVEMENT_KINDS = [
   { id: 'waste', label: 'Waste', direction: 'out', icon: 'trash' },
   { id: 'count', label: 'Count variance', direction: 'adjust', icon: 'check' },
   { id: 'adjust', label: 'Manual adjust', direction: 'adjust', icon: 'settings' },
+  { id: 'transfer', label: 'Branch transfer', direction: 'adjust', icon: 'swap' },
 ]
 
 export const MOVEMENT_LABEL = Object.fromEntries(MOVEMENT_KINDS.map((kind) => [kind.id, kind.label]))
@@ -1154,10 +1157,96 @@ function shopReducerBase(state, action) {
     }
 
     case 'GUEST_SEND': {
-      // Atomic QR order: find-or-create the table's check, add guest lines,
-      // fire them immediately. One action so two phones can't fork a check.
+      // Atomic QR order: find-or-create the table's check (dine_in), OR create
+      // a brand-new delivery/takeout order without any table (off-table path).
       // 86'd lines are skipped (the live menu hides them; this is the race guard).
-      const { tableId, items = [] } = action
+      const {
+        tableId,
+        items = [],
+        orderType = 'dine_in',
+        customer = null,
+        deliveryFee = 0,
+        deliveryAddress = null,
+        eta = null,
+      } = action
+      const offTable = OFF_TABLE_TYPES.includes(orderType)
+
+      // ── Off-table path (delivery / takeout) ────────────────────────────
+      if (offTable) {
+        const createdAt = new Date().toISOString()
+        const nowIso = createdAt
+        const inventoryById = Object.fromEntries(state.inventory.map((i) => [i.id, i]))
+        const sanitized = sanitizeCustomer(customer)
+        const newOrder = {
+          id: uid('o'),
+          tableId: null,
+          type: orderType,
+          serverId: 'guest',
+          status: 'open',
+          createdAt,
+          sentAt: nowIso,
+          paidAt: null,
+          voidReason: null,
+          compTotal: 0,
+          items: [],
+          customer: sanitized,
+          eta: eta || null,
+          ...(orderType === 'delivery'
+            ? {
+              deliveryFee: Math.max(0, roundMoney(Number(deliveryFee) || 0)),
+              deliveryStatus: 'queued',
+              deliveryStatusAt: createdAt,
+              deliveryAddress: deliveryAddress || sanitized?.address || null,
+            }
+            : {}),
+        }
+        const newLines = []
+        const totalDec = {}
+        for (const g of items) {
+          const menuItem = state.menu.find((m) => m.id === g.menuItemId)
+          if (!menuItem || !menuItem.available || menuItem.active === false) continue
+          const qty = Math.min(12, Math.max(1, Number(g.qty) || 1))
+          const recipe = state.recipes[g.menuItemId]
+          const dec = theoreticalDecrementFor(recipe, qty)
+          for (const [k, v] of Object.entries(dec)) {
+            if (inventoryById[k]?.counted === false) continue
+            totalDec[k] = (totalDec[k] || 0) + v
+          }
+          newLines.push({
+            id: uid('it'), menuItemId: g.menuItemId, qty,
+            modifiers: g.modifiers || [], station: menuItem.station, status: 'fired',
+            course: g.course || 'main', notes: g.notes || '',
+            by: 'guest', guest: g.guest || sanitized?.name || null, firedAt: nowIso,
+            recipeSnapshot: recipe ? { ...recipe, plateCost: plateCostFor(recipe, inventoryById) } : null,
+          })
+        }
+        if (!newLines.length) return state
+        const filledOrder = {
+          ...newOrder,
+          items: newLines,
+          status: orderStatusFromItems(newLines, 'open'),
+        }
+        const orders = capOrders([...state.orders, filledOrder])
+        const sale = applyStockLines(state, saleMovements(state, totalDec, {
+          ref: filledOrder.id,
+          note: `${newLines.reduce((sum, l) => sum + l.qty, 0)} line(s) from guest ${orderType}`,
+        }), { at: nowIso, by: 'guest' })
+        const inventory = sale ? sale.inventory : state.inventory
+        const pendingUndo = {
+          orderId: filledOrder.id, sentAt: nowIso,
+          expiresAt: Date.now() + TARGETS.undoSendSeconds * 1000,
+          itemIds: newLines.map((l) => l.id), restore: totalDec,
+        }
+        return {
+          ...state,
+          orders,
+          inventory,
+          movements: sale ? pushMovements(state, sale.movements) : state.movements,
+          pendingUndo,
+        }
+      }
+
+      // ── Dine-in path (requires a seated table) ────────────────────────
       const table = state.tables.find((t) => t.id === tableId)
       if (!table || !['seated', 'ordered', 'occupied'].includes(table.status)) return state
       let order = state.orders.find(
@@ -1193,6 +1282,7 @@ function shopReducerBase(state, action) {
           modifiers: g.modifiers || [], station: menuItem.station, status: 'fired',
           course: g.course || 'main', notes: g.notes || '',
           by: 'guest', guest: g.guest || null, firedAt: nowIso,
+          source: g.source || action.source || 'guest_qr',
           recipeSnapshot: recipe ? { ...recipe, plateCost: plateCostFor(recipe, inventoryById) } : null,
         })
       }
@@ -2455,6 +2545,48 @@ function shopReducerBase(state, action) {
       return { ...state, categories, ...relabelCategoryItems(state, removed, target) }
     }
 
+    case 'REORDER_CATEGORIES': {
+      const ids = Array.isArray(action.categoryIds) ? action.categoryIds : []
+      if (!ids.length) return state
+      const idMap = new Map(ids.map((id, index) => [id, index]))
+      const categories = state.categories.map((c) => {
+        if (idMap.has(c.id)) {
+          return { ...c, sortOrder: idMap.get(c.id) }
+        }
+        return c
+      })
+      return { ...state, categories }
+    }
+
+    case 'REORDER_MENU_ITEMS': {
+      const ids = Array.isArray(action.itemIds) ? action.itemIds : []
+      if (!ids.length) return state
+      const idMap = new Map(ids.map((id, index) => [id, index]))
+      const menu = state.menu.map((item) => {
+        if (idMap.has(item.id)) {
+          return { ...item, sortOrder: idMap.get(item.id) }
+        }
+        return item
+      })
+      return { ...state, menu }
+    }
+
+    case 'MOVE_CATEGORY_ITEMS': {
+      const { fromCategory, fromSubCategory = '', toCategory, toSubCategory = '' } = action
+      if (!fromCategory || !toCategory) return state
+      const relabel = (item) => {
+        const matchesCat = String(item.category || '').toLowerCase() === fromCategory.toLowerCase()
+        const matchesSub = !fromSubCategory || String(item.subCategory || '').toLowerCase() === fromSubCategory.toLowerCase()
+        if (!matchesCat || !matchesSub) return item
+        return { ...item, category: toCategory, subCategory: toSubCategory }
+      }
+      return {
+        ...state,
+        menu: state.menu.map(relabel),
+        inventory: state.inventory.map(relabel),
+      }
+    }
+
     case 'UPSERT_SUPPLIER': {
       const raw = action.supplier
       if (!raw || typeof raw !== 'object') return state
@@ -2613,6 +2745,41 @@ function shopReducerBase(state, action) {
       return { ...state, documents }
     }
 
+    // ── Shifts (Schedule) ─────────────────────────────────
+    case 'ADD_SHIFT': {
+      const shift = action.shift
+      if (!shift || !shift.staffName) return state
+      const id = shift.id || uid('shf')
+      const next = {
+        id,
+        staffName: String(shift.staffName).trim(),
+        role: String(shift.role || 'server').trim(),
+        date: String(shift.date || '').slice(0, 10),
+        startTime: String(shift.startTime || '09:00').trim(),
+        endTime: String(shift.endTime || '17:00').trim(),
+        note: String(shift.note || '').slice(0, 120),
+        createdAt: new Date().toISOString(),
+      }
+      const shifts = [...(state.shifts || []), next].slice(-500)
+      return { ...state, shifts }
+    }
+
+    case 'UPDATE_SHIFT': {
+      const { shiftId, patch } = action
+      if (!shiftId || !patch || typeof patch !== 'object') return state
+      const shifts = (state.shifts || []).map((s) => (
+        s.id === shiftId ? { ...s, ...patch, id: s.id } : s
+      ))
+      return { ...state, shifts }
+    }
+
+    case 'DELETE_SHIFT': {
+      const { shiftId } = action
+      if (!shiftId) return state
+      const shifts = (state.shifts || []).filter((s) => s.id !== shiftId)
+      return { ...state, shifts }
+    }
+
     // ── Misc ───────────────────────────────────────────────
     case 'DISMISS_ALERT':
       return state.dismissedAlerts.includes(action.key)
@@ -2714,6 +2881,49 @@ export function reducer(state, action) {
     const locations = { ...state.locations }
     delete locations[locId]
     return { ...state, locations }
+  }
+  if (action.type === 'TRANSFER_STOCK') {
+    const { fromLocId, toLocId, itemId, qty, notes, by } = action
+    const fromShop = state.locations?.[fromLocId]
+    const toShop = state.locations?.[toLocId]
+    const transferQty = Math.abs(Number(qty))
+    if (!fromShop || !toShop || fromLocId === toLocId || !transferQty || !itemId) return state
+    const fromItem = fromShop.inventory.find((i) => i.id === itemId || i.sku === itemId)
+    if (!fromItem) return state
+    const toItem = toShop.inventory.find((i) => i.id === fromItem.id || (fromItem.sku && i.sku === fromItem.sku) || i.name.toLowerCase() === fromItem.name.toLowerCase())
+    if (!toItem) return state
+
+    const fromDelta = applyStockLines(fromShop, [{
+      inventoryItemId: fromItem.id,
+      qty: -transferQty,
+      kind: 'transfer',
+      note: notes || `Transfer to ${toShop.settings?.locationShort || toLocId}`,
+    }], { by: by || 'owner' })
+
+    const toDelta = applyStockLines(toShop, [{
+      inventoryItemId: toItem.id,
+      qty: transferQty,
+      kind: 'transfer',
+      unitCost: fromItem.avgCost || fromItem.lastCost || 0,
+      note: notes || `Transfer from ${fromShop.settings?.locationShort || fromLocId}`,
+    }], { by: by || 'owner' })
+
+    return {
+      ...state,
+      locations: {
+        ...state.locations,
+        [fromLocId]: fromDelta ? {
+          ...fromShop,
+          inventory: fromDelta.inventory,
+          movements: pushMovements(fromShop, fromDelta.movements),
+        } : fromShop,
+        [toLocId]: toDelta ? {
+          ...toShop,
+          inventory: toDelta.inventory,
+          movements: pushMovements(toShop, toDelta.movements),
+        } : toShop,
+      },
+    }
   }
   if (action.type === 'LOC') {
     const shop = state.locations?.[action.locId]

@@ -11,8 +11,20 @@ import { Field, Modal, btnPrimary, inputCls } from '../components/ui'
 import { MARGIN_BAND_META, STATIONS, STATION_META } from '../lib/constants'
 import { translateCategory, translateDishName, translateInventoryName, useI18n } from '../lib/i18n'
 import { contributionFor, costingFor, money, plateCostFor, uid } from '../lib/models'
+import { categoryTree } from '../lib/settings'
 import { useMenuCatalog } from '../lib/useMenuCatalog'
 import { useRestora } from '../lib/store'
+
+function aggregateBandFor(dishesWithCost) {
+  if (!dishesWithCost.length) return null
+  const avg = dishesWithCost.reduce((sum, item) => sum + (item.c?.contribution || 0), 0) / dishesWithCost.length
+  let band = 'danger'
+  if (avg >= 0.7) band = 'high'
+  else if (avg >= 0.6) band = 'good'
+  else if (avg >= 0.45) band = 'target'
+  else if (avg >= 0.3) band = 'low'
+  return { avg, band }
+}
 
 function snapshotCount(state, menuItemId) {
   return state.orders
@@ -504,7 +516,19 @@ export default function MenuScreen() {
   }
 
   const skuById = useMemo(() => Object.fromEntries(state.inventory.map((i) => [i.id, i])), [state.inventory])
-  const cats = useMemo(() => ['All', ...new Set(catalogMenu.map((m) => m.category))], [catalogMenu])
+  const menuTree = useMemo(() => categoryTree(state.categories, 'menu'), [state.categories])
+  const distinctCats = useMemo(() => [...new Set(catalogMenu.map((m) => m.category))], [catalogMenu])
+  const cats = useMemo(() => ['All', ...new Set([...menuTree.map((r) => r.name), ...distinctCats])], [menuTree, distinctCats])
+
+  const [collapsedParents, setCollapsedParents] = useState({})
+  const [collapsedSubCats, setCollapsedSubCats] = useState({})
+
+  function toggleParentCollapse(id) {
+    setCollapsedParents((cur) => ({ ...cur, [id]: !cur[id] }))
+  }
+  function toggleSubCollapse(id) {
+    setCollapsedSubCats((cur) => ({ ...cur, [id]: !cur[id] }))
+  }
 
   const list = useMemo(() => catalogMenu
     .filter((m) => (cat === 'All' || m.category === cat))
@@ -516,6 +540,76 @@ export default function MenuScreen() {
     .map((m) => ({ m, c: costingFor(m, state.recipes[m.id], skuById) }))
     .sort((a, b) => a.c.contribution - b.c.contribution),
   [catalogMenu, cat, query, lang, state.recipes, skuById])
+
+  const groupedList = useMemo(() => {
+    const targetRoots = cat === 'All'
+      ? (menuTree.length > 0 ? menuTree : distinctCats.map((name) => ({ id: `cat_${name}`, name, children: [] })))
+      : (menuTree.filter((root) => root.name.toLowerCase() === cat.toLowerCase()).length > 0
+          ? menuTree.filter((root) => root.name.toLowerCase() === cat.toLowerCase())
+          : [{ id: `cat_${cat}`, name: cat, children: [] }])
+
+    const matchedDishIds = new Set()
+    const groups = targetRoots.map((root) => {
+      const subGroups = (root.children || []).map((child) => {
+        const items = list.filter(({ m }) => {
+          const matchesCat = m.category?.toLowerCase() === root.name.toLowerCase()
+          const matchesSub = m.subCategory?.toLowerCase() === child.name.toLowerCase()
+          return (matchesCat && matchesSub) || (!m.subCategory && m.category?.toLowerCase() === child.name.toLowerCase())
+        })
+        items.forEach(({ m }) => matchedDishIds.add(m.id))
+        const agg = aggregateBandFor(items)
+        return { child, items, agg }
+      })
+
+      const directItems = list.filter(({ m }) => {
+        if (matchedDishIds.has(m.id)) return false
+        return m.category?.toLowerCase() === root.name.toLowerCase()
+      })
+      directItems.forEach(({ m }) => matchedDishIds.add(m.id))
+
+      const allItems = [...directItems, ...subGroups.flatMap((sg) => sg.items)]
+      const agg = aggregateBandFor(allItems)
+
+      return {
+        root,
+        directItems,
+        subGroups,
+        allItems,
+        agg,
+      }
+    })
+
+    const uncategorizedItems = list.filter(({ m }) => !matchedDishIds.has(m.id))
+    return { groups, uncategorizedItems }
+  }, [cat, distinctCats, list, menuTree])
+
+  function renderDishRow({ m, c }) {
+    const localName = translateDishName(m, lang)
+    return (
+      <li key={m.id}>
+        <button
+          type="button" onClick={() => pickDish(m.id)} aria-current={dishId === m.id}
+          className={`w-full rounded-xl border p-3 text-left transition-all ${dishId === m.id ? 'border-amber-500/60 bg-[var(--color-ink-850)] ring-1 ring-amber-500/40' : 'border-[var(--color-ink-700)] bg-[var(--color-ink-900)] hover:border-[var(--color-ink-600)]'}`}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span className={`text-sm font-bold ${m.available && m.active !== false ? '' : 'text-zinc-500 line-through'}`}>
+              {localName}
+              {lang !== 'en' && localName !== m.name && <span className="sr-only"> ({m.name})</span>}
+            </span>
+            <span className="tnum text-sm font-bold text-amber-300">{money(m.price)}</span>
+          </div>
+          <div className="mt-1.5 flex items-center justify-between gap-2">
+            <span className="tnum text-[11px] text-zinc-500">{mn.plateCost || 'plate'} {money(c.plate)}</span>
+            <span className="flex gap-1">
+              {!m.available && <StatusPill tone="bad" size="sm">86</StatusPill>}
+              {m.active === false && <StatusPill tone="muted" size="sm">Hidden</StatusPill>}
+              <StatusPill tone={MARGIN_BAND_META[c.band].tone} size="sm">{c.band} {(c.contribution * 100).toFixed(0)}%</StatusPill>
+            </span>
+          </div>
+        </button>
+      </li>
+    )
+  }
 
   return (
     <div className="space-y-4">
@@ -555,44 +649,108 @@ export default function MenuScreen() {
                 key={c} type="button" onClick={() => setCat(c)} aria-pressed={cat === c}
                 className={`min-h-[36px] rounded-lg px-3 text-xs font-bold ring-1 ring-inset ${cat === c ? 'bg-amber-500/15 text-amber-200 ring-amber-500/40' : 'text-zinc-500 ring-[var(--color-ink-600)] hover:bg-white/5'}`}
               >
-                {translateCategory(c, lang)}
+                {c === 'All' ? 'All' : translateCategory(c, lang)}
               </button>
             ))}
           </div>
-          <ul className="max-h-[62vh] space-y-2 overflow-y-auto">
+
+          <div className="max-h-[62vh] space-y-3 overflow-y-auto pr-1">
             {list.length === 0 && (
-              <li className="rounded-xl border border-dashed border-[var(--color-ink-600)] p-4 text-center text-sm text-zinc-500">
+              <div className="rounded-xl border border-dashed border-[var(--color-ink-600)] p-4 text-center text-sm text-zinc-500">
                 No menu items match this search.
-              </li>
+              </div>
             )}
-            {list.map(({ m, c }) => {
-              const localName = translateDishName(m, lang)
+
+            {groupedList.groups.map(({ root, directItems, subGroups, allItems, agg }) => {
+              if (allItems.length === 0) return null
+              const isCollapsed = !!collapsedParents[root.id]
+
               return (
-                <li key={m.id}>
+                <div key={root.id} className="rounded-xl border border-[var(--color-ink-700)] bg-[var(--color-ink-950)] overflow-hidden">
+                  {/* Parent Category Header */}
                   <button
-                    type="button" onClick={() => pickDish(m.id)} aria-current={dishId === m.id}
-                    className={`w-full rounded-xl border p-3 text-left ${dishId === m.id ? 'border-amber-500/60 bg-[var(--color-ink-850)] ring-1 ring-amber-500/40' : 'border-[var(--color-ink-700)] bg-[var(--color-ink-900)] hover:border-[var(--color-ink-600)]'}`}
+                    type="button"
+                    onClick={() => toggleParentCollapse(root.id)}
+                    className="flex w-full items-center justify-between bg-[var(--color-ink-850)] px-3 py-2 text-left hover:bg-[var(--color-ink-800)]"
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className={`text-sm font-bold ${m.available && m.active !== false ? '' : 'text-zinc-500 line-through'}`}>
-                        {localName}
-                        {lang !== 'en' && localName !== m.name && <span className="sr-only"> ({m.name})</span>}
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-zinc-400 font-bold" aria-hidden>
+                        {isCollapsed ? '▸' : '▾'}
                       </span>
-                      <span className="tnum text-sm font-bold text-amber-300">{money(m.price)}</span>
-                    </div>
-                    <div className="mt-1.5 flex items-center justify-between gap-2">
-                      <span className="tnum text-[11px] text-zinc-500">{mn.plateCost || 'plate'} {money(c.plate)}</span>
-                      <span className="flex gap-1">
-                        {!m.available && <StatusPill tone="bad" size="sm">86</StatusPill>}
-                        {m.active === false && <StatusPill tone="muted" size="sm">Hidden</StatusPill>}
-                        <StatusPill tone={MARGIN_BAND_META[c.band].tone} size="sm">{c.band} {(c.contribution * 100).toFixed(0)}%</StatusPill>
+                      <span className="text-xs font-bold uppercase tracking-wider text-zinc-200">
+                        {translateCategory(root.name, lang)}
+                      </span>
+                      <span className="rounded-full bg-black/40 px-2 py-0.5 text-[10px] font-semibold text-zinc-400">
+                        {allItems.length}
                       </span>
                     </div>
+
+                    {/* Aggregate Margin Band when collapsed */}
+                    {isCollapsed && agg && (
+                      <span className="flex items-center gap-1.5">
+                        <StatusPill tone={MARGIN_BAND_META[agg.band].tone} size="sm">
+                          {agg.band} avg {(agg.avg * 100).toFixed(0)}%
+                        </StatusPill>
+                      </span>
+                    )}
                   </button>
-                </li>
+
+                  {/* Expanded Items and Subcategories */}
+                  {!isCollapsed && (
+                    <div className="p-2 space-y-2">
+                      {directItems.length > 0 && (
+                        <ul className="space-y-1.5">
+                          {directItems.map(renderDishRow)}
+                        </ul>
+                      )}
+
+                      {subGroups.map(({ child, items, agg: subAgg }) => {
+                        if (items.length === 0) return null
+                        const isSubCollapsed = !!collapsedSubCats[child.id]
+
+                        return (
+                          <div key={child.id} className="ml-2 rounded-lg border border-[var(--color-ink-700)]/60 bg-[var(--color-ink-900)] overflow-hidden">
+                            <button
+                              type="button"
+                              onClick={() => toggleSubCollapse(child.id)}
+                              className="flex w-full items-center justify-between px-2.5 py-1.5 text-left bg-black/20 hover:bg-black/30"
+                            >
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-mono text-zinc-500 text-xs" aria-hidden>└─</span>
+                                <span className="text-xs font-semibold text-zinc-300">{translateCategory(child.name, lang)}</span>
+                                <span className="rounded-full bg-white/5 px-1.5 py-0.2 text-[10px] text-zinc-400">
+                                  {items.length}
+                                </span>
+                              </div>
+                              {subAgg && (
+                                <StatusPill tone={MARGIN_BAND_META[subAgg.band].tone} size="sm">
+                                  {(subAgg.avg * 100).toFixed(0)}%
+                                </StatusPill>
+                              )}
+                            </button>
+                            {!isSubCollapsed && (
+                              <ul className="p-1.5 space-y-1.5">
+                                {items.map(renderDishRow)}
+                              </ul>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
               )
             })}
-          </ul>
+
+            {groupedList.uncategorizedItems.length > 0 && (
+              <div className="rounded-xl border border-[var(--color-ink-700)] bg-[var(--color-ink-950)] p-2">
+                <div className="mb-2 text-xs font-bold uppercase tracking-wider text-zinc-400">Other</div>
+                <ul className="space-y-1.5">
+                  {groupedList.uncategorizedItems.map(renderDishRow)}
+                </ul>
+              </div>
+            )}
+          </div>
         </div>
         <div className="xl:col-span-2">
           <Coster dishId={dishId} onDone={flash} />

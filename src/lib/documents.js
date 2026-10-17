@@ -345,6 +345,12 @@ export function buildShiftReport(shop, { range = 'tonight', now = Date.now() } =
     (sum, entry) => sum + (Number(invById[entry.inventoryItemId]?.lastCost) || 0) * (Number(entry.qty) || 0),
     0,
   )
+  const wasteByReason = (shop.wasteLog || []).reduce((acc, entry) => {
+    const reason = entry.reason || 'other'
+    const cost = (Number(invById[entry.inventoryItemId]?.lastCost) || 0) * (Number(entry.qty) || 0)
+    acc[reason] = (acc[reason] || 0) + cost
+    return acc
+  }, {})
   const negativeStock = (shop.inventory || [])
     .filter((item) => item.counted !== false && Number(item.onHand) < 0)
     .map((item) => ({ name: item.name, onHand: item.onHand, unit: item.unit, value: roundMoney(Math.abs(item.onHand) * (item.lastCost || 0)) }))
@@ -401,6 +407,7 @@ export function buildShiftReport(shop, { range = 'tonight', now = Date.now() } =
     },
     variance: {
       waste: roundMoney(waste),
+      wasteByReason,
       negativeStock,
       stockExceptions: stockExceptions.slice(0, 10).map((row) => ({ name: row.item.name, status: row.status, onHand: row.item.onHand, par: row.item.par, unit: row.item.unit })),
     },
@@ -658,6 +665,7 @@ export function renderDocumentHtml(doc, settings, options = {}) {
 
   const poStrip = doc.kind === 'purchase' ? `
     <section class="po-strip">
+      <div><span class="label">PO Ref</span><div class="value">${escapeHtml(doc.number || doc.reference || '—')}</div></div>
       <div><span class="label">Status</span><div class="value">${escapeHtml(String(doc.delivery?.status || 'draft').replace(/^./, (c) => c.toUpperCase()))}</div></div>
       <div><span class="label">Ordered</span><div class="value">${escapeHtml(doc.delivery?.orderedAt ? new Date(doc.delivery.orderedAt).toLocaleDateString() : '—')}</div></div>
       <div><span class="label">Expected</span><div class="value">${escapeHtml(doc.delivery?.expectedAt ? new Date(doc.delivery.expectedAt).toLocaleDateString() : '—')}</div></div>
@@ -751,7 +759,7 @@ export function renderDocumentHtml(doc, settings, options = {}) {
     ${doc.customer?.dueDate && doc.kind === 'invoice' ? `<div class="foot"><div>Payment terms: ${escapeHtml(doc.customer.paymentTerms || '')} · due ${escapeHtml(new Date(doc.customer.dueDate).toLocaleDateString())}</div><div>${escapeHtml(template.termsText || '')}</div></div>` : ''}
     ${template.thankYou ? `<div class="foot"><div>${escapeHtml(template.thankYou)}</div><div>${escapeHtml(template.footerText || '')}</div></div>` : (template.footerText ? `<div class="foot"><div>${escapeHtml(template.footerText)}</div></div>` : '')}
     ${currencyNote ? `<div class="fx">${escapeHtml(currencyNote)}</div>` : ''}
-    ${qr ? `<div class="qr"><img src="${qr}" alt="QR code" /><div class="muted">${escapeHtml(options.qrCaption || 'Scan for the digital copy')}</div></div>` : ''}
+    ${qr ? `<div class="qr"><img src="${qr}" alt="QR code" /><div class="muted">${escapeHtml(options.qrCaption || 'Scan for the digital copy')}</div></div>` : (doc.kind === 'receipt' ? `<div class="qr-feedback" style="margin-top:10px;text-align:center;border-top:1px dashed #e6e8eb;padding-top:6px;font-size:0.75em;color:#555c66"><div style="font-weight:700">★ Rate your meal &amp; feedback</div><div style="font-size:0.9em;color:#78808b;margin-top:2px">We appreciate your feedback · restora.io/review</div></div>` : '')}
     ${template.showSignature ? `<div class="signature">${escapeHtml(template.signatureLabel || 'Authorized by')} · ${escapeHtml(settings.restaurantName || '')}</div>` : ''}
     ${template.showBankDetails && template.bankDetails ? `<div class="foot"><div>${escapeHtml(template.bankDetails)}</div></div>` : ''}
   </div>
@@ -837,6 +845,11 @@ function renderReportBody(doc, template, options) {
       <tr><td>Waste logged</td><td class="num">${fmt(report.variance.waste)}</td></tr>
       ${report.variance.negativeStock.map((row) => `<tr><td>${escapeHtml(row.name)} negative on-hand</td><td class="num">${row.onHand} ${escapeHtml(row.unit)} · ${fmt(row.value)}</td></tr>`).join('')}
     </table>
+    ${report.variance.wasteByReason && Object.keys(report.variance.wasteByReason).length ? `
+      <div style="margin:6px 0;font-size:.82em;color:#555c66">
+        <strong>Waste breakdown:</strong>
+        ${Object.entries(report.variance.wasteByReason).map(([r, c]) => `<span style="margin-left:8px;text-transform:capitalize">${escapeHtml(r)}: ${fmt(c)}</span>`).join('')}
+      </div>` : ''}
     ${report.variance.stockExceptions.length ? `<table><thead><tr><th>Exception</th><th class="num">On hand</th><th class="num">Par</th></tr></thead><tbody>
       ${report.variance.stockExceptions.map((row) => `<tr><td>${escapeHtml(row.name)} <span class="muted">${escapeHtml(row.status)}</span></td><td class="num">${row.onHand} ${escapeHtml(row.unit)}</td><td class="num">${row.par}</td></tr>`).join('')}
     </tbody></table>` : ''}

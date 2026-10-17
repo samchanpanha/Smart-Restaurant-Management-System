@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import StatusPill from '../../../components/StatusPill'
+import FilterPresetsBar from '../../../components/FilterPresetsBar'
 import { btnGhost, inputCls } from '../../../components/ui'
 import { DELIVERY_STATUS_META, TICKET_STATUS_META } from '../../../lib/constants'
 import { translateTableName, translateTicketStatus, useI18n } from '../../../lib/i18n'
@@ -81,6 +82,17 @@ function TicketList({ tab, setTab, tableFilter, setTableFilter, serverFilter, se
           <option key={type.id} value={type.id}>{ORDER_TYPE_LABEL[type.id] || type.label}</option>
         ))}
       </select>
+
+      <FilterPresetsBar
+        screenKey="tickets"
+        currentFilters={{ tab, tableFilter, serverFilter, typeFilter }}
+        onApply={(f) => {
+          if (f.tab) setTab(f.tab)
+          if (f.tableFilter !== undefined) setTableFilter(f.tableFilter)
+          if (f.serverFilter !== undefined) setServerFilter(f.serverFilter)
+          if (f.typeFilter !== undefined) setTypeFilter(f.typeFilter)
+        }}
+      />
 
       <button type="button" onClick={onNew} className={btnGhost} aria-label="New check">
         + {tk.newOrder || 'New check'}

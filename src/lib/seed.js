@@ -587,6 +587,38 @@ export function buildSeed() {
   const wasteLog = [
     { id: 'w_1', inventoryItemId: 'inv_lettuce', qty: 4, reason: 'spoil', at: minAgo(300), by: 'closer' },
   ]
+
+  const mondayOffset = (() => {
+    const d = new Date(now())
+    const day = d.getDay()
+    return day === 0 ? -6 : 1 - day
+  })()
+  const monday = new Date(new Date(now()).getTime() + mondayOffset * 86400000)
+  const dateForDay = (offset) => new Date(monday.getTime() + offset * 86400000).toISOString().slice(0, 10)
+
+  const shifts = [
+    { id: 'shf_1', staffName: 'Jordan Lee', role: 'server', date: dateForDay(0), startTime: '10:00', endTime: '16:00', note: 'Floor lunch' },
+    { id: 'shf_2', staffName: 'Alex Smith', role: 'server', date: dateForDay(0), startTime: '16:00', endTime: '23:00', note: 'Dinner lead' },
+    { id: 'shf_3', staffName: 'Kim Park', role: 'kitchen', date: dateForDay(0), startTime: '09:00', endTime: '17:00', note: 'Kitchen prep & lunch' },
+    { id: 'shf_4', staffName: 'Sam Rivera', role: 'kitchen', date: dateForDay(0), startTime: '16:00', endTime: '23:30', note: 'Grill & close' },
+    { id: 'shf_5', staffName: 'Jordan Lee', role: 'server', date: dateForDay(1), startTime: '10:00', endTime: '16:00', note: 'Lunch service' },
+    { id: 'shf_6', staffName: 'Kim Park', role: 'kitchen', date: dateForDay(1), startTime: '11:00', endTime: '21:00', note: 'All-day lead' },
+    { id: 'shf_7', staffName: 'Taylor Morgan', role: 'host', date: dateForDay(1), startTime: '17:00', endTime: '22:00', note: 'Dinner seating' },
+    { id: 'shf_8', staffName: 'Alex Smith', role: 'server', date: dateForDay(2), startTime: '11:00', endTime: '20:00', note: 'Floor service' },
+    { id: 'shf_9', staffName: 'Sam Rivera', role: 'kitchen', date: dateForDay(2), startTime: '10:00', endTime: '18:00', note: 'Prep & line' },
+    { id: 'shf_10', staffName: 'Jordan Lee', role: 'server', date: dateForDay(3), startTime: '16:00', endTime: '23:00', note: 'Dinner rush' },
+    { id: 'shf_11', staffName: 'Kim Park', role: 'kitchen', date: dateForDay(3), startTime: '15:00', endTime: '23:00', note: 'Expo & cook' },
+    { id: 'shf_12', staffName: 'Jordan Lee', role: 'server', date: dateForDay(4), startTime: '10:00', endTime: '17:00', note: 'Lunch opener' },
+    { id: 'shf_13', staffName: 'Alex Smith', role: 'server', date: dateForDay(4), startTime: '16:00', endTime: '24:00', note: 'Weekend dinner rush' },
+    { id: 'shf_14', staffName: 'Kim Park', role: 'kitchen', date: dateForDay(4), startTime: '09:00', endTime: '17:00', note: 'Weekend prep' },
+    { id: 'shf_15', staffName: 'Sam Rivera', role: 'kitchen', date: dateForDay(4), startTime: '16:00', endTime: '24:00', note: 'Dinner line' },
+    { id: 'shf_16', staffName: 'Taylor Morgan', role: 'host', date: dateForDay(4), startTime: '16:30', endTime: '22:30', note: 'Door / Host stand' },
+    { id: 'shf_17', staffName: 'Alex Smith', role: 'server', date: dateForDay(5), startTime: '11:00', endTime: '23:00', note: 'Full day' },
+    { id: 'shf_18', staffName: 'Kim Park', role: 'kitchen', date: dateForDay(5), startTime: '10:00', endTime: '22:00', note: 'Chef lead' },
+    { id: 'shf_19', staffName: 'Taylor Morgan', role: 'host', date: dateForDay(5), startTime: '16:00', endTime: '22:00', note: 'Floor flow' },
+    { id: 'shf_20', staffName: 'Jordan Lee', role: 'server', date: dateForDay(6), startTime: '10:00', endTime: '18:00', note: 'Sunday brunch' },
+    { id: 'shf_21', staffName: 'Sam Rivera', role: 'kitchen', date: dateForDay(6), startTime: '09:00', endTime: '18:00', note: 'Brunch kitchen' },
+  ]
   // ── Buy side: purchases + the movement ledger they write to ───────
   // Two deliveries already received, one order still with the vendor.
   const purchases = [
@@ -776,6 +808,7 @@ export function buildSeed() {
     recipes,
     inventory,
     orders: frozenOrders,
+    shifts,
     wasteLog,
     invoiceLog,
     turnHistory,

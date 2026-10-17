@@ -37,6 +37,8 @@ const AssistantScreen = lazy(() => import('./screens/AssistantScreen'))
 const UsersScreen = lazy(() => import('./screens/UsersScreen'))
 const RolesScreen = lazy(() => import('./screens/RolesScreen'))
 const OwnersScreen = lazy(() => import('./screens/OwnersScreen'))
+const ScheduleScreen = lazy(() => import('./screens/ScheduleScreen'))
+const WasteScreen = lazy(() => import('./screens/WasteScreen'))
 
 function guestTableId() {
   try {
@@ -124,6 +126,8 @@ const SCREENS = {
   users: UsersScreen,
   roles: RolesScreen,
   owners: OwnersScreen,
+  schedule: ScheduleScreen,
+  waste: WasteScreen,
 }
 
 /** A brief hold while a lazily-loaded screen chunk arrives. */

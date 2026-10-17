@@ -852,12 +852,78 @@ export function descendantCategoryIds(categories, id) {
 
 /** Menu items that reference a category (or any of its sub-categories). */
 export function itemsInCategory(menu, categories, categoryId) {
+  const ids = descendantCategoryIds(categories || [], categoryId)
   const names = new Set(
-    descendantCategoryIds(categories || [], categoryId)
-      .map((id) => categoryById(categories, id)?.name)
-      .filter(Boolean),
+    ids.map((id) => categoryById(categories, id)?.name?.toLowerCase()).filter(Boolean),
   )
-  return (menu || []).filter((item) => names.has(item.category))
+  return (menu || []).filter((item) => {
+    const c = String(item.category || '').toLowerCase()
+    const sc = String(item.subCategory || '').toLowerCase()
+    return names.has(c) || names.has(sc)
+  })
+}
+
+/** Total item count for a category, summing itself and all descendant sub-categories. */
+export function categoryTotalCount(categories = [], categoryId, items = [], _kind = 'menu') {
+  const ids = descendantCategoryIds(categories, categoryId)
+  const names = new Set(ids.map((id) => categoryById(categories, id)?.name?.toLowerCase()).filter(Boolean))
+  return (items || []).filter((item) => {
+    const c = String(item.category || '').toLowerCase()
+    const sc = String(item.subCategory || '').toLowerCase()
+    return names.has(c) || names.has(sc)
+  }).length
+}
+
+/**
+ * Hierarchical grouping of menu items by category tree (parent -> sub).
+ * Returns array of root groups:
+ * [
+ *   {
+ *     category: rootNode,
+ *     directItems: [...],
+ *     children: [
+ *       { category: childNode, items: [...] }
+ *     ],
+ *     allItems: [...],
+ *     totalCount: number
+ *   }
+ * ]
+ * plus any uncategorized items.
+ */
+export function groupMenuByCategories(menu = [], categories = []) {
+  const tree = categoryTree(categories, 'menu')
+  const matchedItemIds = new Set()
+
+  const groups = tree.map((root) => {
+    const childGroups = (root.children || []).map((child) => {
+      const items = (menu || []).filter((item) => {
+        const matchesCat = String(item.category || '').toLowerCase() === root.name.toLowerCase()
+        const matchesSub = String(item.subCategory || '').toLowerCase() === child.name.toLowerCase()
+        return (matchesCat && matchesSub) || (!item.subCategory && String(item.category || '').toLowerCase() === child.name.toLowerCase())
+      })
+      items.forEach((item) => matchedItemIds.add(item.id))
+      return { category: child, items }
+    })
+
+    const directItems = (menu || []).filter((item) => {
+      if (matchedItemIds.has(item.id)) return false
+      const matchesCat = String(item.category || '').toLowerCase() === root.name.toLowerCase()
+      return matchesCat
+    })
+    directItems.forEach((item) => matchedItemIds.add(item.id))
+
+    const allItems = [...directItems, ...childGroups.flatMap((cg) => cg.items)]
+    return {
+      category: root,
+      directItems,
+      children: childGroups,
+      allItems,
+      totalCount: allItems.length,
+    }
+  })
+
+  const uncategorized = (menu || []).filter((item) => !matchedItemIds.has(item.id))
+  return { groups, uncategorized }
 }
 
 /** "Mains › Pasta" — the display path for an item's category and sub-category. */

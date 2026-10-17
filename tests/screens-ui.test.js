@@ -81,6 +81,8 @@ const MARKERS = {
   users: 'Who can sign in to this restaurant',
   roles: 'Each role is a set of screens',
   owners: 'Every restaurant on the platform',
+  schedule: 'Weekly shift schedule',
+  waste: 'Waste tracking',
 }
 
 const settle = async (ms = 40) => {
