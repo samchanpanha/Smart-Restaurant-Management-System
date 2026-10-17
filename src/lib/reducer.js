@@ -63,6 +63,7 @@ function mergeSettings(current, patch) {
     telegram: { ...current.telegram, ...(patch.telegram || {}) },
     numbering: { ...current.numbering, ...(patch.numbering || {}) },
     templates: { ...current.templates, ...(patch.templates || {}) },
+    dashboard: { ...current.dashboard, ...(patch.dashboard || {}) },
     currencies: Array.isArray(patch.currencies) ? patch.currencies : current.currencies,
   }
   const settings = sanitizeSettings(merged, current.restaurantName)
@@ -318,7 +319,24 @@ function withShopDefaults(shop, locationLabel = 'Downtown') {
     purchases, movements, settings,
     tables: normalizeTablePositions(shop.tables),
     orders,
-    shifts: (Array.isArray(shop.shifts) ? shop.shifts : []).slice(-500),
+    // A shift doubles as the cash session for offline gating: `status` is
+    // 'open' while the drawer is out. The marker only comes from the new
+    // open/close feature — a legacy roster row carries none, so an
+    // upgrade never locks offline selling on branches that never used it.
+    shifts: (Array.isArray(shop.shifts) ? shop.shifts : [])
+      .map((shift) => {
+        if (!shift) return shift
+        if (shift.status === 'open' || shift.status === 'closed') return shift
+        // A stray marker is not a session state: strip it so the row
+        // reads as a plain legacy roster entry (no gate adoption).
+        const { status, ...rest } = shift
+        return rest
+      })
+      .slice(-500),
+    customers: (Array.isArray(shop.customers) ? shop.customers : [])
+      .map((customer) => sanitizeCustomerRecord(customer))
+      .filter(Boolean)
+      .slice(-800),
     wasteLog: (Array.isArray(shop.wasteLog) ? shop.wasteLog : []).slice(-500),
     dismissedAlerts: (Array.isArray(shop.dismissedAlerts) ? shop.dismissedAlerts : []).slice(-MAX_DISMISSED_ALERTS),
   }
@@ -660,8 +678,32 @@ function sanitizeCustomer(raw) {
   const name = String(raw.name || '').trim().slice(0, 60)
   const phone = String(raw.phone || '').trim().slice(0, 30)
   const address = String(raw.address || '').trim().slice(0, 160)
+  const customerId = String(raw.customerId || '').trim().slice(0, 64)
   if (!name && !phone && !address) return null
-  return { name, phone, address }
+  return {
+    name,
+    phone,
+    address,
+    // Link back to the saved customer directory entry, when the check was
+    // created from one. Optional, so legacy payloads keep their shape.
+    ...(customerId ? { customerId } : {}),
+  }
+}
+
+/** A saved local customer: the directory the Tickets composer picks from. */
+function sanitizeCustomerRecord(raw) {
+  if (!raw || typeof raw !== 'object') return null
+  const name = String(raw.name || '').trim().slice(0, 60)
+  const phone = String(raw.phone || '').trim().slice(0, 30)
+  const note = String(raw.note || '').trim().slice(0, 200)
+  if (!name && !phone) return null
+  return {
+    id: raw.id || uid('cus'),
+    name,
+    phone,
+    ...(note ? { note } : {}),
+    createdAt: String(raw.createdAt || '').slice(0, 30),
+  }
 }
 
 const OFF_TABLE_TYPES = ['takeout', 'delivery']
@@ -2745,7 +2787,24 @@ function shopReducerBase(state, action) {
       return { ...state, documents }
     }
 
+    // ── Customers (local directory) ────────────────────────
+    // The Tickets composer saves walk-in customers here — online or, with
+    // the outbox queueing the action, offline. One case serves both
+    // create and edit: the record always travels whole.
+    case 'UPSERT_CUSTOMER': {
+      const customer = sanitizeCustomerRecord(action.customer)
+      if (!customer) return state
+      const existing = (state.customers || []).some((c) => c.id === customer.id)
+      const customers = existing
+        ? (state.customers || []).map((c) => (c.id === customer.id ? { ...c, ...customer } : c))
+        : [...(state.customers || []), customer]
+      return { ...state, customers: customers.slice(-800) }
+    }
+
     // ── Shifts (Schedule) ─────────────────────────────────
+    // A shift is also the branch's cash session: `status: 'open'` means the
+    // drawer is out and offline selling is allowed. Legacy roster rows are
+    // always 'closed'.
     case 'ADD_SHIFT': {
       const shift = action.shift
       if (!shift || !shift.staffName) return state
@@ -2758,6 +2817,7 @@ function shopReducerBase(state, action) {
         startTime: String(shift.startTime || '09:00').trim(),
         endTime: String(shift.endTime || '17:00').trim(),
         note: String(shift.note || '').slice(0, 120),
+        status: shift.status === 'open' ? 'open' : 'closed',
         createdAt: new Date().toISOString(),
       }
       const shifts = [...(state.shifts || []), next].slice(-500)

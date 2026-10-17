@@ -17,8 +17,27 @@ function NewCheckModal({ onClose, onCreated }) {
   const [fee, setFee] = useState('2.00')
   const [eta, setEta] = useState('')
   const [error, setError] = useState('')
+  // Local customer directory: pick a saved customer (filters with what is
+  // typed) or save a new one as the check is created. The link travels on
+  // the order's customer block, and the save is an ordinary synced action
+  // — offline creation queues through the outbox like every sale does.
+  const customers = Array.isArray(state.customers) ? state.customers : []
+  const [customerId, setCustomerId] = useState(null)
+  const [saveCustomer, setSaveCustomer] = useState(true)
+  const query = `${name} ${phone}`.trim().toLowerCase()
+  const matches = query.length >= 2
+    ? customers.filter((c) => `${c.name} ${c.phone}`.toLowerCase().includes(query)).slice(0, 5)
+    : []
 
   const offTable = orderType !== 'dine_in'
+
+  function pickCustomer(record) {
+    setCustomerId(record.id)
+    setName(record.name || '')
+    setPhone(record.phone || '')
+    if (record.note) setAddress(record.note)
+    setError('')
+  }
 
   function start() {
     const orderId = uid('o')
@@ -33,11 +52,29 @@ function NewCheckModal({ onClose, onCreated }) {
         setError('Add a customer name.')
         return
       }
+      let linkId = customerId
+      if (saveCustomer && name.trim() && !linkId) {
+        linkId = uid('cus')
+        dispatch({
+          type: 'UPSERT_CUSTOMER',
+          customer: {
+            id: linkId,
+            name: name.trim(),
+            phone: phone.trim(),
+            createdAt: new Date().toISOString(),
+          },
+        })
+      }
       dispatch({
         type: 'CREATE_ORDER',
         id: orderId,
         orderType,
-        customer: { name, phone, address: orderType === 'delivery' ? address : '' },
+        customer: {
+          name,
+          phone,
+          address: orderType === 'delivery' ? address : '',
+          ...(linkId ? { customerId: linkId } : {}),
+        },
         deliveryFee: orderType === 'delivery' ? Number(fee) || 0 : 0,
         eta: eta ? new Date(eta).toISOString() : null,
       })
@@ -84,16 +121,43 @@ function NewCheckModal({ onClose, onCreated }) {
         ) : (
           <>
             <Field label="Customer name">
-              <input value={name} onChange={(e) => { setName(e.target.value); setError('') }} placeholder="Ava Chen" className={inputCls} maxLength={60} aria-label="Customer name" autoFocus />
+              <input value={name} onChange={(e) => { setName(e.target.value); setCustomerId(null); setError('') }} placeholder="Ava Chen" className={inputCls} maxLength={60} aria-label="Customer name" autoFocus />
             </Field>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Phone">
-                <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="012 345 678" className={inputCls} maxLength={30} />
+                <input value={phone} onChange={(e) => { setPhone(e.target.value); setCustomerId(null) }} placeholder="012 345 678" className={inputCls} maxLength={30} />
               </Field>
               <Field label="ETA / pickup time">
                 <input type="datetime-local" value={eta} onChange={(e) => setEta(e.target.value)} className={inputCls} />
               </Field>
             </div>
+            {matches.length > 0 && (
+              <label className="block">
+                <span className="text-xs font-semibold text-zinc-500">Saved customers</span>
+                <div className="mt-1 rounded-xl bg-[var(--color-ink-800)] ring-1 ring-inset ring-[var(--color-ink-600)] divide-y divide-[var(--color-ink-700)]" data-testid="customer-matches">
+                  {matches.map((record) => (
+                    <button
+                      key={record.id}
+                      type="button"
+                      onClick={() => pickCustomer(record)}
+                      className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-xs hover:bg-white/5 ${customerId === record.id ? 'bg-amber-500/15 font-semibold text-amber-300' : 'text-zinc-300'}`}
+                    >
+                      <span className="truncate">{record.name || record.phone}</span>
+                      <span className="shrink-0 text-zinc-500">{record.phone}</span>
+                    </button>
+                  ))}
+                </div>
+              </label>
+            )}
+            <label className="flex items-center gap-2 text-xs text-zinc-400">
+              <input
+                type="checkbox"
+                checked={saveCustomer}
+                onChange={(e) => setSaveCustomer(e.target.checked)}
+                className="h-3.5 w-3.5 accent-amber-500"
+              />
+              <span>Save this customer to the directory (works offline — syncs when the server is back)</span>
+            </label>
             {orderType === 'delivery' && (
               <>
                 <Field label="Delivery address">

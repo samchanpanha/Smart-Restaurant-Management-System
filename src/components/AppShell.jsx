@@ -32,7 +32,7 @@ export default function AppShell({ children }) {
   const confirm = useConfirm()
   const {
     state, dispatch, role, setRole, screen, setScreen, link, resync, notice, locId, setLocId, locations,
-    openScreenInTab, alerts,
+    openScreenInTab, alerts, queued, conflicts, dismissConflicts,
     tabs, activeTabId, saveTabScroll, setSelectedTableId, setSelectedDishId, setSelectedOrderId,
   } = useRestora()
   const now = useNow(30000)
@@ -168,13 +168,24 @@ export default function AppShell({ children }) {
 
   const isProduction = state.settings?.operatingMode === 'production'
 
+  // The offline pill doubles as the outbox gauge, so an operator never
+  // wonders whether this terminal still owes the server something.
+  const queuedCount = queued || 0
   const linkPill = link.status === 'live'
-    ? { tone: 'ok', label: dict.liveServer }
+    ? (queuedCount
+      ? { tone: 'warn', label: (dict.queuedChanges || ((n) => `${n} queued to sync`))(queuedCount) }
+      : { tone: 'ok', label: dict.liveServer })
     : link.status === 'offline'
-      ? { tone: 'warn', label: dict.offlineTerminal }
+      ? (queuedCount
+        ? { tone: 'warn', label: (dict.offlineQueued || ((n) => `Offline · ${n} queued`))(queuedCount) }
+        : { tone: 'warn', label: dict.offlineTerminal })
       : isProduction
         ? { tone: 'ok', label: dict.productionMode || 'Production' }
         : { tone: 'muted', label: dict.localDemo }
+
+  // Financial replay conflicts need a human: the server refused an offline
+  // change and it is parked, not lost. The banner stays until dismissed.
+  const conflictList = Array.isArray(conflicts) ? conflicts : []
 
   return (
     <div className="restora-theme app-shell flex overflow-hidden bg-[var(--color-ink-950)] text-zinc-100">
@@ -421,6 +432,31 @@ export default function AppShell({ children }) {
         <div ref={panelRef} id="workspace-panel" role="tabpanel" aria-labelledby={`workspace-tab-${activeTabId}`} className="app-workspace min-h-0 flex-1 overflow-y-auto">
           <div className="app-page">
             {notice && <div className="animate-status-in mb-4 rounded-xl bg-sky-500/10 px-4 py-2.5 text-sm text-sky-800 ring-1 ring-inset ring-sky-500/30" role="status">{notice}</div>}
+            {conflictList.length > 0 && (
+              <div className="animate-status-in mb-4 rounded-xl bg-amber-500/10 px-4 py-3 text-sm text-amber-900 ring-1 ring-inset ring-amber-500/40" role="alert">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <span aria-hidden="true">⚠️</span>
+                    <div>
+                      <div className="font-bold">{(dict.conflictTitle || (() => 'Offline changes need review'))(conflictList.length)}</div>
+                      <div className="mt-0.5 text-xs text-amber-800">
+                        {dict.conflictSubtitle || 'The server refused these queued changes. Nothing was lost — review the details before re-entering them.'}
+                      </div>
+                    </div>
+                  </div>
+                  <button type="button" onClick={dismissConflicts} className="min-h-8 rounded-lg border border-amber-500/40 px-2.5 text-xs font-semibold text-amber-900 hover:bg-amber-500/10">
+                    {dict.conflictDismiss || 'Dismiss'}
+                  </button>
+                </div>
+                <ul className="mt-2 space-y-1 text-xs text-amber-900/90">
+                  {conflictList.slice(-5).map((conflict) => (
+                    <li key={conflict.lid || conflict.at} className="tnum">
+                      {conflict.financial ? '💰' : '·'} {conflict.type} — {conflict.error || 'rejected'} <span className="text-amber-700/70">({new Date(conflict.at).toLocaleString(localeTag)})</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {children}
           </div>
         </div>

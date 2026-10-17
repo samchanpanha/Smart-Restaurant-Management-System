@@ -148,9 +148,39 @@ Allergen/dietary notes in the included demo seed are examples only; verify them
 against the actual recipe and kitchen cross-contact practices before using them
 for guest safety decisions.
 
-Known v1 limits: actions apply optimistically — if two terminals race (same
-table), the server rejects the loser (`409`) and it resyncs. Edits made while
-offline are overwritten by the authoritative snapshot on reconnect.
+Known limits: actions apply optimistically — if two terminals race (same
+table), the server rejects the loser (`409`) and it resyncs. Offline work is
+no longer lost: it queues (see "Offline terminals" below) and replays when
+the server is back; a replay the server refuses (price changed, table taken)
+lands as a conflict banner instead of vanishing.
+
+### Offline terminals
+
+Terminals keep selling with no server: the UI runs on the cached snapshot in
+localStorage, and every sale is queued in an offline outbox
+(`src/lib/outbox.js`, key `restora-outbox-v1`). On reconnect the store
+replays the queue in order — idempotently, via a `_lid` the server dedupes
+(unique on `actions.owner_id + client_id + lid`) — then takes the
+authoritative snapshot. A refused *financial* action is parked for review
+(banner listing `restora-conflicts-v1`), never silently dropped.
+
+First-release restrictions while offline (`src/lib/offline.js`):
+
+- No catalog/menu/inventory-master edits, no settings or exchange-rate
+  changes, no supplier/purchase actions, no template edits, no shift-roster
+  edits (`OFFLINE_BLOCKED`).
+- Sale preflight: cached menu + cached session (24h TTL, `restora-session-cache-v1`)
+  + matching branch pin; an **open cash-session shift** gates a branch that
+  ever opened one (open a shift in Control → Schedule with "Cash session open").
+- Payments offline are cash-only; card/QR needs the link.
+- Void/refund is limited to orders created on this terminal while offline.
+- No empire-level actions (branches, transfers) offline.
+
+Production apps also register a service worker (`public/sw.js`, production
+builds only) so a cold reload with no network still boots the shell; `/api`
+is never cached. Guest phones and Telegram mini-app sessions participate in
+the same outbox (their orders replay too). `npm run dev` without a server on
+:3001 remains the pure localStorage demo — it neither gates nor queues.
 
 ### Configuration, documents, catalog & suppliers
 

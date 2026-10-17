@@ -236,6 +236,10 @@ if (!hasColumn('menu_categories', 'description')) db.exec("ALTER TABLE menu_cate
 if (!hasColumn('menu_categories', 'station')) db.exec("ALTER TABLE menu_categories ADD COLUMN station TEXT NOT NULL DEFAULT ''")
 if (!hasColumn('menu_categories', 'active')) db.exec('ALTER TABLE menu_categories ADD COLUMN active INTEGER NOT NULL DEFAULT 1')
 if (!hasColumn('inventory_items', 'counted')) db.exec('ALTER TABLE inventory_items ADD COLUMN counted INTEGER NOT NULL DEFAULT 1')
+// Offline outbox support: a committed action records the client's local
+// id, so a replayed queue entry that already landed returns its original
+// seq instead of applying twice (no double payments after a crash).
+if (!hasColumn('actions', 'lid')) db.exec('ALTER TABLE actions ADD COLUMN lid TEXT')
 
 if (db.pragma('user_version', { simple: true }) < 3) {
   // FK toggles are ignored inside a transaction, so flip them off up front and
@@ -303,6 +307,8 @@ db.exec(`
     ON issued_documents (owner_id, location_id, kind, issued_at DESC);
   CREATE INDEX IF NOT EXISTS actions_by_owner
     ON actions (owner_id, seq);
+  CREATE UNIQUE INDEX IF NOT EXISTS actions_client_lid
+    ON actions (owner_id, client_id, lid) WHERE lid IS NOT NULL;
 `)
 
 // ─── Prepared statements ─────────────────────────────────────────
@@ -369,8 +375,9 @@ export function setBranding(branding) {
   }
   setKv.run(PLATFORM_OWNER, BRANDING_KEY, JSON.stringify(branding))
 }
-const insertAction = db.prepare('INSERT INTO actions (owner_id, client_id, type, action, ts) VALUES (?, ?, ?, ?, ?)')
+const insertAction = db.prepare('INSERT INTO actions (owner_id, client_id, type, action, ts, lid) VALUES (?, ?, ?, ?, ?, ?)')
 const selectSince = db.prepare('SELECT seq, client_id AS clientId, action FROM actions WHERE owner_id = ? AND seq > ? ORDER BY seq ASC LIMIT ?')
+const selectActionByLid = db.prepare('SELECT seq FROM actions WHERE owner_id = ? AND client_id = ? AND lid = ?')
 const countActions = db.prepare('SELECT COUNT(*) AS n, MAX(seq) AS max FROM actions WHERE owner_id = ?')
 // The action log is a replay buffer, not an audit archive: keep the newest
 // RETAIN_ACTIONS per tenant so the table (and replay payloads) stay bounded.
@@ -773,8 +780,8 @@ const syncMenuCatalogStandalone = db.transaction((ownerId, state) => {
   syncConfigTx(ownerId, state)
 })
 
-const commitActionTx = db.transaction((ownerId, clientId, actionType, actionJson, timestamp, stateJson, state) => {
-  const info = insertAction.run(ownerId, clientId, actionType, actionJson, timestamp)
+const commitActionTx = db.transaction((ownerId, clientId, actionType, actionJson, timestamp, stateJson, state, lid) => {
+  const info = insertAction.run(ownerId, clientId, actionType, actionJson, timestamp, lid)
   const seq = Number(info.lastInsertRowid)
   if (seq > RETAIN_ACTIONS) pruneActions.run(ownerId, seq - RETAIN_ACTIONS)
   setKv.run(ownerId, 'snapshot', stateJson)
@@ -838,7 +845,28 @@ export function commitAction(ownerId, clientId, action, state) {
     new Date().toISOString(),
     stateJson,
     state,
+    actionLid(action),
   )
+}
+
+/** The client's local action id, wherever the wrapper put it. */
+function actionLid(action) {
+  return action?.action?._lid ?? action?._lid ?? null
+}
+
+/**
+ * Seq of an earlier identical commit (same tenant, same terminal, same
+ * local id), or null. The actions route consults this before running the
+ * reducer: replaying an offline queue that already landed once — a crash
+ * between POST and response, two terminals flushing the same entry —
+ * must return the original seq, never apply a second time.
+ */
+export function findDuplicateAction(ownerId, clientId, action) {
+  const lid = actionLid(action)
+  if (!lid) return null
+  const client = typeof clientId === 'string' ? clientId : 'anon'
+  const row = selectActionByLid.get(ownerId || DEFAULT_OWNER, client, lid)
+  return row ? Number(row.seq) : null
 }
 
 export function actionsSince(ownerId, seq, limit = 500) {

@@ -45,6 +45,11 @@ function ShiftModal({ shift, defaultDate, onClose, onSave, onDelete, sc = {} }) 
   const [startTime, setStartTime] = useState(shift?.startTime || '10:00')
   const [endTime, setEndTime] = useState(shift?.endTime || '17:00')
   const [note, setNote] = useState(shift?.note || '')
+  // A shift doubles as the branch's cash session: while it is 'open' the
+  // drawer is out and offline terminals are allowed to sell and take
+  // cash. 'closed' is the default so a roster edit never opens a drawer
+  // by accident.
+  const [open, setOpen] = useState(shift?.status === 'open')
   const [error, setError] = useState('')
 
   function handleSubmit(e) {
@@ -61,6 +66,7 @@ function ShiftModal({ shift, defaultDate, onClose, onSave, onDelete, sc = {} }) 
       startTime,
       endTime,
       note: note.trim(),
+      status: open ? 'open' : 'closed',
     })
   }
 
@@ -138,6 +144,21 @@ function ShiftModal({ shift, defaultDate, onClose, onSave, onDelete, sc = {} }) 
             className={inputCls}
           />
         </Field>
+
+        <label className="flex items-start gap-3 rounded-xl bg-emerald-500/10 p-3 ring-1 ring-inset ring-emerald-500/25">
+          <input
+            type="checkbox"
+            checked={open}
+            onChange={(e) => setOpen(e.target.checked)}
+            className="mt-0.5 h-4 w-4 accent-emerald-500"
+          />
+          <span className="text-xs leading-tight text-emerald-200">
+            <strong className="text-emerald-300">Cash session open</strong>
+            <br />
+            While this shift is open the drawer counts as live and offline
+            terminals may keep selling and taking cash. Close it at handover.
+          </span>
+        </label>
 
         <div className="flex items-center justify-between pt-3 border-t border-white/10">
           {shift && onDelete ? (
@@ -438,6 +459,7 @@ export default function ScheduleScreen() {
                   visibleShifts.map((shift) => {
                     const meta = ROLE_META[shift.role] || ROLE_META.server
                     const hrs = calcHours(shift.startTime, shift.endTime)
+                    const sessionOpen = shift.status === 'open'
                     return (
                       <div
                         key={shift.id}
@@ -452,6 +474,19 @@ export default function ScheduleScreen() {
                           <span>{shift.startTime} – {shift.endTime}</span>
                           <span className="font-semibold">{hrs}h</span>
                         </div>
+                        {sessionOpen && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              dispatch({ type: 'UPDATE_SHIFT', shiftId: shift.id, patch: { status: 'closed' } })
+                            }}
+                            className="mt-1.5 w-full rounded-md bg-emerald-500/20 px-1.5 py-1 text-[10px] font-bold text-emerald-300 ring-1 ring-inset ring-emerald-500/40 hover:bg-emerald-500/30"
+                            title="Close this cash session — offline selling on this branch locks until another shift opens"
+                          >
+                            💵 Cash session open — click to close
+                          </button>
+                        )}
                         {shift.note && (
                           <div className="mt-1 text-[10px] italic opacity-75 truncate">
                             “{shift.note}”

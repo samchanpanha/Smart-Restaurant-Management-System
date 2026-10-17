@@ -22,6 +22,7 @@ import { AlertsSection } from './sections/Alerts'
 import { BrandSection } from './sections/Brand'
 import { BusinessSection } from './sections/Business'
 import { BranchesSection } from './sections/Branches'
+import { DashboardSection } from './sections/Dashboard'
 import { DataSection } from './sections/Data'
 import { DocumentsSection } from './sections/Documents'
 import { FoodSection } from './sections/Food'
@@ -40,6 +41,7 @@ const SECTIONS = [
   { id: 'stock', label: 'Stock rules', blurb: 'Valuation, reorder, auto-86' },
   { id: 'food', label: 'Food & menu', blurb: 'Tags, allergens, courses, photos, service windows' },
   { id: 'pos', label: 'Service & POS', blurb: 'Tips, splits, printers, QR' },
+  { id: 'dashboard', label: 'Dashboard', blurb: 'Hero, KPI cards, section toggles, targets' },
   { id: 'alerts', label: 'Alerts', blurb: 'What pings whom, and when' },
   { id: 'ai', label: 'AI assistant & Guides', blurb: 'Provider, model, API key, how-to guides' },
   { id: 'brand', label: 'App brand', blurb: 'Name, tagline, logo, icon' },
@@ -53,6 +55,7 @@ const SECTION_ICON = {
   money: 'costing',
   stock: 'inventory',
   pos: 'pos',
+  dashboard: 'dashboard',
   alerts: 'bell',
   ai: 'sparkles',
   brand: 'photo',
@@ -71,7 +74,18 @@ export default function SettingsScreen({ initialSection = 'business' }) {
   )
   const { lang, dict } = useI18n()
   const st = dict.settings || {}
-  const [section, setSection] = useState(initialSection)
+  // Cross-screen handoff: another screen (e.g. the Dashboard's
+  // "Customize" button) asks for a specific section once.
+  const [section, setSection] = useState(() => {
+    try {
+      const wanted = sessionStorage.getItem('restora-settings-section')
+      if (wanted && SECTIONS.some((entry) => entry.id === wanted)) {
+        sessionStorage.removeItem('restora-settings-section')
+        return wanted
+      }
+    } catch { /* storage unavailable — default landing */ }
+    return initialSection
+  })
   const [draft, setDraft] = useState(() => settings)
   const [scopeAll, setScopeAll] = useState(false)
   const [savedAt, setSavedAt] = useState(null)
@@ -89,6 +103,7 @@ export default function SettingsScreen({ initialSection = 'business' }) {
     stock: st.inventoryTab || 'Stock rules',
     food: st.foodTab || 'Food & menu',
     pos: st.posTab || 'Service & POS',
+    dashboard: st.dashboardTab || 'Dashboard',
     alerts: st.notificationsTab || 'Alerts & notifications',
     ai: st.aiTab || 'AI assistant & Guides',
     brand: 'App brand',
@@ -180,6 +195,8 @@ export default function SettingsScreen({ initialSection = 'business' }) {
         return <FoodSection draft={draft} patch={patch} />
       case 'pos':
         return <PosSection draft={draft} patch={patch} />
+      case 'dashboard':
+        return <DashboardSection draft={draft} patch={patch} />
       case 'alerts':
         return <AlertsSection draft={draft} patch={patch} />
       case 'ai':

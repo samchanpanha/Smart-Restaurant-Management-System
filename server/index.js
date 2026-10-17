@@ -12,7 +12,7 @@
 //   GET  /api/categories    → category tree with sub-categories (loc)
 //   GET  /api/settings      → configuration for one location (loc)
 //   GET  /api/documents     → issued invoice/receipt/ticket/report registry (loc)
-//   POST /api/actions       → { seq } | 409 (illegal transition)
+//   POST /api/actions       → { seq } | { seq, dedup } | 409 (illegal transition)
 //   GET  /api/events?since=N → SSE stream (replay + live)
 //   POST /api/telegram/webhook  → Telegram update → bot reply (+ actions)
 //   POST /api/telegram/simulate → run a bot command without changing state
@@ -48,9 +48,9 @@ import { replyKeyboard } from '../src/lib/telegram.js'
 import { STATE_VERSION, buildEmpire, migrateToEmpire, reducer } from '../src/lib/reducer.js'
 import { DOC_KINDS } from '../src/lib/settings.js'
 import {
-  db, DEFAULT_OWNER, actionsSince, commitAction, getAiConfig, getBranding, getCategories, getDocumentTotals,
-  getDocuments, getInventory, getMenuCatalog, getSettings, getSuppliers, loadSnapshot, logStats, saveSnapshot,
-  setAiConfig, setBranding, syncMenuCatalog,
+  db, DEFAULT_OWNER, actionsSince, commitAction, findDuplicateAction, getAiConfig, getBranding, getCategories,
+  getDocumentTotals, getDocuments, getInventory, getMenuCatalog, getSettings, getSuppliers, loadSnapshot, logStats,
+  saveSnapshot, setAiConfig, setBranding, syncMenuCatalog,
 } from './db.js'
 
 const PORT = Number(process.env.PORT || 3001)
@@ -288,6 +288,13 @@ app.post('/api/actions', resolveTenant, (req, res) => {
   }
   if (REJECTED.has(action.type)) {
     return res.status(400).json({ error: `${action.type} is local-only` })
+  }
+  // Idempotency: an offline replay whose action already committed (the
+  // first POST's response may have died before reaching the terminal)
+  // returns the original seq without touching state again.
+  const dupSeq = findDuplicateAction(req.tenantId, clientId, action)
+  if (dupSeq != null) {
+    return res.json({ seq: dupSeq, dedup: true })
   }
   // Branch-pinned users may only send shop actions to their own branch —
   // never the empire-level ones (reset, branch create/remove).

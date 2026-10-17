@@ -489,6 +489,41 @@ export function defaultSettings(locationLabel = 'Downtown') {
       recipients: '',
     },
 
+    // Dashboard composition: what the shift overview shows and how it
+    // greets the room. Everything defaults to the shipped layout, so a
+    // blank value here is always the designed page.
+    dashboard: {
+      heroEnabled: true,
+      heroImage: '',
+      showLivePill: true,
+      showMetaLine: true,
+      greetingName: '',
+      subtitle: '',
+      cards: {
+        revenue: true,
+        covers: true,
+        avgCheck: true,
+        foodCost: true,
+        occupancy: true,
+      },
+      sections: {
+        salesTrend: true,
+        alertsRail: true,
+        aiAlerts: true,
+        menuEngineering: true,
+        aiMenu: true,
+        kitchenSla: true,
+        floorSnapshot: true,
+        branchOverview: true,
+        quickOverview: true,
+        shiftBriefing: true,
+        quickActions: true,
+        aiForecast: true,
+        recentActivity: true,
+        shiftHealth: true,
+      },
+    },
+
     updatedAt: null,
     updatedBy: null,
   }
@@ -791,6 +826,43 @@ export function sanitizeSettings(raw, locationLabel = 'Downtown') {
         : base.notifications.channel,
       webhookUrl: clampText(source.notifications?.webhookUrl, 200),
       recipients: clampText(source.notifications?.recipients, 200),
+    },
+
+    // Dashboard composition. Every toggle defaults to shown — a template
+    // has to opt into hiding things, never the other way around. The
+    // hero image passes the same URL policy as the logo (https/data/path
+    // only), and text overrides are plain clamped strings: blank means
+    // "use the designed default".
+    dashboard: {
+      heroEnabled: source.dashboard?.heroEnabled !== false,
+      heroImage: sanitizeLogoUrl(source.dashboard?.heroImage),
+      showLivePill: source.dashboard?.showLivePill !== false,
+      showMetaLine: source.dashboard?.showMetaLine !== false,
+      greetingName: clampText(source.dashboard?.greetingName, 40),
+      subtitle: clampText(source.dashboard?.subtitle, 160),
+      cards: {
+        revenue: source.dashboard?.cards?.revenue !== false,
+        covers: source.dashboard?.cards?.covers !== false,
+        avgCheck: source.dashboard?.cards?.avgCheck !== false,
+        foodCost: source.dashboard?.cards?.foodCost !== false,
+        occupancy: source.dashboard?.cards?.occupancy !== false,
+      },
+      sections: {
+        salesTrend: source.dashboard?.sections?.salesTrend !== false,
+        alertsRail: source.dashboard?.sections?.alertsRail !== false,
+        aiAlerts: source.dashboard?.sections?.aiAlerts !== false,
+        menuEngineering: source.dashboard?.sections?.menuEngineering !== false,
+        aiMenu: source.dashboard?.sections?.aiMenu !== false,
+        kitchenSla: source.dashboard?.sections?.kitchenSla !== false,
+        floorSnapshot: source.dashboard?.sections?.floorSnapshot !== false,
+        branchOverview: source.dashboard?.sections?.branchOverview !== false,
+        quickOverview: source.dashboard?.sections?.quickOverview !== false,
+        shiftBriefing: source.dashboard?.sections?.shiftBriefing !== false,
+        quickActions: source.dashboard?.sections?.quickActions !== false,
+        aiForecast: source.dashboard?.sections?.aiForecast !== false,
+        recentActivity: source.dashboard?.sections?.recentActivity !== false,
+        shiftHealth: source.dashboard?.sections?.shiftHealth !== false,
+      },
     },
 
     updatedAt: source.updatedAt || null,
