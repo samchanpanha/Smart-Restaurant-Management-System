@@ -23,10 +23,10 @@ With the API running, extra environment (all optional — nothing breaks without
 
 | Variable | What it is |
 |---|---|
-| `TELEGRAM_BOT_TOKEN` | BotFather token. Without it the bot answers in the screen and every push is a logged no-op. |
+| `TELEGRAM_BOT_TOKEN` | BotFather token. Without it the bot answers in the screen and every push is a logged no-op. Can also be saved in **Settings → Telegram bot & mini app** (that wins over the env). |
 | `TELEGRAM_CHAT_ROLES` | `12345:manager,67890:staff` — chat ids and the access they get (`*` is the default, `staff`). |
 | `TELEGRAM_WEBHOOK_SECRET` | Shared secret Telegram must echo back on every update. |
-| `RESTORA_PUBLIC_URL` | Public origin used for guest / mini-app links in replies. |
+| `RESTORA_PUBLIC_URL` | Public origin used for guest / mini-app links in replies. Optional on Render — `RENDER_EXTERNAL_URL` is picked up automatically, and **Settings → Telegram** can pin a per-restaurant Base URL instead. |
 | `RESTORA_DATA` | Where `restora.sqlite` lives (default `server/data/`). |
 | `SUPERADMIN_EMAIL` / `SUPERADMIN_PASSWORD` / `SUPERADMIN_NAME` | Seed (or promote) the platform super admin on boot. |
 | `RESTORA_TENANT` | Slug (or id) of the owner the Telegram bot serves; defaults to the first owner, else the legacy `default` tenant. |
@@ -312,13 +312,24 @@ The bot reads and writes the **same book** the terminals do: the engine
 (`server/telegram.js`) applies them through the shared reducer, commits them
 like any terminal action, and broadcasts over SSE. Nothing is a shadow copy.
 
-1. Talk to **@BotFather**, create a bot, put its token in `TELEGRAM_BOT_TOKEN`.
+1. Talk to **@BotFather**, create a bot, then either set `TELEGRAM_BOT_TOKEN` or
+   paste the token into **Settings → Telegram bot & mini app** (stored per
+   restaurant, never shown again; the saved token wins over the env var and
+   applies to the next message with no restart).
 2. Point Telegram at this server:
    ```bash
    curl "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook?url=$RESTORA_PUBLIC_URL/api/telegram/webhook&secret_token=$TELEGRAM_WEBHOOK_SECRET"
    ```
 3. Map chats to roles with `TELEGRAM_CHAT_ROLES=12345:manager,67890:staff`.
    Anything unmapped gets staff access: look-ups only.
+
+**Base URL.** `/qr <table>` and the mini-app links are built from one address,
+resolved in this order: the **Base URL** field in Settings → Telegram bot &
+mini app (per restaurant), then `RESTORA_PUBLIC_URL`, then Render's own
+`RENDER_EXTERNAL_URL` (a deploy links to itself with zero configuration), then
+`PUBLIC_URL`. With none of them set, `/qr` says so instead of handing out a
+link nobody can open. Saving the Base URL alone never touches the stored token,
+and clearing the field hands the job back to the environment.
 
 **Commands** — staff: `/start /help /today /week /low /stock <item> /menu [term] /orders /qr <table> /table <n>`;
 managers add `/pnl /report [range] /86 <item> /un86 <item> /po /receive <PO#> /buy [range] /digest`.

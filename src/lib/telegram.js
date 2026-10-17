@@ -281,9 +281,21 @@ function digestText(shop, now = Date.now()) {
 function qrText(shop, arg, baseUrl, ownerSlug = '') {
   const table = matchByName(arg, shop.tables, 'name') || (shop.tables || []).find((entry) => String(entry.id).endsWith(String(arg)))
   if (!table) return 'Which table? Try /qr 12.'
-  const base = baseUrl || 'https://restora.example'
+  // No base URL means the server could not work out this restaurant's public
+  // address: say so instead of handing out a link nobody can open.
+  const base = String(baseUrl || '').trim().replace(/\/+$/, '')
+  if (!base) {
+    return [
+      heading(`Guest link · ${table.name}`),
+      'I do not know this restaurant\u2019s public address yet, so I cannot build the guest link.',
+      'Set the Base URL in Settings → Telegram bot & mini app, then send /qr ' + String(arg || table.id) + ' again.',
+      `Seats ${table.seats} · ${table.zone}`,
+    ].join('\n')
+  }
   const sep = base.includes('?') ? '&' : '?'
-  const owner = ownerSlug ? `${sep}owner=${encodeURIComponent(ownerSlug)}` : ''
+  // Everything after the first query param joins with "&" — a second "?"
+  // would swallow the guest id (and, with it, the table).
+  const owner = ownerSlug ? `&owner=${encodeURIComponent(ownerSlug)}` : ''
   const guestLink = `${base}${sep}guest=${encodeURIComponent(table.id)}${owner}`
   const miniApp = `${guestLink}&tg=1`
   return [

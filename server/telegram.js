@@ -9,18 +9,20 @@
 //   TELEGRAM_BOT_TOKEN    bot token from BotFather — no token, no outbound calls
 //   TELEGRAM_CHAT_ROLES   "12345:manager,67890:staff,*:staff" (default *:staff)
 //   TELEGRAM_WEBHOOK_SECRET  optional; when set, Telegram must echo it back
-//   RESTORA_PUBLIC_URL    used for the guest / mini app links in replies
+//   RESTORA_PUBLIC_URL    base URL for the guest / mini app links in replies
+//                         (RENDER_EXTERNAL_URL is used automatically on Render)
 //
 // The router also owns the two things the push side needs: every chat that
 // messages the bot is remembered (so it can be notified later without anyone
 // copying ids into env files), and the bot's own notification stats are
 // reported through /api/telegram/status.
 //
-// The token itself can be set from Settings → Telegram bot & mini app
-// (GET/PUT /api/telegram/config, write-only). Because the bot is a single
-// instance-wide webhook, the save lands on the tenant the bot serves
-// (botTenantId), not the caller's; the TELEGRAM_BOT_TOKEN environment remains
-// the fallback everywhere.
+// Settings → Telegram bot & mini app owns two fields (GET/PUT
+// /api/telegram/config): the bot token (write-only) and the Base URL that
+// guest /qr and mini-app links are built from. Because the bot is a single
+// instance-wide webhook, both save to the tenant the bot serves
+// (botTenantId), not the caller's; TELEGRAM_BOT_TOKEN / RESTORA_PUBLIC_URL
+// remain the fallbacks everywhere.
 
 import express from 'express'
 import { runTelegramCommand, parseTelegramUpdate, replyKeyboard, TELEGRAM_COMMANDS } from '../src/lib/telegram.js'
@@ -68,10 +70,21 @@ const MAX_TOKEN = 120
 // BotFather tokens are "<digits>:<secret>"; testnet tokens share the shape.
 const TOKEN_RE = /^\d+:[A-Za-z0-9_-]{8,}$/
 
+const MAX_PUBLIC_URL = 300
+// Anything we hand to a guest as a link has to be a real http(s) address.
+function isHttpUrl(value) {
+  return /^https?:\/\/[^\s/$.?#][^\s]*$/i.test(value)
+}
+// One canonical shape: no trailing slash, no stray spaces (the guest-link
+// builder appends "?guest=…" and doubled slashes read as a mistake).
+function normalizeBase(value) {
+  return String(value ?? '').trim().replace(/\/+$/, '')
+}
+
 export function createTelegramRouter({
   getState,
   applyAction,
-  publicUrl = process.env.RESTORA_PUBLIC_URL || '',
+  publicUrl = '',
   ownerSlug = '',
   onChat = null,
   notifier = null,
@@ -103,8 +116,25 @@ export function createTelegramRouter({
     return String(process.env.TELEGRAM_BOT_TOKEN || '').trim()
   }
 
+  // Where the bot's guest links point. Order: the tenant's saved Base URL
+  // (Settings → Telegram), then an explicitly injected `publicUrl`, then the
+  // environment — RESTORA_PUBLIC_URL, or Render's own RENDER_EXTERNAL_URL so
+  // a deploy links to itself with zero configuration.
+  function envBase() {
+    return normalizeBase(publicUrl || process.env.RESTORA_PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || process.env.PUBLIC_URL || '')
+  }
+  function baseFor(ownerId) {
+    try {
+      const saved = normalizeBase(getConfig?.(ownerId)?.publicUrl)
+      if (saved) return saved
+    } catch { /* fall through to the environment */ }
+    return envBase()
+  }
+  /** The bot is one webhook: its links come from the tenant it serves. */
+  const publicBase = () => baseFor(botTenantId)
+
   function miniAppUrl() {
-    return publicUrl || `${process.env.PUBLIC_URL || ''}`
+    return publicBase()
   }
 
   /** Run a command against a shop and (optionally) apply what it asks for. */
@@ -201,7 +231,7 @@ export function createTelegramRouter({
       configured: Boolean(token()),
       hasSecret: Boolean(process.env.TELEGRAM_WEBHOOK_SECRET),
       webhookPath: '/api/telegram/webhook',
-      publicUrl: publicUrl || null,
+      publicUrl: publicBase() || null,
       chatRoles,
       commands: TELEGRAM_COMMANDS,
       stats,
@@ -239,26 +269,36 @@ export function createTelegramRouter({
   })
 
   // ─── Settings → Telegram bot & mini app ────────────────────────
-  // One field: the bot token. Write-only — responses report whether a token
-  // exists and where it comes from, never the token itself (same contract as
-  // the AI config). Saved per tenant in SQLite kv; the webhook, the status
-  // route, and the notifier all resolve through getToken, so a save takes
-  // effect on the next message with no restart. Owner + super admin only.
+  // Two fields: the bot token (write-only) and the Base URL guest links are
+  // built from (readable — it is not a secret, and the field has to show what
+  // is stored). Responses report whether a token exists and where it comes
+  // from, never the token itself (same contract as the AI config). Saved per
+  // tenant in SQLite kv; the webhook, the status route, and the notifier all
+  // resolve through getToken/publicBase, so a save takes effect on the next
+  // message with no restart. Owner + super admin only.
   if (getConfig && setConfig && requireAdmin && resolveTenant) {
-    // Read/write the token on the tenant the bot serves, never the caller's
+    // Read/write the config on the tenant the bot serves, never the caller's
     // own tenant: the two can differ (a super admin's owner, or any owner who
     // is not the bot's), and writing to the caller is what makes a saved token
     // invisible to the bot.
     const configOwner = (req) => botTenantId || req.tenantId
     // Shape sent to the browser — deliberately omits the token.
     function present(ownerId) {
-      const stored = String(getConfig(ownerId)?.token || '').trim()
+      const config = getConfig(ownerId) || {}
+      const stored = String(config.token || '').trim()
       const env = String(process.env.TELEGRAM_BOT_TOKEN || '').trim()
+      const savedUrl = normalizeBase(config.publicUrl)
+      // What the field shows vs. what the bot actually uses: blank here means
+      // the deployment's own address (env) is doing the work.
+      const effective = baseFor(ownerId)
       return {
         ok: true,
         configured: Boolean(stored || env),
         hasToken: Boolean(stored),
         tokenSource: stored ? 'tenant' : env ? 'environment' : 'none',
+        publicUrl: savedUrl,
+        publicUrlEffective: effective,
+        publicUrlSource: savedUrl ? 'tenant' : effective ? 'environment' : 'none',
         webhookPath: '/api/telegram/webhook',
       }
     }
@@ -271,19 +311,35 @@ export function createTelegramRouter({
     router.put('/api/telegram/config', resolveTenant, requireAdmin, (req, res) => {
       const ownerId = configOwner(req)
       const body = req.body || {}
-      if (!('token' in body)) return res.status(400).json({ ok: false, error: 'token is required' })
+      if (!('token' in body) && !('publicUrl' in body)) {
+        return res.status(400).json({ ok: false, error: 'token or publicUrl is required' })
+      }
       const next = { ...(getConfig(ownerId) || {}) }
-      const value = String(body.token ?? '').trim().slice(0, MAX_TOKEN)
-      if (value) {
-        if (!TOKEN_RE.test(value)) {
-          return res.status(400).json({
-            ok: false,
-            error: 'That does not look like a bot token — BotFather sends one shaped like 123456789:AA…',
-          })
+      if ('token' in body) {
+        const value = String(body.token ?? '').trim().slice(0, MAX_TOKEN)
+        if (value) {
+          if (!TOKEN_RE.test(value)) {
+            return res.status(400).json({
+              ok: false,
+              error: 'That does not look like a bot token — BotFather sends one shaped like 123456789:AA…',
+            })
+          }
+          next.token = value
+        } else {
+          delete next.token
         }
-        next.token = value
-      } else {
-        delete next.token
+      }
+      if ('publicUrl' in body) {
+        // Empty clears it: the bot falls back to the deployment's own address.
+        const value = normalizeBase(body.publicUrl).slice(0, MAX_PUBLIC_URL)
+        if (value) {
+          if (!isHttpUrl(value)) {
+            return res.status(400).json({ ok: false, error: 'Base URL must start with http:// or https://' })
+          }
+          next.publicUrl = value
+        } else {
+          delete next.publicUrl
+        }
       }
       setConfig(ownerId, next)
       res.json(present(ownerId))

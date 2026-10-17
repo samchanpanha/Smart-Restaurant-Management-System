@@ -682,10 +682,12 @@ let notifier = null
 const botToken = () =>
   String(getTelegramConfig(DEFAULT_TENANT)?.token || process.env.TELEGRAM_BOT_TOKEN || '').trim()
 
+// The router resolves the Base URL for guest links itself: the tenant's saved
+// value (Settings → Telegram), then RESTORA_PUBLIC_URL, then Render's own
+// RENDER_EXTERNAL_URL — so a deploy links to itself with no configuration.
 const telegram = createTelegramRouter({
   getState: () => runtimeFor(DEFAULT_TENANT).state,
   applyAction: applyActionServer,
-  publicUrl: process.env.RESTORA_PUBLIC_URL || '',
   ownerSlug: getOwnerById(DEFAULT_TENANT)?.slug || '',
   onChat: (chatId) => notifier?.registerChat(chatId),
   notifier: () => notifier,

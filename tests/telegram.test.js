@@ -145,6 +145,20 @@ test('lookups answer with packs, suppliers, and what is short', () => {
   assert.match(qr.reply, /&tg=1/)
 })
 
+// The base URL is a setting now, so "no base URL" must not invent a domain:
+// a link nobody can open is worse than telling the manager where to set it.
+test('without a base URL the guest link asks for one instead of inventing a domain', () => {
+  const shop = shopOf(buildEmpire())
+  const bare = runTelegramCommand('/qr 12', { shop, role: 'manager' })
+  assert.ok(!bare.reply.includes('restora.example'), 'no placeholder domain in the reply')
+  assert.match(bare.reply, /Base URL/)
+  assert.match(bare.reply, /Settings → Telegram/)
+  assert.match(bare.reply, /\/qr 12/, 'tells the manager what to send again')
+  // A trailing slash never doubles up in the link.
+  const slashed = runTelegramCommand('/qr 12', { shop, miniAppUrl: 'https://restora.test/', ownerSlug: 'demo' })
+  assert.match(slashed.reply, /https:\/\/restora\.test\?guest=t12&owner=demo/)
+})
+
 test('changing commands come back as actions, never as side effects', () => {
   const shop = shopOf(buildEmpire())
   const offer = runTelegramCommand('/86 Restora burger', { shop, role: 'manager' })
@@ -461,6 +475,99 @@ test('a saved token binds to the bot tenant, not the caller', async () => {
   } finally {
     if (previousEnv === undefined) delete process.env.TELEGRAM_BOT_TOKEN
     else process.env.TELEGRAM_BOT_TOKEN = previousEnv
+    await new Promise((resolve) => srv.close(resolve))
+  }
+})
+
+// ─── The Base URL field ────────────────────────────────────────────
+// Settings → Telegram owns the address guest links are built from. It is not
+// a secret, so it comes back to the screen; the token never does. Saving the
+// URL must leave the token alone, and the bot's /qr reply must use it.
+
+test('the saved Base URL drives the bot’s guest links and survives a token save', async () => {
+  const stored = { 'bot-owner': { token: '111:AAHtenanttoken' } }
+  const app = express()
+  app.use(express.json())
+  app.use(createTelegramRouter({
+    getState: () => buildEmpire(),
+    applyAction: () => true,
+    resolveTenant: (req, _res, next) => { req.tenantId = 'bot-owner'; next() },
+    requireAdmin: (req, res, next) => (req.get('x-role') === 'owner' ? next() : res.status(403).json({ error: 'owner access required' })),
+    getConfig: (ownerId) => stored[ownerId] || null,
+    setConfig: (ownerId, config) => { stored[ownerId] = config },
+    getToken: () => stored['bot-owner']?.token,
+    botTenantId: 'bot-owner',
+  }).router)
+  const srv = await new Promise((resolve) => { const s = app.listen(0, '127.0.0.1', () => resolve(s)) })
+  const url = (p) => `http://127.0.0.1:${srv.address().port}${p}`
+  const owner = { 'Content-Type': 'application/json', 'x-role': 'owner' }
+  const previous = { render: process.env.RENDER_EXTERNAL_URL, restora: process.env.RESTORA_PUBLIC_URL }
+  delete process.env.RENDER_EXTERNAL_URL
+  delete process.env.RESTORA_PUBLIC_URL
+
+  try {
+    // Nothing saved and no env: the screen says so, the bot refuses to guess.
+    const fresh = await (await fetch(url('/api/telegram/config'), { headers: owner })).json()
+    assert.equal(fresh.publicUrl, '')
+    assert.equal(fresh.publicUrlEffective, '')
+    assert.equal(fresh.publicUrlSource, 'none')
+    const bare = await (await fetch(url('/api/telegram/simulate'), {
+      method: 'POST', headers: owner, body: JSON.stringify({ text: '/qr 12', role: 'manager' }),
+    })).json()
+    assert.match(bare.reply, /Base URL/)
+
+    // A URL that is not http(s) is refused, a real one is stored and echoed.
+    const bad = await fetch(url('/api/telegram/config'), {
+      method: 'PUT', headers: owner, body: JSON.stringify({ publicUrl: 'restora.example.com' }),
+    })
+    assert.equal(bad.status, 400)
+
+    const saved = await fetch(url('/api/telegram/config'), {
+      method: 'PUT', headers: owner, body: JSON.stringify({ publicUrl: 'https://restora.onrender.com/' }),
+    })
+    const savedBody = await saved.json()
+    assert.equal(saved.status, 200)
+    assert.equal(savedBody.publicUrl, 'https://restora.onrender.com', 'trailing slash trimmed')
+    assert.equal(savedBody.publicUrlEffective, 'https://restora.onrender.com')
+    assert.equal(savedBody.publicUrlSource, 'tenant')
+    assert.equal(stored['bot-owner'].token, '111:AAHtenanttoken', 'the token is untouched')
+
+    // The bot answers /qr with the saved address — the whole point of the field.
+    const qr = await (await fetch(url('/api/telegram/simulate'), {
+      method: 'POST', headers: owner, body: JSON.stringify({ text: '/qr 12', role: 'manager' }),
+    })).json()
+    assert.match(qr.reply, /https:\/\/restora\.onrender\.com\?guest=t12/)
+    assert.match(qr.reply, /&tg=1/)
+
+    // The status route reports it too, and a token save cannot erase it.
+    assert.equal((await (await fetch(url('/api/telegram/status'))).json()).publicUrl, 'https://restora.onrender.com')
+    const tokenSave = await (await fetch(url('/api/telegram/config'), {
+      method: 'PUT', headers: owner, body: JSON.stringify({ token: '123456789:AAF-abc_DEF0123456789xyz' }),
+    })).json()
+    assert.equal(tokenSave.publicUrl, 'https://restora.onrender.com')
+    assert.equal(tokenSave.hasToken, true)
+
+    // Clearing falls back to the environment (Render sets its own URL).
+    process.env.RENDER_EXTERNAL_URL = 'https://from-render.onrender.com'
+    const cleared = await (await fetch(url('/api/telegram/config'), {
+      method: 'PUT', headers: owner, body: JSON.stringify({ publicUrl: '' }),
+    })).json()
+    assert.equal(cleared.publicUrl, '', 'nothing stored')
+    assert.equal(cleared.publicUrlEffective, 'https://from-render.onrender.com')
+    assert.equal(cleared.publicUrlSource, 'environment')
+    const qrEnv = await (await fetch(url('/api/telegram/simulate'), {
+      method: 'POST', headers: owner, body: JSON.stringify({ text: '/qr 12', role: 'manager' }),
+    })).json()
+    assert.match(qrEnv.reply, /https:\/\/from-render\.onrender\.com\?guest=t12/)
+
+    // Neither field in the body is a bad request, not a silent wipe.
+    const empty = await fetch(url('/api/telegram/config'), { method: 'PUT', headers: owner, body: '{ }' })
+    assert.equal(empty.status, 400)
+  } finally {
+    if (previous.render === undefined) delete process.env.RENDER_EXTERNAL_URL
+    else process.env.RENDER_EXTERNAL_URL = previous.render
+    if (previous.restora === undefined) delete process.env.RESTORA_PUBLIC_URL
+    else process.env.RESTORA_PUBLIC_URL = previous.restora
     await new Promise((resolve) => srv.close(resolve))
   }
 })
