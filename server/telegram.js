@@ -16,9 +16,11 @@
 // copying ids into env files), and the bot's own notification stats are
 // reported through /api/telegram/status.
 //
-// The token itself can be set per tenant from Settings → Telegram bot &
-// mini app (GET/PUT /api/telegram/config, write-only) — the TELEGRAM_BOT_TOKEN
-// environment remains the fallback everywhere.
+// The token itself can be set from Settings → Telegram bot & mini app
+// (GET/PUT /api/telegram/config, write-only). Because the bot is a single
+// instance-wide webhook, the save lands on the tenant the bot serves
+// (botTenantId), not the caller's; the TELEGRAM_BOT_TOKEN environment remains
+// the fallback everywhere.
 
 import express from 'express'
 import { runTelegramCommand, parseTelegramUpdate, replyKeyboard, TELEGRAM_COMMANDS } from '../src/lib/telegram.js'
@@ -81,6 +83,12 @@ export function createTelegramRouter({
   setConfig = null,
   requireAdmin = null,
   resolveTenant = null,
+  // The bot is one webhook + one token for the whole instance, so the token the
+  // Settings field saves must land on the tenant the bot actually reads
+  // (DEFAULT_TENANT in server/index.js). Without this, a save by an owner whose
+  // tenant is not the bot's is written where the bot never looks — the field
+  // looks saved, yet /api/telegram/status still reports "no token".
+  botTenantId = null,
 }) {
   const router = express.Router()
   const chatRoles = parseChatRoles()
@@ -237,6 +245,11 @@ export function createTelegramRouter({
   // route, and the notifier all resolve through getToken, so a save takes
   // effect on the next message with no restart. Owner + super admin only.
   if (getConfig && setConfig && requireAdmin && resolveTenant) {
+    // Read/write the token on the tenant the bot serves, never the caller's
+    // own tenant: the two can differ (a super admin's owner, or any owner who
+    // is not the bot's), and writing to the caller is what makes a saved token
+    // invisible to the bot.
+    const configOwner = (req) => botTenantId || req.tenantId
     // Shape sent to the browser — deliberately omits the token.
     function present(ownerId) {
       const stored = String(getConfig(ownerId)?.token || '').trim()
@@ -252,13 +265,14 @@ export function createTelegramRouter({
 
     router.get('/api/telegram/config', resolveTenant, requireAdmin, (req, res) => {
       res.setHeader('Cache-Control', 'no-store')
-      res.json(present(req.tenantId))
+      res.json(present(configOwner(req)))
     })
 
     router.put('/api/telegram/config', resolveTenant, requireAdmin, (req, res) => {
+      const ownerId = configOwner(req)
       const body = req.body || {}
       if (!('token' in body)) return res.status(400).json({ ok: false, error: 'token is required' })
-      const next = { ...(getConfig(req.tenantId) || {}) }
+      const next = { ...(getConfig(ownerId) || {}) }
       const value = String(body.token ?? '').trim().slice(0, MAX_TOKEN)
       if (value) {
         if (!TOKEN_RE.test(value)) {
@@ -271,8 +285,8 @@ export function createTelegramRouter({
       } else {
         delete next.token
       }
-      setConfig(req.tenantId, next)
-      res.json(present(req.tenantId))
+      setConfig(ownerId, next)
+      res.json(present(ownerId))
     })
   }
 

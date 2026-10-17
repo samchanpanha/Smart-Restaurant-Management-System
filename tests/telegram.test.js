@@ -412,3 +412,55 @@ test('the token config is owner-gated, validated, and write-only', async () => {
     await new Promise((resolve) => srv.close(resolve))
   }
 })
+
+// The bot is one webhook for the whole instance, so a save must land on the
+// tenant the bot reads (botTenantId), not the caller's. Without this pin, an
+// owner who is not the bot's saves a token the bot never sees — the field looks
+// saved while /api/telegram/status keeps reporting "no token".
+test('a saved token binds to the bot tenant, not the caller', async () => {
+  const stored = {}
+  const app = express()
+  app.use(express.json())
+  app.use(createTelegramRouter({
+    getState: () => buildEmpire(),
+    applyAction: () => true,
+    resolveTenant: (req, _res, next) => { req.tenantId = req.get('x-tenant') || 'default'; next() },
+    requireAdmin: (req, res, next) => (req.get('x-role') === 'owner' ? next() : res.status(403).json({ error: 'owner access required' })),
+    getConfig: (ownerId) => stored[ownerId] || null,
+    setConfig: (ownerId, config) => { stored[ownerId] = config },
+    getToken: () => stored['bot-owner']?.token || process.env.TELEGRAM_BOT_TOKEN,
+    botTenantId: 'bot-owner',
+  }).router)
+  const srv = await new Promise((resolve) => { const s = app.listen(0, '127.0.0.1', () => resolve(s)) })
+  const url = (p) => `http://127.0.0.1:${srv.address().port}${p}`
+  const call = (method, path, body, headers = {}) => fetch(url(path), {
+    method,
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body: body ? JSON.stringify(body) : undefined,
+  })
+  const owner = { 'x-role': 'owner', 'x-tenant': 'acme' }
+  const previousEnv = process.env.TELEGRAM_BOT_TOKEN
+  delete process.env.TELEGRAM_BOT_TOKEN
+
+  try {
+    const good = '123456789:AAF-abc_DEF0123456789xyz'
+    // Owner of "acme" saves — but the token belongs to the bot tenant.
+    const saved = await call('PUT', '/api/telegram/config', { token: good }, owner)
+    assert.equal(saved.status, 200)
+    assert.equal(stored['bot-owner'].token, good)
+    assert.equal(stored.acme, undefined, 'never written to the caller tenant')
+
+    // Reading from another tenant reports the bot's token, so the screen and
+    // the bot agree on what is configured.
+    const seen = await (await call('GET', '/api/telegram/config', null, { 'x-role': 'owner', 'x-tenant': 'other' })).json()
+    assert.equal(seen.hasToken, true)
+    assert.equal(seen.tokenSource, 'tenant')
+
+    // And the status route (which uses the bot token) flips to configured.
+    assert.equal((await (await fetch(url('/api/telegram/status'))).json()).configured, true)
+  } finally {
+    if (previousEnv === undefined) delete process.env.TELEGRAM_BOT_TOKEN
+    else process.env.TELEGRAM_BOT_TOKEN = previousEnv
+    await new Promise((resolve) => srv.close(resolve))
+  }
+})

@@ -693,6 +693,10 @@ const telegram = createTelegramRouter({
   resolveTenant,
   // Same owner / super admin gate the AI config uses.
   requireAdmin: requireAiAdmin,
+  // A save from Settings must bind to the tenant the bot serves, not the
+  // caller's — otherwise an owner who is not the bot's writes a token the bot
+  // never reads (see createTelegramRouter).
+  botTenantId: DEFAULT_TENANT,
   getConfig: (ownerId) => getTelegramConfig(ownerId),
   setConfig: (ownerId, config) => setTelegramConfig(ownerId, config),
 })
