@@ -155,6 +155,8 @@ export const APP_TRANSLATIONS = {
       telegram: 'តេឡេក្រាម និងកម្មវិធីតូច',
       system: 'ប្រព័ន្ធ និងគំរូទិន្នន័យ',
       assistant: 'ជំនួយការ AI (Ops Copilot)',
+      schedule: 'កាលវិភាគវេនការងារ',
+      waste: 'កត់ត្រាទំនិញខូចខាត (Waste)',
     },
     roles: {
       owner: 'Maya · ម្ចាស់ហាង / អ្នកគ្រប់គ្រង',
@@ -640,6 +642,8 @@ export const APP_TRANSLATIONS = {
       telegram: 'Telegram & Mini App',
       system: 'System & Model',
       assistant: 'Ops Copilot',
+      schedule: 'Shift schedule',
+      waste: 'Waste tracking',
     },
     roles: {
       owner: 'Maya · Owner/GM',
@@ -1099,6 +1103,8 @@ export const APP_TRANSLATIONS = {
       telegram: 'Telegram与小程序',
       system: '系统与数据模型',
       assistant: 'AI 运营助手',
+      schedule: '排班管理',
+      waste: '损耗报废',
     },
     roles: {
       owner: 'Maya · 店长/总经理',
@@ -1587,6 +1593,12 @@ function enrichLangDict(langCode, raw) {
           ? `${roleName} 角色无权访问 ${screenName} 页面。`
           : `${roleName} role cannot access ${screenName}.`,
   }
+  raw.productionMode = isKm ? 'របៀបជាក់ស្តែង' : isZh ? '正式营运模式' : 'Production Mode'
+  raw.productionStaffNote = isKm
+    ? 'ការប្តូរតួនាទីសាកល្បងត្រូវបានបិទ។ បុគ្គលិកត្រូវចូលគណនីជាក់ស្តែង។'
+    : isZh
+      ? '演示角色切换器已停用。员工必须使用真实凭据登录。'
+      : 'Demo role switcher is disabled. Staff must log in with authentic credentials.'
   raw.common = {
     ...raw.common,
     transferTable: isKm ? 'ប្តូរតុ' : isZh ? '转台/换桌' : 'Transfer Table',
@@ -1835,6 +1847,172 @@ function enrichLangDict(langCode, raw) {
     statusTab: raw.guestScreen?.navStatus,
     billTab: raw.guestScreen?.navBill,
     viewOrder: isKm ? 'មើលការកម្មង់' : isZh ? '查看已选' : 'View order',
+  }
+  raw.scheduleScreen = {
+    title: isKm ? 'កាលវិភាគវេនការងារ' : isZh ? '每周员工排班表' : 'Weekly shift schedule',
+    kicker: isKm ? 'ការគ្រប់គ្រង · ប្រតិបត្តិការបុគ្គលិក' : isZh ? '运营管理 · 员工调度与考勤' : 'Control · Staff operations',
+    subtitle: isKm
+      ? 'រៀបចំកាលវិភាគបុគ្គលិក ធានាការបំពេញការងារក្នុងផ្ទះបាយ និងសាល និងគ្រប់គ្រងម៉ោងធ្វើការប្រចាំសប្តាហ៍។'
+      : isZh
+        ? '规划员工班次，确保后厨与前厅人力充足，平衡每周工时。'
+        : 'Plan staff rosters, ensure kitchen and floor coverage, and balance weekly hours.',
+    today: isKm ? 'ថ្ងៃនេះ' : isZh ? '今天' : 'Today',
+    prevWeek: isKm ? 'សប្តាហ៍មុន' : isZh ? '上一周' : 'Previous week',
+    nextWeek: isKm ? 'សប្តាហ៍បន្ទាប់' : isZh ? '下一周' : 'Next week',
+    print: isKm ? 'បោះពុម្ព' : isZh ? '打印' : 'Print',
+    addShift: isKm ? '+ បន្ថែមវេនការងារ' : isZh ? '+ 添加排班' : '+ Add shift',
+    newShift: isKm ? 'វេនការងារថ្មី' : isZh ? '新建排班' : 'New Shift',
+    editShift: isKm ? 'កែប្រែវេនការងារ' : isZh ? '编辑排班' : 'Edit Shift',
+    saveShift: isKm ? 'រក្សាទុកវេនការងារ' : isZh ? '保存排班' : 'Save shift',
+    deleteShift: isKm ? 'លុបវេនការងារ' : isZh ? '删除排班' : 'Delete shift',
+    deleteConfirmTitle: isKm ? 'លុបវេនការងារនេះ?' : isZh ? '删除该排班班次？' : 'Delete this shift?',
+    deleteConfirmBody: isKm ? 'វេនការងារនេះនឹងត្រូវដកចេញជាអចិន្ត្រៃយ៍ពីកាលវិភាគ។' : isZh ? '该排班班次将从日程表中永久移除。' : 'This shift will be permanently removed from the schedule.',
+    totalShifts: isKm ? 'វេនការងារសរុប' : isZh ? '总班次' : 'Total shifts',
+    acrossDays: isKm ? 'ក្នុងរយៈពេល 7 ថ្ងៃ' : isZh ? '跨越 7 天' : 'across 7 days',
+    scheduledHours: isKm ? 'ម៉ោងកំណត់' : isZh ? '排班总工时' : 'Scheduled hours',
+    rosteredDuration: isKm ? 'រយៈពេលការងារសរុប' : isZh ? '排定工作时长' : 'rostered duration',
+    staffActive: isKm ? 'បុគ្គលិកសកម្ម' : isZh ? '在岗员工数' : 'Staff active',
+    teamMembers: isKm ? 'សមាជិកក្រុម' : isZh ? '名团队成员' : 'team members',
+    coverageAlerts: isKm ? 'ការជូនដំណឹងកម្លាំងខ្វះ' : isZh ? '人力短缺预警' : 'Coverage alerts',
+    daysMissingRoles: isKm ? 'ថ្ងៃដែលខ្វះតួនាទីស្នូល' : isZh ? '天缺少关键岗位' : 'days missing core roles',
+    staffMemberName: isKm ? 'ឈ្មោះបុគ្គលិក' : isZh ? '员工姓名' : 'Staff member name',
+    role: isKm ? 'តួនាទី' : isZh ? '岗位角色' : 'Role',
+    date: isKm ? 'កាលបរិច្ឆេទ' : isZh ? '日期' : 'Date',
+    startTime: isKm ? 'ម៉ោងចាប់ផ្តើម' : isZh ? '上班时间' : 'Start time',
+    endTime: isKm ? 'ម៉ោងបញ្ចប់' : isZh ? '下班时间' : 'End time',
+    note: isKm ? 'កំណត់ចំណាំ' : isZh ? '备注说明' : 'Notes',
+    noShiftsWeek: isKm ? 'មិនមានវេនការងារក្នុងសប្តាហ៍នេះទេ។' : isZh ? '本周暂无排班。' : 'No shifts scheduled for this week.',
+    clickAddShift: isKm ? 'ចុច + បន្ថែមវេនការងារ ដើម្បីចាប់ផ្តើមកាលវិភាគ។' : isZh ? '点击 + 添加排班 开始安排人员。' : 'Click + Add shift to build the roster.',
+    allRoles: isKm ? 'គ្រប់តួនាទី' : isZh ? '全部岗位' : 'All roles',
+    roles: {
+      server: isKm ? 'រត់តុ (Server)' : isZh ? '服务员 (Server)' : 'Server',
+      kitchen: isKm ? 'ផ្ទះបាយ (Kitchen)' : isZh ? '后厨 (Kitchen)' : 'Kitchen',
+      host: isKm ? 'ទទួលភ្ញៀវ (Host)' : isZh ? '领位/接待 (Host)' : 'Host',
+      manager: isKm ? 'អ្នកគ្រប់គ្រង (Manager)' : isZh ? '主管/店长 (Manager)' : 'Manager',
+    },
+  }
+  raw.schedule = raw.scheduleScreen
+  raw.wasteScreen = {
+    title: isKm ? 'កត់ត្រាទំនិញខូចខាត (Waste)' : isZh ? '后厨损耗与报废跟踪' : 'Waste tracking',
+    kicker: isKm ? 'ការគ្រប់គ្រង · សុចរិតភាពផ្ទះបាយ' : isZh ? '运营管理 · 后厨合规与品控' : 'Control · Kitchen integrity',
+    subtitle: isKm
+      ? 'តាមដានការខូចខាត ការកាត់សម្អាត និងម្ហូបធ្វើឡើងវិញ។ គ្រប់គ្រងគម្លាតស្តុក និងថ្លៃដើមអាហារឱ្យមានប្រសិទ្ធភាព។'
+      : isZh
+        ? '记录食材变质、修整损耗及后厨重做。严格控制库存差异与食材成本。'
+        : 'Track spoilage, trimming loss, and kitchen comps. Keep variance in check and food costs tight.',
+    logWasteBtn: isKm ? '+ កត់ត្រាការខូចខាត' : isZh ? '+ 登记报损' : '+ Log kitchen waste',
+    modalTitle: isKm ? 'កត់ត្រាទំនិញខូចខាតក្នុងផ្ទះបាយ' : isZh ? '登记后厨报损' : 'Log Kitchen Waste',
+    modalSub: isKm
+      ? 'កត់ត្រាស្តុកដែលបាត់បង់ ខូច ឬកាត់សម្អាត។ ស្តុក និងបញ្ជីថ្លៃដើមនឹងធ្វើបច្ចុប្បន្នភាពភ្លាមៗ។'
+      : isZh
+        ? '记录损失、变质或修整的库存原料。实时扣减库存并记入成本流水。'
+        : 'Record lost, spoiled, or trimmed inventory. Stock and cost ledgers update instantly.',
+    totalWasteLoss: isKm ? 'ការខាតបង់ខូចខាតសរុប' : isZh ? '报损总损失' : 'Total waste loss',
+    recordedToDate: isKm ? 'បានកត់ត្រារហូតមកដល់បច្ចុប្បន្ន' : isZh ? '累计记录金额' : 'recorded to date',
+    wasteEvents: isKm ? 'ចំនួនលើកកត់ត្រា' : isZh ? '报损事件' : 'Waste events',
+    incidentsLogged: isKm ? 'ករណីត្រូវបានកត់ត្រា' : isZh ? '次已登记事件' : 'incidents logged',
+    worstOffender: isKm ? 'មុខទំនិញខាតបង់ច្រើនជាងគេ' : isZh ? '损耗最高品项' : 'Worst offender',
+    highestWasteCost: isKm ? 'ថ្លៃដើមខាតសរុបខ្ពស់បំផុត' : isZh ? '报损金额最多' : 'highest total waste cost',
+    noWasteRecorded: isKm ? 'មិនមានការខូចខាតកត់ត្រាទេ' : isZh ? '暂无报损记录' : 'No waste recorded',
+    everythingOnTrack: isKm ? 'អ្វីៗដំណើរការល្អ' : isZh ? '各项指标正常' : 'Everything on track',
+    filterByReason: isKm ? 'ត្រងតាមមូលហេតុ' : isZh ? '按原因筛选' : 'Filter by reason',
+    allReasons: isKm ? 'គ្រប់មូលហេតុ' : isZh ? '全部原因' : 'All reasons',
+    itemCol: isKm ? 'មុខទំនិញ' : isZh ? '品项名称' : 'Item',
+    qtyCol: isKm ? 'បរិមាណ' : isZh ? '数量' : 'Quantity',
+    costLossCol: isKm ? 'ថ្លៃដើមខាតបង់' : isZh ? '损失金额' : 'Cost loss',
+    reasonCol: isKm ? 'មូលហេតុ' : isZh ? '报损原因' : 'Reason',
+    dateTimeCol: isKm ? 'កាលបរិច្ឆេទ & ម៉ោង' : isZh ? '登记时间' : 'Date & Time',
+    recordedByCol: isKm ? 'កត់ត្រាដោយ' : isZh ? '操作人' : 'Recorded by',
+    notesCol: isKm ? 'កំណត់ចំណាំ' : isZh ? '备注' : 'Notes',
+    noWasteLoggedYet: isKm ? 'មិនទាន់មានការកត់ត្រាការខូចខាតក្នុងផ្ទះបាយនៅឡើយទេ។' : isZh ? '暂未登记后厨食材报损。' : 'No kitchen waste recorded yet.',
+    saveWaste: isKm ? 'កត់ត្រាការខូចខាត' : isZh ? '确认登记' : 'Log waste',
+    reasons: {
+      prep: isKm ? 'ការកាត់សម្អាត / រៀបចំចម្អិន' : isZh ? '修整损耗 / 备料损失' : 'Prep loss / Trimming',
+      spoil: isKm ? 'ខូចគុណភាព / ផុតកំណត់' : isZh ? '食材变质 / 超过保质期' : 'Spoilage / Expired',
+      comp: isKm ? 'សងភ្ញៀវ / ធ្វើឡើងវិញក្នុងផ្ទះបាយ' : isZh ? '退菜赠送 / 后厨重做' : 'Comped / Kitchen remake',
+      error: isKm ? 'ចម្អិនខុសបច្ចេកទេស / ខ្លោច' : isZh ? '烹饪失误 / 烧焦烤糊' : 'Cook error / Burnt',
+      overproduction: isKm ? 'ផលិតលើស / សល់ចុងវេន' : isZh ? '生产过量 / 闭店剩余' : 'Overproduction / Leftover',
+    },
+  }
+  raw.waste = raw.wasteScreen
+  raw.commandPalette = {
+    placeholder: isKm ? 'វាយបញ្ចូលពាក្យបញ្ជា ឬស្វែងរក…' : isZh ? '输入指令或搜索…' : 'Type a command or search…',
+    searchAll: isKm ? 'ស្វែងរកអ្វីគ្រប់យ៉ាងក្នុង Restora…' : isZh ? '在 Restora 中搜索任何内容…' : 'Search anything in Restora…',
+    noResults: isKm ? 'រកមិនឃើញពាក្យបញ្ជា ឬទិន្នន័យដែលត្រូវគ្នាទេ។' : isZh ? '未找到匹配的指令或项目。' : 'No matching commands or items found.',
+    jumpTo: isKm ? 'ចូលទៅកាន់' : isZh ? '跳转至' : 'Jump to',
+    types: {
+      all: isKm ? 'ទាំងអស់' : isZh ? '全部' : 'All',
+      screen: isKm ? 'ទំព័រ' : isZh ? '功能页面' : 'Screen',
+      menu: isKm ? 'មុខម្ហូប' : isZh ? '菜品' : 'Dish',
+      table: isKm ? 'តុ' : isZh ? '餐桌' : 'Table',
+      inventory: isKm ? 'ស្តុក' : isZh ? '库存品项' : 'Stock',
+      action: isKm ? 'សកម្មភាព' : isZh ? '快捷操作' : 'Action',
+    },
+    actions: {
+      shortcuts: isKm ? 'បញ្ជីផ្លូវកាត់ក្តារចុច' : isZh ? '快捷键速查表' : 'Keyboard Shortcuts Cheat Sheet',
+      shortcutsSub: isKm ? 'មើលផ្លូវកាត់ក្តារចុចទាំងអស់ (?)' : isZh ? '查看全部键盘快捷键 (?)' : 'View all keyboard shortcuts (?)',
+      newTicket: isKm ? 'បើកការកម្មង់ថ្មី (ញ៉ាំនៅហាង / ខ្ចប់)' : isZh ? '新建堂食/外带订单' : 'New Dine-In / Takeout Ticket',
+      newTicketSub: isKm ? 'បើកផ្ទាំងបង្កើតសំបុត្រកម្មង់' : isZh ? '打开点单编辑器新建订单' : 'Open ticket composer to start an order',
+      eightySix: isKm ? 'មើលបញ្ជីមុខម្ហូបអស់ស្តុក (86 Board)' : isZh ? '查看估清与缺货看板 (86 Board)' : 'View 86 Board & Stock Outages',
+      eightySixSub: isKm ? 'ពិនិត្យមុខម្ហូបដែលមិនអាចចម្អិនបានពេលនេះ' : isZh ? '检查当前后厨无法供应的菜品' : 'Check dishes currently unavailable in the kitchen',
+      switchBranch: (branchName) => isKm ? `ប្តូរទៅសាខា ${branchName}` : isZh ? `切换至分店 ${branchName}` : `Switch to ${branchName}`,
+      switchBranchSub: isKm ? 'ប្តូរសាខាសកម្មរបស់ភោជនីយដ្ឋាន' : isZh ? '切换当前操作的分店' : 'Switch active restaurant branch',
+    },
+  }
+  raw.shortcutsOverlay = {
+    title: isKm ? 'ផ្លូវកាត់ក្តារចុច' : isZh ? '键盘快捷键' : 'Keyboard Shortcuts',
+    subtitle: isKm ? 'បង្កើនល្បឿនដំណើរការការងារក្នុងពេលសេវាកម្ម' : isZh ? '在繁忙营业服务期间大幅提升操作效率' : 'Boost your workflow velocity during service',
+    sections: {
+      global: isKm ? 'ទូទៅ និងការរុករក' : isZh ? '全局与导航' : 'Global & Navigation',
+      live: isKm ? 'សេវាកម្មផ្ទាល់ និងការកម្មង់' : isZh ? '现场服务与点单' : 'Live Service & Tickets',
+      kitchen: isKm ? 'ផ្ទះបាយ និងផ្ទាំងបង្ហាញ (KDS)' : isZh ? '后厨看板 (KDS)' : 'Kitchen & Display (KDS)',
+    },
+    keys: {
+      commandPalette: isKm ? 'បើកប្រអប់ពាក្យបញ្ជារហ័ស (Command Palette)' : isZh ? '打开全局命令面板 (Command Palette)' : 'Open Command Palette',
+      cheatSheet: isKm ? 'បង្ហាញបញ្ជីផ្លូវកាត់ក្តារចុចនេះ' : isZh ? '显示本快捷键速查表' : 'Show this keyboard shortcuts cheat sheet',
+      switchTab: isKm ? 'ប្តូររវាងផ្ទាំងការងារដែលកំពុងបើក' : isZh ? '在已打开的工作区标签页之间切换' : 'Switch between open workspace tabs',
+      closeTab: isKm ? 'បិទផ្ទាំងការងារបច្ចុប្បន្ន' : isZh ? '关闭当前工作区标签页' : 'Close active workspace tab',
+      closeModal: isKm ? 'បិទផ្ទាំង modal ឬលុបការស្វែងរក' : isZh ? '关闭弹出层或清除搜索' : 'Close active modal or dismiss search',
+      newTicket: isKm ? 'សំបុត្រកម្មង់ថ្មី (របៀបរហ័ស)' : isZh ? '新建订单（极速模式）' : 'New ticket (quick-add mode)',
+      fireHeld: isKm ? 'បញ្ជូនមុខម្ហូបដែលផ្អាកទាំងអស់ទៅផ្ទះបាយភ្លាមៗ' : isZh ? '立即起菜/叫起所有挂起菜品' : 'Fire all held kitchen items immediately',
+      billTable: isKm ? 'គិតលុយ / បោះពុម្ពវិក្កយបត្រសម្រាប់តុសកម្ម' : isZh ? '打印当前桌账单/结账' : 'Bill / print receipt for active table',
+      payTicket: isKm ? 'ទូទាត់ប្រាក់ និងបិទសំបុត្រកម្មង់' : isZh ? '完成支付并关闭当前订单' : 'Pay and close active ticket',
+      seatGuest: isKm ? 'ដាក់ភ្ញៀវអង្គុយ / ជ្រើសរើសតុលើប្លង់' : isZh ? '入座/在平面图上选择餐桌' : 'Seat guest / select table on floor',
+      bumpKds: isKm ? 'បញ្ជាក់រួចរាល់ការកម្មង់ចាស់ជាងគេក្នុងផ្ទះបាយ' : isZh ? '划线/完成最早的后厨订单' : 'Bump oldest active kitchen ticket',
+      recallKds: isKm ? 'ហៅការកម្មង់ដែលទើបតែបញ្ជាក់រួចរាល់មកវិញ' : isZh ? '召回最近完成的后厨订单' : 'Recall most recently bumped kitchen ticket',
+      board86: isKm ? 'បើកផ្ទាំងគ្រប់គ្រងម្ហូបអស់ស្តុក (86)' : isZh ? '打开菜品估清管理看板 (86)' : 'Open 86 dish availability board',
+    },
+  }
+  raw.filterPresets = {
+    savePresetBtn: isKm ? '+ រក្សាទុកកម្រងចម្រាញ់' : isZh ? '+ 保存筛选预设' : '+ Save filter preset',
+    presetsLabel: isKm ? 'កម្រងចម្រាញ់៖' : isZh ? '筛选预设：' : 'Presets:',
+    saveAsPreset: isKm ? 'រក្សាទុកលក្ខខណ្ឌចម្រាញ់បច្ចុប្បន្នជាកម្រងរហ័ស' : isZh ? '将当前筛选条件保存为快捷预设' : 'Save active filter as a quick preset',
+    presetNamePlaceholder: isKm ? 'ឈ្មោះកម្រង…' : isZh ? '预设名称…' : 'Preset name…',
+    deletePreset: (name) => isKm ? `លុបកម្រង ${name}` : isZh ? `删除预设 ${name}` : `Delete preset ${name}`,
+  }
+  raw.operatingMode = {
+    title: isKm ? 'បរិស្ថាន និងរបៀបប្រតិបត្តិការ' : isZh ? '运行环境与系统模式' : 'Operating Environment & Mode',
+    subtitle: isKm
+      ? 'ប្តូររវាងរបៀបសាកល្បង (Demo) និងរបៀបប្រតិបត្តិការជាក់ស្តែង (Production)។'
+      : isZh
+        ? '在演示体验沙盒与正式营运生产模式之间切换。'
+        : 'Toggle between simulated demo sandbox and live production operations.',
+    activeMode: isKm ? 'របៀបសកម្ម៖' : isZh ? '当前模式：' : 'Active Mode:',
+    demoMode: isKm ? 'របៀបសាកល្បង (Demo Mode)' : isZh ? '演示模式 (Demo Mode)' : 'Demo Mode',
+    prodMode: isKm ? 'របៀបជាក់ស្តែង (Production Mode)' : isZh ? '正式营运模式 (Production Mode)' : 'Production Mode',
+    demoDesc: isKm
+      ? 'បរិស្ថានសាកល្បង · អនុញ្ញាតឱ្យប្តូរតួនាទីសាកល្បង និងកំណត់ទិន្នន័យឡើងវិញភ្លាមៗ'
+      : isZh
+        ? '模拟体验沙盒 · 允许切换演示角色和一键重置演示数据'
+        : 'Simulated sandbox · Mock roles & instant demo resets allowed',
+    prodDesc: isKm
+      ? 'ប្រតិបត្តិការភោជនីយដ្ឋានជាក់ស្តែង · តម្រូវឱ្យចូលគណនីត្រឹមត្រូវ ការទូទាត់ប្រាក់ពិតប្រាកដ និងលាក់ផ្ទាំងគ្រប់គ្រងសាកល្បង'
+      : isZh
+        ? '真实餐厅运营 · 强制真实员工鉴权、真实顾客收银结算、隐藏演示操作工具'
+        : 'Live restaurant operations · Enforced authentication, real guest checkout, demo controls hidden',
+    switchToProd: isKm ? 'ប្តូរទៅរបៀបជាក់ស្តែង (Production)' : isZh ? '切换至正式营运 (Production)' : 'Switch to Production',
+    switchToDemo: isKm ? 'ប្តូរទៅរបៀបសាកល្បង (Demo)' : isZh ? '切换至演示模式 (Demo)' : 'Switch to Demo',
+    lockedHint: isKm ? 'ការជ្រើសរើសតួនាទីត្រូវបានចាក់សោក្នុងរបៀបជាក់ស្តែង' : isZh ? '正式营运模式已锁定角色切换器' : 'Role picker disabled in production mode',
   }
   return raw
 }

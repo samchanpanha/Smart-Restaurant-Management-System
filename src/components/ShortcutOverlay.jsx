@@ -1,6 +1,12 @@
 import { useEffect } from 'react'
+import { useI18n } from '../lib/i18n'
 
 export function ShortcutOverlay({ isOpen, onClose }) {
+  const { dict } = useI18n()
+  const so = dict.shortcutsOverlay || {}
+  const sec = so.sections || {}
+  const k = so.keys || {}
+
   useEffect(() => {
     function handleKeyDown(e) {
       if (e.key === 'Escape' && isOpen) {
@@ -15,31 +21,31 @@ export function ShortcutOverlay({ isOpen, onClose }) {
 
   const sections = [
     {
-      title: 'Global & Navigation',
+      title: sec.global || 'Global & Navigation',
       items: [
-        { keys: ['⌘', 'K'], label: 'Open Command Palette' },
-        { keys: ['?'], label: 'Show this keyboard shortcuts cheat sheet' },
-        { keys: ['Alt', '1…9'], label: 'Switch between open workspace tabs' },
-        { keys: ['Ctrl', 'W'], label: 'Close active workspace tab' },
-        { keys: ['Esc'], label: 'Close active modal or dismiss search' },
+        { keys: ['⌘', 'K'], label: k.commandPalette || 'Open Command Palette' },
+        { keys: ['?'], label: k.cheatSheet || 'Show this keyboard shortcuts cheat sheet' },
+        { keys: ['Alt', '1…9'], label: k.switchTab || 'Switch between open workspace tabs' },
+        { keys: ['Ctrl', 'W'], label: k.closeTab || 'Close active workspace tab' },
+        { keys: ['Esc'], label: k.closeModal || 'Close active modal or dismiss search' },
       ],
     },
     {
-      title: 'Live Service & Tickets',
+      title: sec.live || 'Live Service & Tickets',
       items: [
-        { keys: ['N'], label: 'New ticket (quick-add mode)' },
-        { keys: ['F'], label: 'Fire all held kitchen items immediately' },
-        { keys: ['B'], label: 'Bill / print receipt for active table' },
-        { keys: ['P'], label: 'Pay and close active ticket' },
-        { keys: ['S'], label: 'Seat guest / select table on floor' },
+        { keys: ['N'], label: k.newTicket || 'New ticket (quick-add mode)' },
+        { keys: ['F'], label: k.fireHeld || 'Fire all held kitchen items immediately' },
+        { keys: ['B'], label: k.billTable || 'Bill / print receipt for active table' },
+        { keys: ['P'], label: k.payTicket || 'Pay and close active ticket' },
+        { keys: ['S'], label: k.seatGuest || 'Seat guest / select table on floor' },
       ],
     },
     {
-      title: 'Kitchen & Display (KDS)',
+      title: sec.kitchen || 'Kitchen & Display (KDS)',
       items: [
-        { keys: ['Enter'], label: 'Bump oldest active kitchen ticket' },
-        { keys: ['R'], label: 'Recall most recently bumped kitchen ticket' },
-        { keys: ['8'], label: 'Open 86 dish availability board' },
+        { keys: ['Enter'], label: k.bumpKds || 'Bump oldest active kitchen ticket' },
+        { keys: ['R'], label: k.recallKds || 'Recall most recently bumped kitchen ticket' },
+        { keys: ['8'], label: k.board86 || 'Open 86 dish availability board' },
       ],
     },
   ]
@@ -59,8 +65,8 @@ export function ShortcutOverlay({ isOpen, onClose }) {
           <div className="flex items-center gap-2.5">
             <span className="text-xl">⌨️</span>
             <div>
-              <h2 className="text-base font-bold text-zinc-100">Keyboard Shortcuts</h2>
-              <p className="text-xs text-zinc-400">Boost your workflow velocity during service</p>
+              <h2 className="text-base font-bold text-zinc-100">{so.title || 'Keyboard Shortcuts'}</h2>
+              <p className="text-xs text-zinc-400">{so.subtitle || 'Boost your workflow velocity during service'}</p>
             </div>
           </div>
           <button

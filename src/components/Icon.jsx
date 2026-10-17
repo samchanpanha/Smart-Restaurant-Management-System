@@ -77,6 +77,9 @@ const ICONS = {
   warning: TriangleAlert,
   sparkles: Sparkles,
   message: MessagesSquare,
+  map: Building2,
+  pos: ReceiptText,
+  dish: UtensilsCrossed,
 }
 
 export function Icon({ name, size = 20, className = '', strokeWidth = 1.8, ...props }) {

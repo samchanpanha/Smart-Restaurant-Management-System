@@ -17,7 +17,7 @@ process.env.SUPERADMIN_PASSWORD = 'super-secret-1'
 process.env.SUPERADMIN_NAME = 'Root Admin'
 
 const express = (await import('express')).default
-const { createAuthRouter, seedAuth, ALL_SCREENS } = await import('../server/auth.js')
+const { createAuthRouter, seedAuth, ALL_SCREENS, DEFAULT_SUPERADMIN } = await import('../server/auth.js')
 
 let server = null
 let base = ''
@@ -58,6 +58,50 @@ test('the super admin is seeded from the environment', async () => {
   assert.equal(data.user.isSuperAdmin, true)
   assert.equal(data.user.role.key, 'super')
   assert.ok(cookie, 'login set a session cookie')
+})
+
+test('seedAuth defaults to DEFAULT_SUPERADMIN if SUPERADMIN_EMAIL is empty or omitted', async () => {
+  const oldEmail = process.env.SUPERADMIN_EMAIL
+  const oldPass = process.env.SUPERADMIN_PASSWORD
+  try {
+    delete process.env.SUPERADMIN_EMAIL
+    delete process.env.SUPERADMIN_PASSWORD
+    seedAuth()
+    const { status, data } = await api('POST', '/api/auth/login', {
+      body: { email: DEFAULT_SUPERADMIN.email, password: DEFAULT_SUPERADMIN.password },
+    })
+    assert.equal(status, 200)
+    assert.equal(data.user.isSuperAdmin, true)
+    assert.equal(data.user.email, DEFAULT_SUPERADMIN.email)
+  } finally {
+    process.env.SUPERADMIN_EMAIL = oldEmail
+    process.env.SUPERADMIN_PASSWORD = oldPass
+  }
+})
+
+test('seedAuth resets password when SUPERADMIN_RESET_PASSWORD is set', async () => {
+  const oldEmail = process.env.SUPERADMIN_EMAIL
+  const oldPass = process.env.SUPERADMIN_PASSWORD
+  const oldReset = process.env.SUPERADMIN_RESET_PASSWORD
+  try {
+    process.env.SUPERADMIN_EMAIL = DEFAULT_SUPERADMIN.email
+    process.env.SUPERADMIN_PASSWORD = 'new-super-pass-99'
+    process.env.SUPERADMIN_RESET_PASSWORD = '1'
+    seedAuth()
+    const { status, data } = await api('POST', '/api/auth/login', {
+      body: { email: DEFAULT_SUPERADMIN.email, password: 'new-super-pass-99' },
+    })
+    assert.equal(status, 200)
+    assert.equal(data.user.email, DEFAULT_SUPERADMIN.email)
+  } finally {
+    process.env.SUPERADMIN_EMAIL = oldEmail
+    process.env.SUPERADMIN_PASSWORD = oldPass
+    if (oldReset !== undefined) {
+      process.env.SUPERADMIN_RESET_PASSWORD = oldReset
+    } else {
+      delete process.env.SUPERADMIN_RESET_PASSWORD
+    }
+  }
 })
 
 test('registering a host owner creates the tenant and its owner user', async () => {

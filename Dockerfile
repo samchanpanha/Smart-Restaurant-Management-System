@@ -22,7 +22,10 @@ FROM node:22-bookworm-slim AS runtime
 ENV NODE_ENV=production \
     PORT=3001 \
     HOST=0.0.0.0 \
-    RESTORA_DATA=/data
+    RESTORA_DATA=/data \
+    SUPERADMIN_EMAIL=admin@restora.io \
+    SUPERADMIN_PASSWORD=superadmin1234 \
+    SUPERADMIN_NAME="Super Admin"
 WORKDIR /app
 
 COPY --from=build /app/node_modules ./node_modules

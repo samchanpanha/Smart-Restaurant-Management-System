@@ -430,7 +430,11 @@ function PaySheet({ order, onClose, onPaid }) {
       >
         {processing ? 'Authorizing payment...' : `Pay ${money(finalTotal)}`}
       </button>
-      <p className="mt-2 text-center text-[11px] text-stone-400">Demo checkout · Simulated payment authorization</p>
+      <p className="mt-2 text-center text-[11px] text-stone-400">
+        {state.settings?.operatingMode === 'production'
+          ? '🔒 Secure checkout · Order verified'
+          : 'Demo checkout · Simulated payment authorization'}
+      </p>
     </Sheet>
   )
 }

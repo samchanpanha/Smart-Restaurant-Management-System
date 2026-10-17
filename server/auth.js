@@ -323,12 +323,33 @@ function startSession(userId) {
 
 // ─── Seed ────────────────────────────────────────────────────────
 
+export const DEFAULT_SUPERADMIN = {
+  email: 'admin@restora.io',
+  password: 'superadmin1234',
+  name: 'Super Admin',
+}
+
 export function seedAuth() {
   seedSystemRoles()
 
   const created = nowIso()
-  const email = normalizeEmail(process.env.SUPERADMIN_EMAIL)
-  const password = String(process.env.SUPERADMIN_PASSWORD || '')
+  const emailRaw = process.env.SUPERADMIN_EMAIL?.trim()
+  const disabled = process.env.SUPERADMIN_DISABLE === '1' ||
+    process.env.SUPERADMIN_DISABLE === 'true' ||
+    emailRaw === 'none' ||
+    emailRaw === 'off' ||
+    emailRaw === 'false'
+
+  if (disabled) {
+    q.purgeSessions.run(nowIso())
+    return
+  }
+
+  const email = emailRaw ? normalizeEmail(emailRaw) : DEFAULT_SUPERADMIN.email
+  const passwordRaw = process.env.SUPERADMIN_PASSWORD?.trim()
+  const password = passwordRaw ? String(passwordRaw) : DEFAULT_SUPERADMIN.password
+  const adminName = process.env.SUPERADMIN_NAME?.trim() || DEFAULT_SUPERADMIN.name
+
   if (email && password) {
     const existing = q.userByEmail.get(email)
     if (!existing) {
@@ -336,15 +357,22 @@ export function seedAuth() {
         console.warn('[restora] SUPERADMIN_PASSWORD too short — super admin not seeded')
       } else {
         q.insertUser.run(
-          uid('user'), null, email, process.env.SUPERADMIN_NAME || 'Super Admin',
+          uid('user'), null, email, adminName,
           hashPassword(password), ROLE_BY_KEY.super.id, 1, 'active', created, created,
         )
         console.log(`[restora] seeded super admin ${email}`)
       }
-    } else if (!existing.is_super_admin) {
-      db.prepare('UPDATE auth_users SET is_super_admin = 1, role_id = ? WHERE id = ?')
-        .run(ROLE_BY_KEY.super.id, existing.id)
-      console.log(`[restora] promoted ${email} to super admin`)
+    } else {
+      if (!existing.is_super_admin) {
+        db.prepare('UPDATE auth_users SET is_super_admin = 1, role_id = ? WHERE id = ?')
+          .run(ROLE_BY_KEY.super.id, existing.id)
+        console.log(`[restora] promoted ${email} to super admin`)
+      }
+      if (process.env.SUPERADMIN_RESET_PASSWORD === '1' || process.env.SUPERADMIN_RESET_PASSWORD === 'true') {
+        db.prepare('UPDATE auth_users SET password_hash = ?, updated_at = ? WHERE id = ?')
+          .run(hashPassword(password), created, existing.id)
+        console.log(`[restora] reset super admin password for ${email}`)
+      }
     }
   }
   q.purgeSessions.run(nowIso())

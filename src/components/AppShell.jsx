@@ -166,11 +166,15 @@ export default function AppShell({ children }) {
   }
 
 
+  const isProduction = state.settings?.operatingMode === 'production'
+
   const linkPill = link.status === 'live'
     ? { tone: 'ok', label: dict.liveServer }
     : link.status === 'offline'
       ? { tone: 'warn', label: dict.offlineTerminal }
-      : { tone: 'muted', label: dict.localDemo }
+      : isProduction
+        ? { tone: 'ok', label: dict.productionMode || 'Production' }
+        : { tone: 'muted', label: dict.localDemo }
 
   return (
     <div className="restora-theme app-shell flex overflow-hidden bg-[var(--color-ink-950)] text-zinc-100">
@@ -385,6 +389,16 @@ export default function AppShell({ children }) {
                       {user.owner && <div className="px-2 pt-1 text-xs text-zinc-400">{user.owner.name}</div>}
                       <button type="button" onClick={() => { setProfileOpen(false); logout() }} className="mt-3 w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-zinc-700 hover:bg-zinc-100">{dict.signOut}</button>
                     </>
+                  ) : isProduction ? (
+                    <div className="mt-3 rounded-xl bg-zinc-50 p-2.5 text-xs text-zinc-600">
+                      <div className="flex items-center gap-1.5 font-bold text-zinc-800">
+                        <span>🔒</span>
+                        <span>{dict.productionMode || 'Production Mode'}</span>
+                      </div>
+                      <div className="mt-1 text-[11px] text-zinc-500">
+                        {dict.productionStaffNote || 'Demo role switcher is disabled. Staff must log in with authentic credentials.'}
+                      </div>
+                    </div>
                   ) : (
                     <>
                       <label className="mt-3 block px-2 text-[10px] font-bold uppercase tracking-wider text-zinc-500" htmlFor="role">{dict.demoRole}</label>
@@ -393,7 +407,9 @@ export default function AppShell({ children }) {
                       </select>
                     </>
                   )}
-                  <button type="button" onClick={async () => { setProfileOpen(false); const where = link.mode === 'server' ? 'ALL terminals' : 'this terminal'; const ok = await confirm({ title: 'Reset demo data?', body: `This puts the Friday-night seed back on ${where}.`, confirmLabel: 'Reset demo data', tone: 'danger' }); if (ok) dispatch({ type: 'RESET_ALL' }) }} className="mt-2 w-full rounded-lg px-3 py-2 text-left text-xs text-red-600 hover:bg-red-50">{dict.resetDemoData}</button>
+                  {!isProduction && (
+                    <button type="button" onClick={async () => { setProfileOpen(false); const where = link.mode === 'server' ? 'ALL terminals' : 'this terminal'; const ok = await confirm({ title: 'Reset demo data?', body: `This puts the Friday-night seed back on ${where}.`, confirmLabel: 'Reset demo data', tone: 'danger' }); if (ok) dispatch({ type: 'RESET_ALL' }) }} className="mt-2 w-full rounded-lg px-3 py-2 text-left text-xs text-red-600 hover:bg-red-50">{dict.resetDemoData}</button>
+                  )}
                 </div>
               )}
             </div>

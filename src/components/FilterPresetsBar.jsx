@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
+import { useI18n } from '../lib/i18n'
 import { getSavedPresets } from '../lib/savedFilters'
 
 /**
  * Reusable Saved Filter Presets Strip for operational screens.
  */
 export function FilterPresetsBar({ screenKey, currentFilters, onApply }) {
+  const { dict } = useI18n()
+  const fp = dict.filterPresets || {}
   const [presets, setPresets] = useState(() => getSavedPresets(screenKey))
   const [picked, setPicked] = useState('')
   const [naming, setNaming] = useState(false)
@@ -44,16 +47,18 @@ export function FilterPresetsBar({ screenKey, currentFilters, onApply }) {
         type="button"
         onClick={() => setNaming(true)}
         className="rounded-lg border border-dashed border-zinc-300 dark:border-zinc-700 px-2.5 py-1 text-xs text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
-        title="Save active filter as a quick preset"
+        title={fp.saveAsPreset || 'Save active filter as a quick preset'}
       >
-        + Save filter preset
+        {fp.savePresetBtn || '+ Save filter preset'}
       </button>
     )
   }
 
   return (
     <div className="flex flex-wrap items-center gap-1.5 text-xs">
-      <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">Presets:</span>
+      <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">
+        {fp.presetsLabel || 'Presets:'}
+      </span>
 
       {presets.map((p) => {
         const isPicked = picked === p.name
@@ -80,8 +85,8 @@ export function FilterPresetsBar({ screenKey, currentFilters, onApply }) {
                 remove(p.name)
               }}
               className="text-zinc-400 hover:text-red-500 ml-1"
-              title="Delete preset"
-              aria-label={`Delete preset ${p.name}`}
+              title={fp.deletePreset ? fp.deletePreset(p.name) : `Delete preset ${p.name}`}
+              aria-label={fp.deletePreset ? fp.deletePreset(p.name) : `Delete preset ${p.name}`}
             >
               ×
             </button>
@@ -99,7 +104,7 @@ export function FilterPresetsBar({ screenKey, currentFilters, onApply }) {
               if (e.key === 'Enter') commit()
               if (e.key === 'Escape') { setName(''); setNaming(false) }
             }}
-            placeholder="Preset name…"
+            placeholder={fp.presetNamePlaceholder || 'Preset name…'}
             className="h-7 w-28 rounded-lg border border-orange-400 bg-white dark:bg-zinc-800 px-2 text-xs outline-none"
           />
           <button
@@ -107,7 +112,7 @@ export function FilterPresetsBar({ screenKey, currentFilters, onApply }) {
             onClick={commit}
             className="rounded-lg bg-orange-500 px-2 py-1 text-xs font-bold text-white hover:bg-orange-600"
           >
-            Save
+            {dict.save || 'Save'}
           </button>
           <button
             type="button"
@@ -122,9 +127,9 @@ export function FilterPresetsBar({ screenKey, currentFilters, onApply }) {
           type="button"
           onClick={() => setNaming(true)}
           className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white/5 px-2 py-1 text-xs text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
-          title="Save current filters as preset"
+          title={fp.saveAsPreset || 'Save current filters as preset'}
         >
-          + Save preset
+          {fp.savePresetBtn || '+ Save preset'}
         </button>
       )}
     </div>

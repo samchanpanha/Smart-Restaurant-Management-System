@@ -12,7 +12,7 @@
 
 import { buildEmpire } from '../src/lib/reducer.js'
 import { closeDatabase, loadSnapshot, saveSnapshot } from './db.js'
-import { DEMO_PASSWORD, seedDemoTenant } from './auth.js'
+import { DEFAULT_SUPERADMIN, DEMO_PASSWORD, seedAuth, seedDemoTenant } from './auth.js'
 
 const ownerName = process.env.DEMO_OWNER_NAME || 'Restora Demo'
 const slug = process.env.DEMO_SLUG || 'restora-demo'
@@ -20,6 +20,7 @@ const password = process.env.DEMO_PASSWORD || DEMO_PASSWORD
 const baseUrl = String(process.env.RESTORA_PUBLIC_URL || 'http://localhost:3001').replace(/\/$/, '')
 
 function main() {
+  seedAuth()
   const { owner, accounts } = seedDemoTenant({ ownerName, slug, password })
 
   const state = buildEmpire()
@@ -40,6 +41,9 @@ function main() {
   console.log('\n  Sign in at   ' + baseUrl + '/login')
   console.log('  Guest menu   ' + baseUrl + '/?owner=' + owner.slug)
   console.log('\n  Accounts')
+  const superEmail = (process.env.SUPERADMIN_EMAIL && process.env.SUPERADMIN_EMAIL.trim()) || DEFAULT_SUPERADMIN.email
+  const superPassword = (process.env.SUPERADMIN_PASSWORD && process.env.SUPERADMIN_PASSWORD.trim()) || DEFAULT_SUPERADMIN.password
+  line('Super Admin', `${superEmail}  /  ${superPassword}`)
   for (const account of accounts) {
     line(account.label, `${account.email}  /  ${account.password}`)
   }

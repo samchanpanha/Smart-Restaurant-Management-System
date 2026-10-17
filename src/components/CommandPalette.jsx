@@ -22,7 +22,8 @@ export function CommandPalette({ isOpen, onClose, onOpenShortcuts }) {
   } = useRestora()
 
   const { screens } = useAuth()
-  const { lang } = useI18n()
+  const { lang, dict } = useI18n()
+  const cp = dict.commandPalette || {}
   const [query, setQuery] = useState('')
   const [filterType, setFilterType] = useState('all') // 'all' | 'screen' | 'menu' | 'table' | 'inventory' | 'action'
   const [activeIndex, setActiveIndex] = useState(0)
@@ -51,10 +52,10 @@ export function CommandPalette({ isOpen, onClose, onOpenShortcuts }) {
       list.push({
         id: `screen_${nav.id}`,
         type: 'screen',
-        typeLabel: 'Screen',
-        icon: 'layout',
+        typeLabel: cp.types?.screen || 'Screen',
+        icon: 'layers',
         title: translated,
-        subtitle: `Jump to ${translated}`,
+        subtitle: `${cp.jumpTo || 'Jump to'} ${translated}`,
         keywords: `${nav.label} ${translated} ${nav.id}`.toLowerCase(),
         action: () => setScreen(nav.id),
       })
@@ -68,7 +69,7 @@ export function CommandPalette({ isOpen, onClose, onOpenShortcuts }) {
         id: `dish_${dish.id}`,
         type: 'menu',
         typeLabel: 'Dish',
-        icon: 'dish',
+        icon: 'menu',
         title: localName,
         subtitle: `${dish.category} · ${money(dish.price)}${dish.available ? '' : " (86'd)"}`,
         keywords: `${dish.name} ${localName} ${dish.category} ${dish.subCategory || ''} dish menu`.toLowerCase(),
@@ -85,7 +86,7 @@ export function CommandPalette({ isOpen, onClose, onOpenShortcuts }) {
         id: `table_${table.id}`,
         type: 'table',
         typeLabel: 'Table',
-        icon: 'map',
+        icon: 'tables',
         title: table.name,
         subtitle: `${table.zone} · ${table.seats} seats · Status: ${table.status}`,
         keywords: `${table.name} ${table.zone} ${table.status} table seat`.toLowerCase(),
@@ -102,7 +103,7 @@ export function CommandPalette({ isOpen, onClose, onOpenShortcuts }) {
         id: `inv_${inv.id}`,
         type: 'inventory',
         typeLabel: 'Stock',
-        icon: 'box',
+        icon: 'inventory',
         title: inv.name,
         subtitle: `${inv.category} · ${inv.onHand} ${inv.unit} · par: ${inv.par}`,
         keywords: `${inv.name} ${inv.category} stock inventory sku`.toLowerCase(),
@@ -115,10 +116,10 @@ export function CommandPalette({ isOpen, onClose, onOpenShortcuts }) {
       list.push({
         id: 'action_shortcuts',
         type: 'action',
-        typeLabel: 'Action',
-        icon: 'help',
-        title: 'Keyboard Shortcuts Cheat Sheet',
-        subtitle: 'View all keyboard shortcuts (?)',
+        typeLabel: cp.types?.action || 'Action',
+        icon: 'sparkles',
+        title: cp.actions?.shortcuts || 'Keyboard Shortcuts Cheat Sheet',
+        subtitle: cp.actions?.shortcutsSub || 'View all keyboard shortcuts (?)',
         keywords: 'shortcuts hotkeys keyboard help cheat sheet',
         action: onOpenShortcuts,
       })
@@ -129,10 +130,10 @@ export function CommandPalette({ isOpen, onClose, onOpenShortcuts }) {
       list.push({
         id: 'action_new_ticket',
         type: 'action',
-        typeLabel: 'Action',
-        icon: 'pos',
-        title: 'New Dine-In / Takeout Ticket',
-        subtitle: 'Open ticket composer to start an order',
+        typeLabel: cp.types?.action || 'Action',
+        icon: 'orders',
+        title: cp.actions?.newTicket || 'New Dine-In / Takeout Ticket',
+        subtitle: cp.actions?.newTicketSub || 'Open ticket composer to start an order',
         keywords: 'new ticket order start create',
         action: () => {
           setSelectedOrderId(null)
@@ -146,10 +147,10 @@ export function CommandPalette({ isOpen, onClose, onOpenShortcuts }) {
       list.push({
         id: 'action_86_board',
         type: 'action',
-        typeLabel: 'Action',
-        icon: 'dish',
-        title: 'View 86 Board & Stock Outages',
-        subtitle: 'Check dishes currently unavailable in the kitchen',
+        typeLabel: cp.types?.action || 'Action',
+        icon: 'menu',
+        title: cp.actions?.eightySix || 'View 86 Board & Stock Outages',
+        subtitle: cp.actions?.eightySixSub || 'Check dishes currently unavailable in the kitchen',
         keywords: '86 board out of stock unavailable',
         action: () => setScreen('menu'),
       })
@@ -162,10 +163,10 @@ export function CommandPalette({ isOpen, onClose, onOpenShortcuts }) {
           list.push({
             id: `action_branch_${loc.id}`,
             type: 'action',
-            typeLabel: 'Branch',
-            icon: 'map',
-            title: `Switch Branch to: ${loc.name}`,
-            subtitle: `Switch workspace view to ${loc.name}`,
+            typeLabel: cp.types?.action || 'Action',
+            icon: 'building',
+            title: cp.actions?.switchBranch ? cp.actions.switchBranch(loc.name) : `Switch Branch to: ${loc.name}`,
+            subtitle: cp.actions?.switchBranchSub || `Switch workspace view to ${loc.name}`,
             keywords: `branch switch ${loc.name} location ${loc.short}`.toLowerCase(),
             action: () => setLocId(loc.id),
           })
@@ -174,7 +175,7 @@ export function CommandPalette({ isOpen, onClose, onOpenShortcuts }) {
     }
 
     return list
-  }, [allowed, lang, locId, locations, onOpenShortcuts, setLocId, setScreen, setSelectedDishId, setSelectedOrderId, setSelectedTableId, state.inventory, state.menu, state.tables])
+  }, [allowed, cp, lang, locId, locations, onOpenShortcuts, setLocId, setScreen, setSelectedDishId, setSelectedOrderId, setSelectedTableId, state.inventory, state.menu, state.tables])
 
   // Context-aware scoring: boost items matching current screen
   const filteredCommands = useMemo(() => {
@@ -269,7 +270,7 @@ export function CommandPalette({ isOpen, onClose, onOpenShortcuts }) {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Type a command, search screens, dishes, tables, SKU..."
+            placeholder={cp.searchAll || cp.placeholder || "Type a command, search screens, dishes, tables, SKU..."}
             aria-label="Search command palette"
             className="w-full border-0 bg-transparent text-sm text-zinc-100 placeholder-zinc-500 outline-none"
           />
@@ -281,12 +282,12 @@ export function CommandPalette({ isOpen, onClose, onOpenShortcuts }) {
         {/* Filter Type Pills */}
         <div className="flex gap-1.5 overflow-x-auto border-b border-zinc-800/80 px-4 py-2 text-xs bg-[var(--color-ink-950)]/50">
           {[
-            ['all', 'All'],
-            ['screen', 'Screens'],
-            ['menu', 'Dishes'],
-            ['table', 'Tables'],
-            ['inventory', 'Stock'],
-            ['action', 'Actions'],
+            ['all', cp.types?.all || 'All'],
+            ['screen', cp.types?.screen || 'Screens'],
+            ['menu', cp.types?.menu || 'Dishes'],
+            ['table', cp.types?.table || 'Tables'],
+            ['inventory', cp.types?.inventory || 'Stock'],
+            ['action', cp.types?.action || 'Actions'],
           ].map(([type, label]) => (
             <button
               key={type}
@@ -354,7 +355,7 @@ export function CommandPalette({ isOpen, onClose, onOpenShortcuts }) {
 
           {filteredCommands.length === 0 && (
             <li className="py-10 text-center text-sm text-zinc-500">
-              No results found for &quot;{query}&quot;. Try another search term.
+              {cp.noResults || `No results found for "${query}". Try another search term.`}
             </li>
           )}
         </ul>

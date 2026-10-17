@@ -4,8 +4,9 @@ import { formatMoney } from '../../../lib/currency'
 import { printHtml, renderDocumentHtml } from '../../../lib/documents'
 import { DOC_KIND_META, sanitizeSettings } from '../../../lib/settings'
 import { migrateToEmpire } from '../../../lib/reducer'
-import { useToast } from '../../../components/ui/toast-context'
 import { useConfirm } from '../../../components/ui/confirm-context'
+import { useToast } from '../../../components/ui/toast-context'
+import { useI18n } from '../../../lib/i18n'
 import { Card } from '../primitives'
 
 function DataSection({ state, draft, dispatch, empire, locId, link, resync }) {
@@ -13,6 +14,8 @@ function DataSection({ state, draft, dispatch, empire, locId, link, resync }) {
   const importRef = useRef(null)
   const { notify } = useToast()
   const confirm = useConfirm()
+  const { dict } = useI18n()
+  const om = dict.operatingMode || {}
   const documents = useMemo(() => [...(state.documents || [])].reverse(), [state.documents])
 
   function exportState() {
@@ -48,6 +51,91 @@ function DataSection({ state, draft, dispatch, empire, locId, link, resync }) {
 
   return (
     <div className="space-y-4">
+      <Card
+        title={om.title || 'Operating Environment & Mode'}
+        sub={om.subtitle || 'Toggle between Demo Mode (walkthrough role switcher & test resets) and Production Mode (live business service).'}
+      >
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <span
+              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-xl font-bold shadow-xs ${
+                state.settings?.operatingMode === 'production'
+                  ? 'bg-emerald-500/15 text-emerald-600 ring-1 ring-emerald-500/30'
+                  : 'bg-amber-500/15 text-amber-600 ring-1 ring-amber-500/30'
+              }`}
+            >
+              {state.settings?.operatingMode === 'production' ? '🚀' : '🧪'}
+            </span>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold text-zinc-900">
+                  {state.settings?.operatingMode === 'production'
+                    ? (om.prodMode || 'Production Mode (Live Operations)')
+                    : (om.demoMode || 'Demo Mode (Training & Walkthrough)')}
+                </span>
+                <StatusPill tone={state.settings?.operatingMode === 'production' ? 'ok' : 'warn'} size="sm">
+                  {state.settings?.operatingMode === 'production' ? 'Production' : 'Demo'}
+                </StatusPill>
+              </div>
+              <p className="mt-1 text-xs text-zinc-500 leading-relaxed max-w-xl">
+                {state.settings?.operatingMode === 'production'
+                  ? (om.prodDesc || 'Demo role switching is disabled. Staff must log in with authentic individual accounts. Demo reset buttons are disabled to protect live business transactions.')
+                  : (om.demoDesc || 'Fast role-hopping is enabled in the top bar. Simulated guest checkout and demo reset buttons are active.')}
+              </p>
+            </div>
+          </div>
+
+          <div className="shrink-0">
+            {state.settings?.operatingMode === 'production' ? (
+              <button
+                type="button"
+                onClick={async () => {
+                  const ok = await confirm({
+                    title: om.switchToDemo ? `${om.switchToDemo}?` : 'Switch to Demo Mode?',
+                    body: 'This will re-enable the top-bar role switcher and make demo data tools accessible.',
+                    confirmLabel: om.switchToDemo || 'Switch to Demo Mode',
+                  })
+                  if (ok) {
+                    dispatch({
+                      type: 'UPDATE_SETTINGS',
+                      patch: { operatingMode: 'demo' },
+                      updatedBy: 'owner',
+                    })
+                    notify('Switched to Demo Mode', 'success')
+                  }
+                }}
+                className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-xs font-bold text-zinc-700 hover:bg-zinc-50 transition shadow-2xs"
+              >
+                {om.switchToDemo || 'Switch to Demo Mode'}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={async () => {
+                  const ok = await confirm({
+                    title: om.switchToProd ? `${om.switchToProd}?` : 'Enable Production Mode?',
+                    body: 'This disables the top-bar demo role picker, hides demo reset buttons, and enforces authentic staff logins for live restaurant service.',
+                    confirmLabel: om.switchToProd || 'Enable Production Mode',
+                    tone: 'primary',
+                  })
+                  if (ok) {
+                    dispatch({
+                      type: 'UPDATE_SETTINGS',
+                      patch: { operatingMode: 'production' },
+                      updatedBy: 'owner',
+                    })
+                    notify('Restora is now in Production Mode (Demo disabled)', 'success')
+                  }
+                }}
+                className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700 transition shadow-xs"
+              >
+                {om.switchToProd || 'Set Production Mode (Disable Demo)'}
+              </button>
+            )}
+          </div>
+        </div>
+      </Card>
+
       <Card
         title={`Issued documents · ${documents.length}`}
         sub="Every filed document keeps its number, totals, and payload — reprint anytime, void without deleting."

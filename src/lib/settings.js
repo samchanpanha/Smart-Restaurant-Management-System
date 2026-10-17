@@ -344,6 +344,9 @@ export function defaultSettings(locationLabel = 'Downtown') {
     website: 'restora.example',
     taxId: 'EIN 88-1234567',
 
+    // Operating mode: 'demo' (training/walkthrough) or 'production' (live operations)
+    operatingMode: 'demo',
+
     // Money + locale
     baseCurrency: 'USD',
     currency: 'USD',
@@ -653,6 +656,9 @@ export function sanitizeSettings(raw, locationLabel = 'Downtown') {
     email: clampText(source.email, 80),
     website: clampText(source.website, 80),
     taxId: clampText(source.taxId, 40),
+    operatingMode: ['demo', 'production'].includes(source.operatingMode)
+      ? source.operatingMode
+      : (base.operatingMode || 'demo'),
 
     baseCurrency,
     currency: baseCurrency,

@@ -3,6 +3,7 @@ import { Icon } from '../components/Icon'
 import StatusPill from '../components/StatusPill'
 import { Field, Modal, btnGhost, btnPrimary, inputCls } from '../components/ui'
 import { useConfirm } from '../components/ui/confirm-context'
+import { useI18n } from '../lib/i18n'
 import { uid } from '../lib/models'
 import { useRestora } from '../lib/store'
 
@@ -37,7 +38,7 @@ function calcHours(start, end) {
   return Math.round((diff / 60) * 10) / 10
 }
 
-function ShiftModal({ shift, defaultDate, onClose, onSave, onDelete }) {
+function ShiftModal({ shift, defaultDate, onClose, onSave, onDelete, sc = {} }) {
   const [staffName, setStaffName] = useState(shift?.staffName || '')
   const [role, setRole] = useState(shift?.role || 'server')
   const [date, setDate] = useState(shift?.date || defaultDate || new Date().toISOString().slice(0, 10))
@@ -49,7 +50,7 @@ function ShiftModal({ shift, defaultDate, onClose, onSave, onDelete }) {
   function handleSubmit(e) {
     e.preventDefault()
     if (!staffName.trim()) {
-      setError('Staff member name is required.')
+      setError(sc.staffMemberName ? `${sc.staffMemberName} required.` : 'Staff member name is required.')
       return
     }
     onSave({
@@ -65,8 +66,8 @@ function ShiftModal({ shift, defaultDate, onClose, onSave, onDelete }) {
 
   return (
     <Modal
-      title={shift ? 'Edit Shift' : 'New Shift'}
-      subtitle="Schedule team shifts and manage operational floor and kitchen coverage."
+      title={shift ? (sc.editShift || 'Edit Shift') : (sc.newShift || 'New Shift')}
+      subtitle={sc.subtitle || 'Schedule team shifts and manage operational floor and kitchen coverage.'}
       onClose={onClose}
     >
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -160,6 +161,8 @@ function ShiftModal({ shift, defaultDate, onClose, onSave, onDelete }) {
 
 export default function ScheduleScreen() {
   const confirm = useConfirm()
+  const { lang, dict } = useI18n()
+  const sc = dict.scheduleScreen || {}
   const { state, dispatch } = useRestora()
   const [currentWeekMonday, setCurrentWeekMonday] = useState(() => getWeekMonday(new Date()))
   const [modalCtx, setModalCtx] = useState(null) // { shift?, defaultDate? }
@@ -247,9 +250,9 @@ export default function ScheduleScreen() {
 
   async function handleDeleteShift(shiftId) {
     const ok = await confirm({
-      title: 'Delete this shift?',
-      body: 'This shift will be permanently removed from the schedule.',
-      confirmLabel: 'Delete shift',
+      title: sc.deleteConfirmTitle || 'Delete this shift?',
+      body: sc.deleteConfirmBody || 'This shift will be permanently removed from the schedule.',
+      confirmLabel: sc.deleteShift || 'Delete shift',
       tone: 'danger',
     })
     if (!ok) return
@@ -262,13 +265,14 @@ export default function ScheduleScreen() {
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <div className="mb-1 text-xs font-semibold text-orange-600">
-            Control · Staff operations
+            {sc.kicker || 'Control · Staff operations'}
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
-            Weekly shift schedule
+            {sc.title || 'Weekly shift schedule'}
+            {lang !== 'en' && <span className="sr-only"> Weekly shift schedule</span>}
           </h1>
           <p className="mt-1 text-sm text-zinc-500">
-            Plan staff rosters, ensure kitchen and floor coverage, and balance weekly hours.
+            {sc.subtitle || 'Plan staff rosters, ensure kitchen and floor coverage, and balance weekly hours.'}
           </p>
         </div>
 
@@ -278,14 +282,14 @@ export default function ScheduleScreen() {
             onClick={goToday}
             className="rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-2 text-xs font-bold hover:bg-zinc-50 dark:hover:bg-zinc-700"
           >
-            Today
+            {sc.today || 'Today'}
           </button>
           <div className="flex rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-0.5">
             <button
               type="button"
               onClick={prevWeek}
               className="p-1.5 text-zinc-600 dark:text-zinc-300 hover:text-black dark:hover:text-white"
-              title="Previous week"
+              title={sc.prevWeek || 'Previous week'}
             >
               ←
             </button>
@@ -296,7 +300,7 @@ export default function ScheduleScreen() {
               type="button"
               onClick={nextWeek}
               className="p-1.5 text-zinc-600 dark:text-zinc-300 hover:text-black dark:hover:text-white"
-              title="Next week"
+              title={sc.nextWeek || 'Next week'}
             >
               →
             </button>
@@ -305,17 +309,17 @@ export default function ScheduleScreen() {
             type="button"
             onClick={() => window.print()}
             className={btnGhost}
-            title="Print weekly schedule"
+            title={sc.printSchedule || 'Print weekly schedule'}
           >
             <Icon name="printer" className="mr-1 h-3.5 w-3.5" />
-            Print
+            {sc.print || 'Print'}
           </button>
           <button
             type="button"
             onClick={() => setModalCtx({ defaultDate: new Date().toISOString().slice(0, 10) })}
             className={btnPrimary}
           >
-            + Add shift
+            {sc.addShift || '+ Add shift'}
           </button>
         </div>
       </header>
@@ -323,28 +327,36 @@ export default function ScheduleScreen() {
       {/* KPI & Summary Strip */}
       <div className="grid gap-3 sm:grid-cols-4">
         <div className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-[var(--color-ink-900)] p-4 shadow-sm">
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Total shifts</div>
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+            {sc.totalShifts || 'Total shifts'}
+          </div>
           <div className="mt-1 text-2xl font-bold text-zinc-900 dark:text-zinc-100">{weekShifts.length}</div>
-          <div className="text-xs text-zinc-500">across 7 days</div>
+          <div className="text-xs text-zinc-500">{sc.acrossDays || 'across 7 days'}</div>
         </div>
         <div className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-[var(--color-ink-900)] p-4 shadow-sm">
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Scheduled hours</div>
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+            {sc.scheduledHours || 'Scheduled hours'}
+          </div>
           <div className="mt-1 text-2xl font-bold text-orange-600 dark:text-orange-400">{totalWeekHours}h</div>
-          <div className="text-xs text-zinc-500">rostered duration</div>
+          <div className="text-xs text-zinc-500">{sc.rosteredDuration || 'rostered duration'}</div>
         </div>
         <div className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-[var(--color-ink-900)] p-4 shadow-sm">
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Staff active</div>
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+            {sc.staffActive || 'Staff active'}
+          </div>
           <div className="mt-1 text-2xl font-bold text-zinc-900 dark:text-zinc-100">
             {new Set(weekShifts.map((s) => s.staffName)).size}
           </div>
-          <div className="text-xs text-zinc-500">team members</div>
+          <div className="text-xs text-zinc-500">{sc.teamMembers || 'team members'}</div>
         </div>
         <div className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-[var(--color-ink-900)] p-4 shadow-sm">
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Coverage alerts</div>
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+            {sc.coverageAlerts || 'Coverage alerts'}
+          </div>
           <div className="mt-1 text-2xl font-bold text-amber-500">
             {dailyCoverage.filter((d) => d.warnings.length > 0).length}
           </div>
-          <div className="text-xs text-zinc-500">days missing core roles</div>
+          <div className="text-xs text-zinc-500">{sc.daysMissingRoles || 'days missing core roles'}</div>
         </div>
       </div>
 
@@ -462,6 +474,7 @@ export default function ScheduleScreen() {
           onClose={() => setModalCtx(null)}
           onSave={handleSaveShift}
           onDelete={handleDeleteShift}
+          sc={sc}
         />
       )}
     </div>

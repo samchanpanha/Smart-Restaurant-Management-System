@@ -568,10 +568,11 @@ port. The bundled image does the same:
 docker compose up --build            # → http://localhost:3001
 ```
 
-SQLite lives on the `restora-data` volume. Provide `SUPERADMIN_EMAIL`,
-`SUPERADMIN_PASSWORD`, `RESTORA_TENANT`, and the `TELEGRAM_*` values through
-your environment (or a `.env` file beside `docker-compose.yml`) to configure
-the super admin and the hosted bot.
+SQLite lives on the `restora-data` volume. By default, a platform Super Admin
+is seeded on boot (`admin@restora.io` / `superadmin1234`). You can override this by providing
+`SUPERADMIN_EMAIL` and `SUPERADMIN_PASSWORD` (or disable it with `SUPERADMIN_DISABLE=1`),
+along with `RESTORA_TENANT` and `TELEGRAM_*` values through your environment (or a `.env`
+file beside `docker-compose.yml`).
 
 The container has its own database on that volume, so seed the demo **inside
 the container** — running `npm run seed:demo` on the host writes to
