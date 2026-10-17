@@ -149,38 +149,29 @@ against the actual recipe and kitchen cross-contact practices before using them
 for guest safety decisions.
 
 Known limits: actions apply optimistically — if two terminals race (same
-table), the server rejects the loser (`409`) and it resyncs. Offline work is
-no longer lost: it queues (see "Offline terminals" below) and replays when
-the server is back; a replay the server refuses (price changed, table taken)
-lands as a conflict banner instead of vanishing.
+table), the server rejects the loser (`409`) and it resyncs.
 
-### Offline terminals
+### Online-only terminals
 
-Terminals keep selling with no server: the UI runs on the cached snapshot in
-localStorage, and every sale is queued in an offline outbox
-(`src/lib/outbox.js`, key `restora-outbox-v1`). On reconnect the store
-replays the queue in order — idempotently, via a `_lid` the server dedupes
-(unique on `actions.owner_id + client_id + lid`) — then takes the
-authoritative snapshot. A refused *financial* action is parked for review
-(banner listing `restora-conflicts-v1`), never silently dropped.
+Restora keeps **no offline lane**. An action is committed to the server in
+the same breath it is applied: the store POSTs it, and only what the server
+accepts is kept. While the link is down (server mode with
+`status !== 'live'`, or a terminal that booted during an outage) every
+dispatch is refused with a notice — nothing is applied locally, nothing is
+queued, and there is no conflict banner to triage, so a terminal can never
+drift away from server truth. The sidebar pill (**Live · server** /
+**Offline · this terminal** / **Local demo**) is the whole status story.
 
-First-release restrictions while offline (`src/lib/offline.js`):
+`_lid` tagging stays: every action carries a client-unique local id, the
+server dedupes a retried POST by `(owner_id, client_id, lid)`
+(`server/db.js` `findDuplicateAction`), and the SSE echo of a terminal's own
+action is skipped on the way back.
 
-- No catalog/menu/inventory-master edits, no settings or exchange-rate
-  changes, no supplier/purchase actions, no template edits, no shift-roster
-  edits (`OFFLINE_BLOCKED`).
-- Sale preflight: cached menu + cached session (24h TTL, `restora-session-cache-v1`)
-  + matching branch pin; an **open cash-session shift** gates a branch that
-  ever opened one (open a shift in Control → Schedule with "Cash session open").
-- Payments offline are cash-only; card/QR needs the link.
-- Void/refund is limited to orders created on this terminal while offline.
-- No empire-level actions (branches, transfers) offline.
-
-Production apps also register a service worker (`public/sw.js`, production
-builds only) so a cold reload with no network still boots the shell; `/api`
-is never cached. Guest phones and Telegram mini-app sessions participate in
-the same outbox (their orders replay too). `npm run dev` without a server on
-:3001 remains the pure localStorage demo — it neither gates nor queues.
+Production apps register a service worker (`public/sw.js`, production builds
+only) so a cold reload with no network still boots the shell; `/api` is
+never cached, and nothing can be saved while it is unreachable. `npm run dev`
+without a server on :3001 remains the pure localStorage demo — it neither
+syncs nor gates, because it has no server to sync to.
 
 ### Configuration, documents, catalog & suppliers
 

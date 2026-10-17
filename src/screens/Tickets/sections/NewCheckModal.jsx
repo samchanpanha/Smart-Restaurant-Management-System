@@ -19,8 +19,7 @@ function NewCheckModal({ onClose, onCreated }) {
   const [error, setError] = useState('')
   // Local customer directory: pick a saved customer (filters with what is
   // typed) or save a new one as the check is created. The link travels on
-  // the order's customer block, and the save is an ordinary synced action
-  // — offline creation queues through the outbox like every sale does.
+  // the order's customer block, and the save is an ordinary synced action.
   const customers = Array.isArray(state.customers) ? state.customers : []
   const [customerId, setCustomerId] = useState(null)
   const [saveCustomer, setSaveCustomer] = useState(true)
@@ -156,7 +155,7 @@ function NewCheckModal({ onClose, onCreated }) {
                 onChange={(e) => setSaveCustomer(e.target.checked)}
                 className="h-3.5 w-3.5 accent-amber-500"
               />
-              <span>Save this customer to the directory (works offline — syncs when the server is back)</span>
+              <span>Save this customer to the directory</span>
             </label>
             {orderType === 'delivery' && (
               <>

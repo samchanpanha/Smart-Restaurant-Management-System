@@ -289,9 +289,9 @@ app.post('/api/actions', resolveTenant, (req, res) => {
   if (REJECTED.has(action.type)) {
     return res.status(400).json({ error: `${action.type} is local-only` })
   }
-  // Idempotency: an offline replay whose action already committed (the
-  // first POST's response may have died before reaching the terminal)
-  // returns the original seq without touching state again.
+  // Idempotency: a retried POST whose action already committed (the first
+  // response may have died before reaching the terminal) returns the
+  // original seq without touching state again.
   const dupSeq = findDuplicateAction(req.tenantId, clientId, action)
   if (dupSeq != null) {
     return res.json({ seq: dupSeq, dedup: true })

@@ -1,15 +1,15 @@
-// ─── Restora offline app shell ──────────────────────────────────────
+// ─── Restora app shell cache ────────────────────────────────────────
 // Registered only in production builds. Caches the built app assets so a
-// terminal can reload with no network (the React app then runs on its
-// cached localStorage snapshot + the offline outbox). The API is never
-// cached: /api state, actions and SSE stay live-only, and the outbox
-// streams queued writes to the server when it answers again.
+// terminal can reload with no network (the React app then runs read-only on
+// its cached localStorage snapshot: nothing is saved while the API is
+// unreachable). The API is never cached: /api state, actions and SSE stay
+// live-only.
 //
 // Strategy: cache-first for same-origin GETs with a stale-while-revalidate
 // refresh, network-first fallthrough, and an index.html fallback for
 // navigations so a cold reload still boots the SPA.
 
-const CACHE = 'restora-shell-v1'
+const CACHE = 'restora-shell-v2'
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/favicon.svg']
 
 self.addEventListener('install', (event) => {

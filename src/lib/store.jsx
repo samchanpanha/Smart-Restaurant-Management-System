@@ -14,14 +14,6 @@ import { ROLE_NAV, TARGETS } from './constants'
 import { baseCurrencyConfig, setActiveCurrency } from './currency'
 import { usableCachedSession } from './auth'
 import { uid } from './models'
-import {
-  FINANCIAL_ACTIONS, OFFLINE_BLOCKED, OFFLINE_EMPIRE_BLOCKED, SALE_GATE_ACTIONS,
-  offlinePayBlock, offlineSaleBlock, offlineVoidBlock,
-} from './offline'
-import {
-  appendConflict, clearConflicts, dequeue, enqueue, hasSeenServer,
-  markServerSeen, offlineCreatedOrderIds, outboxSize, readConflicts, readOutbox,
-} from './outbox'
 import { buildEmpire, getAlerts, migrateToEmpire, reducer } from './reducer'
 import { DOC_KINDS, documentNumber, templateFor } from './settings'
 import {
@@ -46,16 +38,24 @@ const LOCAL_ONLY = new Set(['HYDRATE', 'EXPIRE_UNDO', 'DISMISS_ALERT'])
 const BOOT_TIMEOUT_MS = 2500
 
 // Plain-English notices (the store sits below the i18n provider); the
-// chrome shows the translated offline state on top of these.
-const OFFLINE_BLOCK_NOTICES = {
-  blockedEdit: 'Offline — this edit needs the server. Try again after reconnecting.',
-  noMenu: 'Offline — no cached menu on this terminal; connect once to sell.',
-  sessionStale: 'Offline — sign-in expired; sign in once online to keep selling.',
-  noShift: 'Offline — open a cash session (Schedule) before selling.',
-  cashOnly: 'Offline — cash payments only; reconnect for cards.',
-  voidServer: 'Offline — only orders created on this terminal can be voided.',
-  branchPin: 'Offline — this account is pinned to another branch.',
-  empire: 'Offline — branch management needs the server.',
+// chrome shows the translated link state on top of these.
+const OFFLINE_NOTICE = 'Offline — reconnecting. This change was not saved.'
+
+// Online-only: a change is only ever applied locally when the server has
+// accepted it, so a terminal can never diverge from server truth (and there
+// is nothing to replay later). While the link is down the store refuses
+// changes instead of queueing them.
+//
+// The one flag left is "has this browser ever reached a server?": it tells a
+// real terminal that booted during an outage (keep polling, refuse edits)
+// from the local demo on `npm run dev`, which has no server at all and just
+// edits its own localStorage.
+const SERVER_SEEN_KEY = 'restora-server-seen'
+function markServerSeen() {
+  try { localStorage.setItem(SERVER_SEEN_KEY, '1') } catch { /* ignore */ }
+}
+function hasSeenServer() {
+  try { return localStorage.getItem(SERVER_SEEN_KEY) === '1' } catch { return false }
 }
 
 const RestoraContext = createContext(null)
@@ -346,18 +346,6 @@ export function RestoraProvider({ children, waitForServer = true }) {
   const linkRef = useRef(link)
   linkRef.current = link
   const [notice, setNotice] = useState(null)
-  // The offline outbox, mirrored into React state so the chrome can show
-  // how many changes are waiting and what the server refused to accept.
-  const [queued, setQueued] = useState(() => outboxSize())
-  const [conflicts, setConflicts] = useState(() => readConflicts())
-  const syncOutboxUi = useCallback(() => {
-    setQueued(outboxSize())
-    setConflicts(readConflicts())
-  }, [])
-  const dismissConflicts = useCallback(() => {
-    clearConflicts()
-    setConflicts([])
-  }, [])
   const locRef = useRef(locId)
   locRef.current = locId
   const seqRef = useRef(0)
@@ -365,9 +353,9 @@ export function RestoraProvider({ children, waitForServer = true }) {
   const clientId = useMemo(getClientId, [])
   const esRef = useRef(null)
   const retryRef = useRef(null)
-  // Live actions are queued and applied once per frame. A busy room sends
-  // several actions a second; without this every one of them re-rendered
-  // every terminal and every guest phone on its own.
+  // Inbound server actions are batched and applied once per frame. A busy
+  // room sends several actions a second; without this every one of them
+  // re-rendered every terminal and every guest phone on its own.
   const inboundRef = useRef([])
   const flushRef = useRef(false)
 
@@ -405,98 +393,22 @@ export function RestoraProvider({ children, waitForServer = true }) {
     }
   }, [])
 
-  // ─── Offline policy ──────────────────────────────────────────────
-  // "Offline" is: connected before, link lost now — or a real terminal
-  // that booted during an outage (hasSeenServer). The localStorage demo
-  // with no server on record is not offline, it is just demo mode.
+  // ─── Online-only policy ──────────────────────────────────────────
+  // "Offline" is: connected before, link lost now — or a real terminal that
+  // booted during an outage (hasSeenServer). The localStorage demo with no
+  // server on record is not offline, it is just demo mode.
   const offlineNow = useCallback(() => {
     const l = linkRef.current
     if (l.mode === 'server') return l.status !== 'live'
     return l.status === 'local' && hasSeenServer()
   }, [])
 
-  // First-release gates: what may not be dispatched while offline.
-  // Returns an i18n-ish reason key, or null when allowed.
-  const offlineBlockReason = useCallback((targetLocId, action) => {
-    const type = action?.type
-    if (!type) return null
-    if (OFFLINE_BLOCKED.has(type)) return 'blockedEdit'
-    if (SALE_GATE_ACTIONS.has(type)) {
-      const shop = emperorRef.current.locations?.[targetLocId] || null
-      const reason = offlineSaleBlock(shop, { session: usableCachedSession() })
-      if (reason) return reason
-    }
-    if (type === 'PAY_ORDER' && offlinePayBlock(action)) return 'cashOnly'
-    if (type === 'VOID_ORDER' || type === 'VOID_ITEM') {
-      // A void/refund is only allowed for an order this terminal created
-      // while offline; the cached server orders are read-only here.
-      const voidBlock = offlineVoidBlock(action, offlineCreatedOrderIds(targetLocId))
-      if (voidBlock) return 'voidServer'
-    }
-    // Branch pin (server truth, cached at sign-in): a pinned account
-    // acts only on its branch — online or off.
+  // A branch-pinned account acts only on its branch: the server enforces it
+  // (403 on another loc), this is the plain-English notice.
+  const branchPinBlock = useCallback((targetLocId) => {
     const pin = String(usableCachedSession()?.scopeLocationId || '')
-    if (pin && pin !== String(targetLocId ?? '')) return 'branchPin'
-    return null
+    return Boolean(pin) && pin !== String(targetLocId ?? '')
   }, [])
-
-  // Drain the outbox in order. Network failures keep the entry (stop in
-  // fifo order); server rejections record a conflict — financial actions
-  // parked for review, others dropped in favour of the server snapshot.
-  const flushOutbox = useCallback(async () => {
-    const entries = readOutbox()
-    if (!entries.length) return true
-    let reached = true
-    for (const entry of entries) {
-      let res
-      try {
-        res = await fetch(withOwner('/api/actions'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: { type: 'LOC', locId: entry.locId, action: entry.action },
-            clientId,
-          }),
-        })
-      } catch {
-        reached = false // still offline — stop in order, keep the queue
-        break
-      }
-      const json = await res.json().catch(() => ({}))
-      if (res.ok && typeof json.seq === 'number') {
-        // Committed (or a dedup replay of an earlier commit — same thing).
-        seqRef.current = Math.max(seqRef.current, json.seq)
-        lidAt.current.set(entry._lid, Date.now())
-        dequeue(entry._lid)
-        syncOutboxUi()
-        continue
-      }
-      appendConflict({
-        lid: entry._lid,
-        locId: entry.locId,
-        type: entry.action?.type || 'unknown',
-        financial: Boolean(entry.financial),
-        error: json.error || `HTTP ${res.status}`,
-        at: new Date().toISOString(),
-      })
-      dequeue(entry._lid)
-      syncOutboxUi()
-      flashNotice(entry.financial
-        ? `Offline change needs review (${json.error || res.status}) — nothing was lost.`
-        : `Offline change skipped — server said: ${json.error || res.status}`)
-      break // settle on authoritative state before continuing
-    }
-    return reached
-  }, [clientId, syncOutboxUi])
-
-  // The one reconnect path: replay the queue first, then take the
-  // authoritative snapshot — offline edits become deltas re-applied on
-  // top of fresh server truth instead of being wiped by it.
-  const recover = useCallback(async () => {
-    const flushed = await flushOutbox()
-    const ok = await resync()
-    return ok && flushed !== false
-  }, [flushOutbox, resync])
 
   const flushInbound = useCallback(() => {
     flushRef.current = false
@@ -545,7 +457,7 @@ export function RestoraProvider({ children, waitForServer = true }) {
       }
       if (msg.hello) {
         if (msg.seq - seqRef.current > 200) {
-          recover().then((ok) => {
+          resync().then((ok) => {
             if (ok) connectStream()
           })
         } else {
@@ -555,7 +467,7 @@ export function RestoraProvider({ children, waitForServer = true }) {
         return
       }
       if (msg.resync) {
-        recover().then((ok) => {
+        resync().then((ok) => {
           if (ok) connectStream()
         })
         return
@@ -577,12 +489,12 @@ export function RestoraProvider({ children, waitForServer = true }) {
       if (esRef.current === es) esRef.current = null
       setLink((l) => ({ ...l, status: 'offline' }))
       retryRef.current = window.setTimeout(async () => {
-        const ok = await recover()
+        const ok = await resync()
         if (ok) connectStream()
         else retryRef.current = window.setTimeout(() => connectStream(), 5000)
       }, 2000)
     }
-  }, [pruneLids, queueInbound, recover])
+  }, [pruneLids, queueInbound, resync])
 
   useEffect(() => {
     const ctrl = new AbortController()
@@ -593,11 +505,10 @@ export function RestoraProvider({ children, waitForServer = true }) {
         seqRef.current = json.seq || 0
         rawDispatch({ type: 'HYDRATE', state: json.empire })
         setLink({ mode: 'server', status: 'live' })
-        // A terminal that had queued work from an earlier offline session
-        // flushes it as soon as it knows this server exists.
+        // From here on this browser is a terminal, not the bare demo: it
+        // keeps trying to reach the server and refuses edits while down.
         markServerSeen()
         connectStream()
-        recover()
       })
       .catch(() => {
         window.clearTimeout(timer)
@@ -613,14 +524,13 @@ export function RestoraProvider({ children, waitForServer = true }) {
   }, [])
 
   // Booted during a server outage? A real terminal keeps polling until
-  // the API answers once, then switches to server mode and replays its
-  // queue. The pure demo (never saw a server, nothing queued) stays
-  // silent — it has nothing to sync to.
+  // the API answers once, then switches to server mode. The pure demo
+  // (never saw a server) stays silent — it has nothing to sync to.
   useEffect(() => {
     const attempt = async () => {
       if (linkRef.current.mode === 'server') return
-      if (!hasSeenServer() && !outboxSize()) return
-      const ok = await recover()
+      if (!hasSeenServer()) return
+      const ok = await resync()
       if (ok) connectStream()
     }
     const t = window.setInterval(attempt, 15000)
@@ -629,12 +539,13 @@ export function RestoraProvider({ children, waitForServer = true }) {
       window.clearInterval(t)
       window.removeEventListener('online', attempt)
     }
-  }, [recover, connectStream])
+  }, [resync, connectStream])
 
-  // One location-scoped action: apply locally, queue when offline, post
-  // when linked. Every synced action is tagged with a local id (`_lid`)
-  // — online or off — so the server can dedup a replayed action and a
-  // queued one can be matched to its echo.
+  // One location-scoped action: applied only when the server will take it.
+  // While the link is down the change is refused outright — never applied
+  // locally, never queued — so this terminal always mirrors server truth.
+  // Linked actions still carry a local id (`_lid`): the server dedups a
+  // retried POST, and the SSE echo is matched against it here.
   const sendAction = useCallback(
     (targetLocId, action) => {
       if (!action || typeof action.type !== 'string') return
@@ -642,30 +553,19 @@ export function RestoraProvider({ children, waitForServer = true }) {
       const offline = offlineNow()
       const linked = linkRef.current.mode === 'server' && linkRef.current.status === 'live'
       if (offline && !isLocalOnly) {
-        const reason = offlineBlockReason(targetLocId, action)
-        if (reason) {
-          flashNotice(OFFLINE_BLOCK_NOTICES[reason] || 'Offline — this change needs the server.')
-          return
-        }
+        flashNotice(OFFLINE_NOTICE)
+        return
+      }
+      if (!isLocalOnly && branchPinBlock(targetLocId)) {
+        flashNotice('This account is pinned to another branch.')
+        return
       }
       const lid = uid('l')
       const tagged = isLocalOnly ? action : { ...action, _lid: lid }
       if (!isLocalOnly) lidAt.current.set(lid, Date.now())
       rawDispatch({ type: 'LOC', locId: targetLocId, action: tagged })
       if (isLocalOnly) return
-      if (!linked) {
-        if (offline && !isLocalOnly) {
-          enqueue({
-            _lid: lid,
-            locId: targetLocId,
-            action: tagged,
-            financial: FINANCIAL_ACTIONS.has(action.type),
-          })
-          syncOutboxUi()
-          flashNotice('Offline — saved on this terminal and queued to sync.')
-        }
-        return
-      }
+      if (!linked) return // local demo — no server to post to
       fetch(withOwner('/api/actions'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -682,21 +582,14 @@ export function RestoraProvider({ children, waitForServer = true }) {
           }
         })
         .catch(() => {
-          // The POST died mid-flight: queue the already-applied action so
-          // the next reconnect replays it (_lid dedup makes a real commit
-          // a no-op — the first attempt may have landed after all).
+          // The POST died mid-flight. Online-only: take the server's word
+          // rather than diverge — the next resync drops this local edit.
           setLink((l) => ({ ...l, status: 'offline' }))
-          enqueue({
-            _lid: lid,
-            locId: targetLocId,
-            action: tagged,
-            financial: FINANCIAL_ACTIONS.has(action.type),
-          })
-          syncOutboxUi()
-          flashNotice('Link lost — changes stay on this terminal until reconnect.')
+          flashNotice('Link lost — nothing was saved. Reconnecting…')
+          resync()
         })
     },
-    [clientId, offlineBlockReason, offlineNow, resync, syncOutboxUi],
+    [branchPinBlock, clientId, offlineNow, resync],
   )
 
   // Dispatch: HYDRATE swaps the empire; shop actions wrap in LOC;
@@ -710,8 +603,8 @@ export function RestoraProvider({ children, waitForServer = true }) {
       }
       const linked = linkRef.current.mode === 'server'
       if (action.type === 'RESET_ALL') {
-        if (offlineNow() && OFFLINE_EMPIRE_BLOCKED.has(action.type)) {
-          flashNotice(OFFLINE_BLOCK_NOTICES.empire)
+        if (offlineNow()) {
+          flashNotice(OFFLINE_NOTICE)
           return
         }
         rawDispatch(action)
@@ -738,8 +631,8 @@ export function RestoraProvider({ children, waitForServer = true }) {
       // Empire-level branch management and stock transfers: apply locally, then sync the whole
       // empire snapshot (no LOC wrapper — applies across shops).
       if (action.type === 'CREATE_LOCATION' || action.type === 'REMOVE_LOCATION' || action.type === 'TRANSFER_STOCK') {
-        if (offlineNow() && OFFLINE_EMPIRE_BLOCKED.has(action.type)) {
-          flashNotice(OFFLINE_BLOCK_NOTICES.empire)
+        if (offlineNow()) {
+          flashNotice(OFFLINE_NOTICE)
           return
         }
         rawDispatch(action)
@@ -763,7 +656,8 @@ export function RestoraProvider({ children, waitForServer = true }) {
           })
           .catch(() => {
             setLink((l) => ({ ...l, status: 'offline' }))
-            flashNotice('Link lost — changes stay on this terminal until reconnect.')
+            flashNotice('Link lost — nothing was saved. Reconnecting…')
+            resync()
           })
         return
       }
@@ -951,13 +845,12 @@ export function RestoraProvider({ children, waitForServer = true }) {
       reopenClosedTab, canReopenClosed: workspace.closed.length > 0, saveTabScroll,
       tabCtx: activeCtx, setTabCtx: setTabContext,
       selectedTableId, setSelectedTableId, selectedDishId, setSelectedDishId,
-      selectedOrderId, setSelectedOrderId, locId, setLocId, link, resync, recover, notice,
-      queued, conflicts, dismissConflicts,
+      selectedOrderId, setSelectedOrderId, locId, setLocId, link, resync, notice,
       locations, createLocation, removeLocation, pushMenuToAllBranches,
       aiPrompt, askAi, clearAiPrompt,
       settings: state.settings, dispatchTo, dispatchEverywhere, issueDocument, templateForKind,
     }),
-    [state, empire, dispatch, role, screen, setScreen, alerts, tabs, activeTabId, openTab, openScreenInTab, activateTab, closeTab, reorderTab, renameTab, togglePinTab, duplicateTab, closeOtherTabs, closeRightTabs, reopenClosedTab, workspace.closed.length, saveTabScroll, activeCtx, setTabContext, selectedTableId, setSelectedTableId, selectedDishId, setSelectedDishId, selectedOrderId, setSelectedOrderId, locId, setLocId, link, resync, recover, notice, queued, conflicts, dismissConflicts, locations, createLocation, removeLocation, pushMenuToAllBranches, aiPrompt, askAi, clearAiPrompt, dispatchTo, dispatchEverywhere, issueDocument, templateForKind],
+    [state, empire, dispatch, role, screen, setScreen, alerts, tabs, activeTabId, openTab, openScreenInTab, activateTab, closeTab, reorderTab, renameTab, togglePinTab, duplicateTab, closeOtherTabs, closeRightTabs, reopenClosedTab, workspace.closed.length, saveTabScroll, activeCtx, setTabContext, selectedTableId, setSelectedTableId, selectedDishId, setSelectedDishId, selectedOrderId, setSelectedOrderId, locId, setLocId, link, resync, notice, locations, createLocation, removeLocation, pushMenuToAllBranches, aiPrompt, askAi, clearAiPrompt, dispatchTo, dispatchEverywhere, issueDocument, templateForKind],
   )
 
   if (waitForServer && link.status === 'starting') {

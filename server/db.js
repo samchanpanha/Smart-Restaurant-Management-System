@@ -236,9 +236,9 @@ if (!hasColumn('menu_categories', 'description')) db.exec("ALTER TABLE menu_cate
 if (!hasColumn('menu_categories', 'station')) db.exec("ALTER TABLE menu_categories ADD COLUMN station TEXT NOT NULL DEFAULT ''")
 if (!hasColumn('menu_categories', 'active')) db.exec('ALTER TABLE menu_categories ADD COLUMN active INTEGER NOT NULL DEFAULT 1')
 if (!hasColumn('inventory_items', 'counted')) db.exec('ALTER TABLE inventory_items ADD COLUMN counted INTEGER NOT NULL DEFAULT 1')
-// Offline outbox support: a committed action records the client's local
-// id, so a replayed queue entry that already landed returns its original
-// seq instead of applying twice (no double payments after a crash).
+// Idempotency support: a committed action records the client's local id,
+// so a POST whose response died on the way back returns its original seq
+// instead of applying twice (no double payments after a crash).
 if (!hasColumn('actions', 'lid')) db.exec('ALTER TABLE actions ADD COLUMN lid TEXT')
 
 if (db.pragma('user_version', { simple: true }) < 3) {
@@ -884,9 +884,9 @@ function actionLid(action) {
 /**
  * Seq of an earlier identical commit (same tenant, same terminal, same
  * local id), or null. The actions route consults this before running the
- * reducer: replaying an offline queue that already landed once — a crash
- * between POST and response, two terminals flushing the same entry —
- * must return the original seq, never apply a second time.
+ * reducer: a retried POST that already landed once — a crash between POST
+ * and response, or a client that re-sent after a timeout — must return the
+ * original seq, never apply a second time.
  */
 export function findDuplicateAction(ownerId, clientId, action) {
   const lid = actionLid(action)

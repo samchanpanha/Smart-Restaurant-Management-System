@@ -109,8 +109,8 @@ function DishImage({ src, className }) {
   )
 }
 
-// A phone loses signal mid-order; the guest deserves to know. The store is
-// local-first, so this informs rather than blocks — the ticket still lands.
+// A phone loses signal mid-order; the guest deserves to know. Orders are
+// online-only, so this warns instead of promising a later send.
 function useOnline() {
   const [online, setOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine !== false))
   useEffect(() => {
@@ -939,7 +939,7 @@ export default function GuestScreen({ tableId, allowPickup = false, onSelfSeat =
         </div>
         {!online && (
           <div className="mb-3 rounded-2xl bg-stone-800 px-4 py-2.5 text-xs font-semibold text-white shadow-sm" role="status" data-testid="guest-offline">
-            You&apos;re offline — your order still saves here and sends the moment you&apos;re back.
+            You&apos;re offline — reconnect to send your order.
           </div>
         )}
         <header className="flex items-center justify-between">

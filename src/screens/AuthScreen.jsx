@@ -149,7 +149,7 @@ export default function AuthScreen() {
           <div className="absolute bottom-0 left-0 right-0 p-8">
             <h2 className="text-xl font-bold tracking-tight text-zinc-100">Run every branch from one place</h2>
             <p className="mt-2 max-w-md text-sm text-zinc-400">
-              Live floor, kitchen, stock, and AI copilot — multi-branch, read-only AI, and offline-first terminals.
+              Live floor, kitchen, stock, and AI copilot — multi-branch, with a read-only AI that never writes to your data.
             </p>
           </div>
         </div>

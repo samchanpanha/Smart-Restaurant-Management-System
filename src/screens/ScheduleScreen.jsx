@@ -46,9 +46,9 @@ function ShiftModal({ shift, defaultDate, onClose, onSave, onDelete, sc = {} }) 
   const [endTime, setEndTime] = useState(shift?.endTime || '17:00')
   const [note, setNote] = useState(shift?.note || '')
   // A shift doubles as the branch's cash session: while it is 'open' the
-  // drawer is out and offline terminals are allowed to sell and take
-  // cash. 'closed' is the default so a roster edit never opens a drawer
-  // by accident.
+  // drawer is out and the branch's takings are considered counted.
+  // 'closed' is the default so a roster edit never opens a drawer by
+  // accident.
   const [open, setOpen] = useState(shift?.status === 'open')
   const [error, setError] = useState('')
 
@@ -155,8 +155,8 @@ function ShiftModal({ shift, defaultDate, onClose, onSave, onDelete, sc = {} }) 
           <span className="text-xs leading-tight text-emerald-200">
             <strong className="text-emerald-300">Cash session open</strong>
             <br />
-            While this shift is open the drawer counts as live and offline
-            terminals may keep selling and taking cash. Close it at handover.
+            While this shift is open the drawer counts as live and its
+            takings are counted. Close it at handover.
           </span>
         </label>
 
@@ -482,7 +482,7 @@ export default function ScheduleScreen() {
                               dispatch({ type: 'UPDATE_SHIFT', shiftId: shift.id, patch: { status: 'closed' } })
                             }}
                             className="mt-1.5 w-full rounded-md bg-emerald-500/20 px-1.5 py-1 text-[10px] font-bold text-emerald-300 ring-1 ring-inset ring-emerald-500/40 hover:bg-emerald-500/30"
-                            title="Close this cash session — offline selling on this branch locks until another shift opens"
+                            title="Close this cash session — the branch's takings are considered counted"
                           >
                             💵 Cash session open — click to close
                           </button>
