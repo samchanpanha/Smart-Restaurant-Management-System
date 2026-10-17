@@ -11,6 +11,8 @@ function TableEditorModal({ table = null, zones, onClose }) {
   const [name, setName] = useState(table?.name || '')
   const [seats, setSeats] = useState(table?.seats || 2)
   const [zone, setZone] = useState(table?.zone || zones[0] || 'Main')
+  const [newZone, setNewZone] = useState(false)
+  const [newZoneName, setNewZoneName] = useState('')
   const [error, setError] = useState('')
   const [showQr, setShowQr] = useState(false)
 
@@ -19,8 +21,15 @@ function TableEditorModal({ table = null, zones, onClose }) {
       setError(lang === 'km' ? 'សូមដាក់ឈ្មោះតុ។' : lang === 'zh' ? '请为餐桌命名。' : 'Give the table a name.')
       return
     }
-    if (editing) dispatch({ type: 'UPDATE_TABLE', tableId: table.id, patch: { name, seats, zone } })
-    else dispatch({ type: 'ADD_TABLE', table: { name, seats, zone } })
+    let zoneName = zone
+    if (newZone) {
+      // Typing a brand-new zone creates the record first, so the table
+      // always belongs to a real rectangle on the plan.
+      zoneName = (newZoneName.trim() || 'Main').slice(0, 32)
+      if (!zones.includes(zoneName)) dispatch({ type: 'CREATE_FLOOR_ZONE', name: zoneName })
+    }
+    if (editing) dispatch({ type: 'UPDATE_TABLE', tableId: table.id, patch: { name, seats, zone: zoneName } })
+    else dispatch({ type: 'ADD_TABLE', table: { name, seats, zone: zoneName } })
     onClose()
   }
 
@@ -54,13 +63,38 @@ function TableEditorModal({ table = null, zones, onClose }) {
             <Stepper value={seats} onChange={setSeats} min={1} max={24} />
           </Field>
           <Field label={lang === 'km' ? 'តំបន់' : lang === 'zh' ? '区域' : 'Zone'}>
-            <input
-              value={zone}
-              onChange={(e) => setZone(e.target.value)}
-              placeholder="Main"
-              className={inputCls}
-              maxLength={32}
-            />
+            {newZone ? (
+              <div>
+                <input
+                  value={newZoneName}
+                  onChange={(e) => setNewZoneName(e.target.value)}
+                  placeholder="Poolside"
+                  className={inputCls}
+                  maxLength={32}
+                  aria-label="New zone name"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={() => setNewZone(false)}
+                  className="mt-1 text-[11px] font-semibold text-amber-600 hover:underline"
+                >
+                  {lang === 'km' ? 'ប្រើតំបន់ដែលមានស្រាប់' : lang === 'zh' ? '使用现有区域' : 'Use an existing zone'}
+                </button>
+              </div>
+            ) : (
+              <select
+                value={zone}
+                onChange={(e) => { if (e.target.value === '__new') setNewZone(true); else setZone(e.target.value) }}
+                className={inputCls}
+                aria-label="Zone"
+              >
+                {zones.map((entry) => (
+                  <option key={entry} value={entry}>{entry}</option>
+                ))}
+                <option value="__new">➕ {lang === 'km' ? 'តំបន់ថ្មី…' : lang === 'zh' ? '新建区域…' : 'New zone…'}</option>
+              </select>
+            )}
           </Field>
         </div>
         {error && (

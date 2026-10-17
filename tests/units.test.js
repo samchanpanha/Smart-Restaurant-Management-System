@@ -266,7 +266,9 @@ test('the seed stocks cases and orders produce by the case', () => {
   const shop = buildEmpire().locations.downtown
   const soda = shop.inventory.find((item) => item.id === 'inv_soda')
   const lettuce = shop.inventory.find((item) => item.id === 'inv_lettuce')
-  assert.deepEqual(soda.packs, [{ id: 'case', name: 'Case', qty: 24 }])
+  // Seed rows ship the canonical pack shape (packs always carry `of`),
+  // so a raw buildEmpire equals the hydrated snapshot bit for bit.
+  assert.deepEqual(soda.packs, [{ id: 'case', name: 'Case', qty: 24, of: null }])
   assert.equal(describeQty(soda, soda.onHand, settings), '4 Cases')
   assert.equal(describeQty(lettuce, lettuce.onHand, settings), '6 Cases + 4 ptn')
 

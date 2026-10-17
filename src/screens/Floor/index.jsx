@@ -9,6 +9,7 @@ import { TableDetail } from './sections/TableDetail.jsx'
 import { ReservationsPanel } from './sections/ReservationsPanel.jsx'
 import { WaitlistPanel } from './sections/WaitlistPanel.jsx'
 import { TableEditorModal } from './sections/TableEditorModal.jsx'
+import { ZoneEditorModal } from './sections/ZoneEditorModal.jsx'
 import { FloorMap } from './sections/FloorMap.jsx'
 
 function FloorScreen() {
@@ -22,6 +23,7 @@ function FloorScreen() {
   const [view, setView] = useState('map')
   const [managing, setManaging] = useState(false)
   const [editor, setEditor] = useState(null) // { table } to edit, {} to add
+  const [zoneEditor, setZoneEditor] = useState(null) // 'create' | zone record | null
   const [selectedTableIds, setSelectedTableIds] = useState([])
 
   function toggleSelectTable(id) {
@@ -40,7 +42,12 @@ function FloorScreen() {
   const occupied = state.tables.filter((t) => ['seated', 'ordered', 'billed'].includes(t.status)).length
   const freeCount = state.tables.filter((t) => t.status === 'free').length
   const dirtyCount = state.tables.filter((t) => t.status === 'dirty').length
-  const zones = [...new Set(state.tables.map((t) => t.zone))]
+  // Zones are real records now; falls back per-table text for snapshots
+  // seen before the normalize pass runs.
+  const zoneRecords = Array.isArray(state.floorZones) ? state.floorZones : []
+  const zones = zoneRecords.length
+    ? zoneRecords.map((zone) => zone.name)
+    : [...new Set(state.tables.map((t) => t.zone))]
   const pendingTransfers = state.tables.filter((t) => t.pendingTransfer && t.pendingTransfer.status === 'pending')
 
   async function removeTable(table) {
@@ -59,6 +66,21 @@ function FloorScreen() {
     })
     if (!ok) return
     dispatch({ type: 'DELETE_TABLE', tableId: table.id })
+  }
+
+  // Removing a zone never removes tables: the reducer falls its tables
+  // back to 'Main', and the user pans to the plan to look at them there.
+  async function removeZone(zoneRecord) {
+    if (!zoneRecord) return
+    const ok = await confirm({
+      title: `Delete ${zoneRecord.name}?`,
+      body: 'Tables in this zone move back to Main on the floor plan.',
+      confirmLabel: 'Delete zone',
+      tone: 'danger',
+    })
+    if (!ok) return
+    dispatch({ type: 'DELETE_FLOOR_ZONE', zoneId: zoneRecord.id })
+    flash(`${zoneRecord.name} removed — its tables are back in Main.`)
   }
 
   const activeDetailId = detailTableId || selectedTableId
@@ -194,24 +216,55 @@ function FloorScreen() {
 
       <div className="grid items-start gap-4 xl:grid-cols-12">
         <div className="space-y-4 xl:col-span-8">
-          {view === 'map' ? <FloorMap tables={state.tables} orders={state.orders} onOpen={openTable} /> : (
+          {view === 'map' ? <FloorMap tables={state.tables} orders={state.orders} onOpen={openTable} floorZones={zoneRecords} floor={state.floor || {}} /> : (
             <div className="space-y-4">
               {managing && (
-                <button
-                  type="button"
-                  onClick={() => setEditor({})}
-                  className="w-full rounded-2xl border-2 border-dashed border-orange-300 bg-orange-50/60 px-4 py-3 text-sm font-bold text-orange-600 hover:bg-orange-50"
-                  aria-label="Add table"
-                >
-                  + {lang === 'km' ? 'បន្ថែមតុ' : lang === 'zh' ? '添加餐桌' : 'Add table'}
-                  {lang !== 'en' && <span className="sr-only"> Add table</span>}
-                </button>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditor({})}
+                    className="rounded-2xl border-2 border-dashed border-orange-300 bg-orange-50/60 px-4 py-3 text-sm font-bold text-orange-600 hover:bg-orange-50"
+                    aria-label="Add table"
+                  >
+                    + {lang === 'km' ? 'បន្ថែមតុ' : lang === 'zh' ? '添加餐桌' : 'Add table'}
+                    {lang !== 'en' && <span className="sr-only"> Add table</span>}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setZoneEditor('create')}
+                    className="rounded-2xl border-2 border-dashed border-sky-300 bg-sky-50/60 px-4 py-3 text-sm font-bold text-sky-600 hover:bg-sky-50"
+                    aria-label="Add zone"
+                  >
+                    + {lang === 'km' ? 'បន្ថែមតំបន់' : lang === 'zh' ? '添加区域' : 'Add zone'}
+                    {lang !== 'en' && <span className="sr-only"> Add zone</span>}
+                  </button>
+                </div>
               )}
               {zones.map((zone) => {
                 const tables = state.tables.filter((table) => table.zone === zone)
                 return (
                   <section key={zone} className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-                    <h2 className="mb-3 text-xs font-bold uppercase tracking-widest text-zinc-500">{translateZone(zone, lang)} · {tables.length}</h2>
+                    <div className="mb-3 flex items-center justify-between gap-2">
+                      <h2 className="text-xs font-bold uppercase tracking-widest text-zinc-500">{translateZone(zone, lang)} · {tables.length}</h2>
+                      {managing && zoneRecords.length > 0 && (
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setZoneEditor(zoneRecords.find((z) => z.name === zone))}
+                            className="min-h-[32px] rounded-lg border border-zinc-200 px-2.5 text-[11px] font-semibold text-zinc-600 hover:bg-zinc-50"
+                          >
+                            {lang === 'km' ? 'ប្ដូរឈ្មោះ' : lang === 'zh' ? '重命名' : 'Rename'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeZone(zoneRecords.find((z) => z.name === zone))}
+                            className="min-h-[32px] rounded-lg border border-red-500/40 px-2.5 text-[11px] font-semibold text-red-300 hover:bg-red-500/10"
+                          >
+                            {lang === 'km' ? 'លុប' : lang === 'zh' ? '删除' : 'Delete'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
                     {managing ? (
                       <ul className="space-y-2">
                         {tables.map((table) => (
@@ -296,6 +349,14 @@ function FloorScreen() {
       )}
       {editor && (
         <TableEditorModal table={editor.table || null} zones={zones} onClose={() => setEditor(null)} />
+      )}
+
+      {zoneEditor && (
+        <ZoneEditorModal
+          zone={zoneEditor === 'create' ? null : zoneEditor}
+          zoneCount={zoneRecords.length}
+          onClose={() => setZoneEditor(null)}
+        />
       )}
 
       {selectedTableIds.length > 0 && (

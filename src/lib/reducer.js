@@ -318,6 +318,13 @@ function withShopDefaults(shop, locationLabel = 'Downtown') {
     ...shop, menu, inventory: linkedInventory, categories, suppliers, documents,
     purchases, movements, settings,
     tables: normalizeTablePositions(shop.tables),
+    // Floor plan geometry, per branch: room size + real zone rectangles.
+    // Legacy floors (no records yet) get zones derived once from the old
+    // auto-bands so the upgrade redraws the same picture.
+    floor: sanitizeFloorRoom(shop.floor),
+    floorZones: Array.isArray(shop.floorZones)
+      ? shop.floorZones.slice(0, 12).map((zone, index) => sanitizeZoneRecord(zone, index))
+      : seedFloorZones(shop.tables),
     orders,
     // A shift doubles as the cash session for offline gating: `status` is
     // 'open' while the drawer is out. The marker only comes from the new
@@ -606,11 +613,17 @@ function sanitizeTableFields(raw, existing = {}) {
   const targetTurnMinutes = Number.isFinite(targetRaw)
     ? Math.max(10, Math.min(300, targetRaw))
     : targetTurnMinutesFor(seats)
+  // Visual footprint on the floor plan: 1 = the shipped tile size.
+  const scaleRaw = Number(raw?.tileScale ?? existing.tileScale)
+  const tileScale = Number.isFinite(scaleRaw)
+    ? Math.min(3, Math.max(0.75, Math.round(scaleRaw * 100) / 100))
+    : 1
   return {
     name: name || existing.name || 'Table',
     seats,
     zone: zone || existing.zone || 'Main',
     targetTurnMinutes,
+    tileScale,
   }
 }
 
@@ -670,6 +683,86 @@ function uniqueTableName(tables, name, exceptId = null) {
   let n = 2
   while (taken.has(`${base} ${n}`.toLowerCase())) n += 1
   return `${base} ${n}`
+}
+
+// ── Floor plan geometry ──────────────────────────────────────────
+// Zones are real rectangles on the plan (top-left x/y in %, w/h in % of
+// the room), while `table.zone` stays the assignment string. A table
+// whose zone text has no record still renders — it just sits outside
+// every rect with its own label chip.
+
+function sanitizeZoneRect(raw) {
+  const x = clampPct(raw?.x ?? 0)
+  const y = clampPct(raw?.y ?? 0)
+  // Ten-percent minimums keep a zone grabbable on a tablet.
+  const w = Math.min(100 - x, Math.max(10, clampPct(raw?.w ?? 100)))
+  const h = Math.min(100 - y, Math.max(10, clampPct(raw?.h ?? 100)))
+  return { x, y, w, h }
+}
+
+function sanitizeZoneRecord(raw, index = 0) {
+  const name = String(raw?.name ?? '').trim().slice(0, 32) || `Zone ${index + 1}`
+  return {
+    id: String(raw?.id ?? `z_${index + 1}`).trim().slice(0, 50),
+    name,
+    ...sanitizeZoneRect(raw),
+  }
+}
+
+/** Zone names stay unique so one table never sits in two zones at once. */
+function uniqueZoneName(zones, name, exceptId = null) {
+  const base = String(name || 'Zone').trim().slice(0, 32) || 'Zone'
+  const taken = new Set(zones.filter((z) => z.id !== exceptId).map((z) => String(z.name).toLowerCase()))
+  if (!taken.has(base.toLowerCase())) return base
+  let n = 2
+  while (taken.has(`${base} ${n}`.toLowerCase())) n += 1
+  return `${base} ${n}`
+}
+
+/**
+ * Legacy floors carry no zone records: derive one full-height band per
+ * zone name that reproduces the old auto-band geometry exactly, so an
+ * upgrade redraws the same picture and becomes draggable from there.
+ */
+function seedFloorZones(tables) {
+  const bands = new Map()
+  for (const table of Array.isArray(tables) ? tables : []) {
+    const zone = table?.zone || 'Main'
+    const x = Number.isFinite(Number(table?.posX)) ? clampPct(table.posX) : 50
+    const band = bands.get(zone) || { min: x, max: x }
+    band.min = Math.min(band.min, x)
+    band.max = Math.max(band.max, x)
+    bands.set(zone, band)
+  }
+  const zones = []
+  for (const [name, band] of bands) {
+    const x = clampPct(band.min - 10)
+    const right = clampPct(band.max + 10)
+    zones.push(sanitizeZoneRecord({
+      id: `z_seed_${String(name).toLowerCase().replace(/[^a-z0-9]+/g, '_')}`,
+      name,
+      x,
+      y: 0,
+      w: Math.min(100 - x, Math.max(6, right - x)),
+      h: 100,
+    }))
+  }
+  return zones
+}
+
+/** Room size in content pixels; 0 on either axis = auto-fit (shipped look). */
+function sanitizeFloorRoomValue(value, min, max) {
+  const n = Math.round(Number(value))
+  if (!Number.isFinite(n) || n <= 0) return 0
+  return Math.min(max, Math.max(min, n))
+}
+
+function sanitizeFloorRoom(raw) {
+  const room = raw && typeof raw === 'object' ? raw : {}
+  return {
+    roomW: sanitizeFloorRoomValue(room.roomW, 600, 3000),
+    roomH: sanitizeFloorRoomValue(room.roomH, 400, 1800),
+  }
 }
 
 /** Off-table orders carry a customer block; inline orders do not. */
@@ -960,26 +1053,46 @@ function shopReducerBase(state, action) {
         seatedAt: null,
         partySize: null,
       }
-      return { ...state, tables: normalizeTablePositions([...state.tables, table]) }
+      // A first table on a floor with no zone records gives the room one
+      // full-canvas zone to grow from, so the picker never blocks on "no
+      // zones defined".
+      const zones = Array.isArray(state.floorZones) ? state.floorZones : []
+      const floorZones = zones.length ? zones : [
+        sanitizeZoneRecord({ name: fields.zone || 'Main', x: 0, y: 0, w: 100, h: 100 }),
+      ]
+      return {
+        ...state,
+        floorZones,
+        tables: normalizeTablePositions([...state.tables, table]),
+      }
     }
 
     case 'SET_TABLE_LAYOUT': {
-      // Accept one move ({ tableId, posX, posY }) or an array of them.
+      // Accept one move ({ tableId, posX, posY, scale? }) or an array of them.
       const moves = Array.isArray(action.moves)
         ? action.moves
-        : [{ tableId: action.tableId, posX: action.posX, posY: action.posY }]
+        : [{ tableId: action.tableId, posX: action.posX, posY: action.posY, scale: action.scale }]
       const byId = new Map()
       for (const move of moves) {
         if (!move?.tableId) continue
-        byId.set(move.tableId, { posX: clampPct(move.posX), posY: clampPct(move.posY) })
+        const scaleRaw = Number(move.scale)
+        byId.set(move.tableId, {
+          posX: clampPct(move.posX),
+          posY: clampPct(move.posY),
+          scale: Number.isFinite(scaleRaw)
+            ? Math.min(3, Math.max(0.75, Math.round(scaleRaw * 100) / 100))
+            : undefined,
+        })
       }
       if (!byId.size) return state
       let changed = false
       const tables = state.tables.map((table) => {
         const move = byId.get(table.id)
-        if (!move || (table.posX === move.posX && table.posY === move.posY)) return table
+        if (!move) return table
+        const scale = move.scale === undefined ? table.tileScale ?? 1 : move.scale
+        if (table.posX === move.posX && table.posY === move.posY && (table.tileScale ?? 1) === scale) return table
         changed = true
-        return { ...table, posX: move.posX, posY: move.posY }
+        return { ...table, posX: move.posX, posY: move.posY, tileScale: scale }
       })
       return changed ? { ...state, tables } : state
     }
@@ -1009,6 +1122,74 @@ function shopReducerBase(state, action) {
         r.tableId === tableId ? { ...r, tableId: null } : r,
       )
       return { ...state, tables, reservations }
+    }
+
+    // ── Floor plan: room size + zones ──────────────────────────
+    case 'SET_FLOOR_ROOM': {
+      // Room pixels per axis; 0 = auto-fit. Omitting a field keeps it.
+      const floor = {
+        roomW: action.roomW === undefined
+          ? state.floor?.roomW ?? 0
+          : sanitizeFloorRoomValue(action.roomW, 600, 3000),
+        roomH: action.roomH === undefined
+          ? state.floor?.roomH ?? 0
+          : sanitizeFloorRoomValue(action.roomH, 400, 1800),
+      }
+      const current = state.floor || {}
+      if (state.floor && (current.roomW ?? 0) === floor.roomW && (current.roomH ?? 0) === floor.roomH) return state
+      return { ...state, floor }
+    }
+
+    case 'CREATE_FLOOR_ZONE': {
+      const zones = Array.isArray(state.floorZones) ? state.floorZones : []
+      if (zones.length >= 12) return state
+      const index = zones.length
+      // Default slot: a full-width band under the last zone (the legacy
+      // look), unless the caller positions it.
+      const tentativeName = String(action.name ?? '').trim().slice(0, 32) || `Zone ${index + 1}`
+      const zone = sanitizeZoneRecord({
+        id: action.id,
+        name: uniqueZoneName(zones, tentativeName),
+        x: action.x ?? 0,
+        y: action.y ?? Math.min(80, index * 20),
+        w: action.w ?? 100,
+        h: action.h ?? 20,
+      }, index)
+      return { ...state, floorZones: [...zones, zone] }
+    }
+
+    case 'UPDATE_FLOOR_ZONE': {
+      const zones = Array.isArray(state.floorZones) ? state.floorZones : []
+      const zone = zones.find((z) => z.id === action.zoneId)
+      if (!zone) return state
+      const patch = action.patch || {}
+      const rect = patch.rect
+        && ['x', 'y', 'w', 'h'].some((key) => patch.rect[key] !== undefined)
+        ? sanitizeZoneRect({ ...zone, ...patch.rect })
+        : zone
+      const name = patch.name !== undefined
+        ? uniqueZoneName(zones, String(patch.name).trim().slice(0, 32) || zone.name, zone.id)
+        : zone.name
+      if (name === zone.name && rect === zone) return state
+      const floorZones = zones.map((z) => (z.id === zone.id ? { ...z, ...rect, name } : z))
+      // Renaming a zone drags its assigned tables along.
+      const tables = name !== zone.name
+        ? state.tables.map((t) => (t.zone === zone.name ? { ...t, zone: name } : t))
+        : state.tables
+      return { ...state, floorZones, tables }
+    }
+
+    case 'DELETE_FLOOR_ZONE': {
+      const zones = Array.isArray(state.floorZones) ? state.floorZones : []
+      const zone = zones.find((z) => z.id === action.zoneId)
+      if (!zone) return state
+      const floorZones = zones.filter((z) => z.id !== zone.id)
+      if (floorZones.length === zones.length) return state
+      // Tables assigned to the zone fall back to 'Main' — they never vanish.
+      const tables = state.tables.some((t) => t.zone === zone.name)
+        ? state.tables.map((t) => (t.zone === zone.name ? { ...t, zone: 'Main' } : t))
+        : state.tables
+      return { ...state, floorZones, tables }
     }
 
     // ── Orders / tickets ───────────────────────────────────
@@ -2876,13 +3057,16 @@ export function shopReducer(state, action) {
 export const STATE_VERSION = 6
 
 export function buildEmpire() {
-  const downtown = buildSeed()
-  downtown.settings = {
-    ...downtown.settings,
+  const downtownRaw = buildSeed()
+  downtownRaw.settings = {
+    ...downtownRaw.settings,
     restaurantName: 'Restora · Downtown',
     locationShort: 'DT',
   }
-  return { version: STATE_VERSION, locations: { downtown, riverside: buildSeedRiverside() } }
+  // Both boots pass through the shared shop defaults so every location —
+  // fresh demo or resumed snapshot — carries the same normalized shape.
+  const downtown = withShopDefaults(downtownRaw, 'Downtown')
+  return { version: STATE_VERSION, locations: { downtown, riverside: withShopDefaults(buildSeedRiverside(), 'Riverside') } }
 }
 
 const LOCATION_LABELS = { downtown: 'Downtown', riverside: 'Riverside' }
