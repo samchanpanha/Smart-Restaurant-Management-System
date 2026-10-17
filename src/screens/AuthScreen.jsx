@@ -5,6 +5,7 @@ import { useState } from 'react'
 import LanguageSwitcher from '../components/LanguageSwitcher'
 import { ModernVisual } from '../components/ModernVisual'
 import { useAuth } from '../lib/auth'
+import { useBrand } from '../lib/branding'
 import { useDomTranslator, useI18n } from '../lib/i18n'
 
 const INPUT = 'w-full rounded-lg border border-[var(--color-ink-600)] bg-[var(--color-ink-900)] px-3 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-orange-400 focus:outline-none'
@@ -12,6 +13,7 @@ const INPUT = 'w-full rounded-lg border border-[var(--color-ink-600)] bg-[var(--
 export default function AuthScreen() {
   const { login, register } = useAuth()
   const { lang, dict } = useI18n()
+  const brand = useBrand()
   useDomTranslator(null, lang)
   const au = dict.auth || {}
   const [mode, setMode] = useState('login')
@@ -47,17 +49,28 @@ export default function AuthScreen() {
     <div className="restora-theme relative min-h-screen bg-[var(--color-ink-950)] px-4 py-10 text-zinc-100">
       <div className="mx-auto grid min-h-[calc(100vh-5rem)] w-full max-w-6xl items-center gap-10 lg:grid-cols-[minmax(0,26rem)_1fr]">
         <div className="w-full max-w-md">
+          {brand.logoUrl && (
+            <img
+              src={brand.logoUrl}
+              alt={brand.name || 'Restora'}
+              className="mb-6 h-12 max-w-[240px] object-contain object-left"
+            />
+          )}
           <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500/10 text-amber-400 ring-1 ring-inset ring-amber-500/20">
-                <svg aria-hidden="true" width="30" height="30" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M7 19c-2.2-.4-3.5-2-3.5-4.2 0-2.5 1.8-4.4 4.1-4.7A8.8 8.8 0 0 1 16 4a8.8 8.8 0 0 1 8.4 6.1c2.3.3 4.1 2.2 4.1 4.7 0 2.2-1.3 3.8-3.5 4.2v4.5H7V19Z" />
-                  <path d="M10 16.5c1.4 1.3 3.4 2 6 2s4.6-.7 6-2M12 24v4m8-4v4" />
-                </svg>
+              <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl bg-amber-500/10 text-amber-400 ring-1 ring-inset ring-amber-500/20">
+                {brand.iconUrl ? (
+                  <img src={brand.iconUrl} alt="" className="h-full w-full object-contain p-1.5" />
+                ) : (
+                  <svg aria-hidden="true" width="30" height="30" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M7 19c-2.2-.4-3.5-2-3.5-4.2 0-2.5 1.8-4.4 4.1-4.7A8.8 8.8 0 0 1 16 4a8.8 8.8 0 0 1 8.4 6.1c2.3.3 4.1 2.2 4.1 4.7 0 2.2-1.3 3.8-3.5 4.2v4.5H7V19Z" />
+                    <path d="M10 16.5c1.4 1.3 3.4 2 6 2s4.6-.7 6-2M12 24v4m8-4v4" />
+                  </svg>
+                )}
               </div>
               <div>
-                <div className="text-2xl font-bold leading-none tracking-tight">Restora</div>
-                <div className="mt-1 text-[11px] tracking-wide text-zinc-500">{dict.brandSubtitle}</div>
+                <div className="text-2xl font-bold leading-none tracking-tight">{brand.name || 'Restora'}</div>
+                <div className="mt-1 text-[11px] tracking-wide text-zinc-500">{brand.tagline || dict.brandSubtitle}</div>
               </div>
             </div>
             <LanguageSwitcher compact testIdPrefix="auth-lang" />

@@ -42,14 +42,15 @@ import { attachAuth, createAuthRouter, getOwnerById, getOwnerBySlug, listOwners,
 import { createTelegramRouter, sendTelegramMessage } from './telegram.js'
 import { createAiRouter } from './ai.js'
 import { createAiConfigRouter } from './ai-config.js'
+import { createBrandingRouter, requireSuperAdmin } from './branding.js'
 import { createNotifier, sendTelegramEvent } from './notify.js'
 import { replyKeyboard } from '../src/lib/telegram.js'
 import { STATE_VERSION, buildEmpire, migrateToEmpire, reducer } from '../src/lib/reducer.js'
 import { DOC_KINDS } from '../src/lib/settings.js'
 import {
-  db, DEFAULT_OWNER, actionsSince, commitAction, getAiConfig, getCategories, getDocumentTotals, getDocuments,
-  getInventory, getMenuCatalog, getSettings, getSuppliers, loadSnapshot, logStats, saveSnapshot, setAiConfig,
-  syncMenuCatalog,
+  db, DEFAULT_OWNER, actionsSince, commitAction, getAiConfig, getBranding, getCategories, getDocumentTotals,
+  getDocuments, getInventory, getMenuCatalog, getSettings, getSuppliers, loadSnapshot, logStats, saveSnapshot,
+  setAiConfig, setBranding, syncMenuCatalog,
 } from './db.js'
 
 const PORT = Number(process.env.PORT || 3001)
@@ -743,6 +744,16 @@ const aiConfig = createAiConfigRouter({
   },
 })
 app.use(aiConfig.router)
+
+// The deployment brand (sign-in screen, boot screen, shell, browser tab)
+// is instance-wide and public to read — the sign-in screen has no session
+// yet — while only the super admin may write it.
+const branding = createBrandingRouter({
+  requireAdmin: requireSuperAdmin,
+  getBranding: () => getBranding(),
+  setBranding: (brand) => setBranding(brand),
+})
+app.use(branding.router)
 
 // ─── SSE fan-out ────────────────────────────────────────────────
 

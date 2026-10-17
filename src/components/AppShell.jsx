@@ -9,6 +9,7 @@ import LanguageSwitcher from './LanguageSwitcher'
 import { Icon } from './Icon'
 import { NAV_SECTIONS, ROLES, SCREEN_ICONS, allowedScreens, screenForAlert } from '../lib/constants'
 import { useAuth } from '../lib/auth'
+import { useBrand } from '../lib/branding'
 import { translateScreenLabel, useDomTranslator, useI18n } from '../lib/i18n'
 import { useConfirm } from './ui/confirm-context'
 import { useNow, useRestora } from '../lib/store'
@@ -35,6 +36,7 @@ export default function AppShell({ children }) {
   const now = useNow(30000)
   const { user, screens, logout } = useAuth()
   const { lang, dict } = useI18n()
+  const brand = useBrand()
   useDomTranslator(null, lang)
   const [search, setSearch] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
@@ -153,16 +155,20 @@ export default function AppShell({ children }) {
       <aside className="app-sidebar flex w-[248px] shrink-0 flex-col border-r border-[var(--color-ink-700)] bg-[var(--color-ink-900)] text-zinc-100">
         <div className="border-b border-[var(--color-ink-700)] px-5 py-5">
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-500/10 text-amber-400 ring-1 ring-inset ring-amber-500/20">
-              <svg aria-hidden="true" width="29" height="29" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M7 19c-2.2-.4-3.5-2-3.5-4.2 0-2.5 1.8-4.4 4.1-4.7A8.8 8.8 0 0 1 16 4a8.8 8.8 0 0 1 8.4 6.1c2.3.3 4.1 2.2 4.1 4.7 0 2.2-1.3 3.8-3.5 4.2v4.5H7V19Z" />
-                <path d="M10 16.5c1.4 1.3 3.4 2 6 2s4.6-.7 6-2M12 24v4m8-4v4" />
-                <path d="M11 11c.3-1.7 1.3-2.8 2.8-3.4M18.5 8.2c1 .6 1.7 1.5 2 2.8" />
-              </svg>
+            <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-xl bg-amber-500/10 text-amber-400 ring-1 ring-inset ring-amber-500/20">
+              {brand.iconUrl ? (
+                <img src={brand.iconUrl} alt="" className="h-full w-full object-contain p-1" />
+              ) : (
+                <svg aria-hidden="true" width="29" height="29" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M7 19c-2.2-.4-3.5-2-3.5-4.2 0-2.5 1.8-4.4 4.1-4.7A8.8 8.8 0 0 1 16 4a8.8 8.8 0 0 1 8.4 6.1c2.3.3 4.1 2.2 4.1 4.7 0 2.2-1.3 3.8-3.5 4.2v4.5H7V19Z" />
+                  <path d="M10 16.5c1.4 1.3 3.4 2 6 2s4.6-.7 6-2M12 24v4m8-4v4" />
+                  <path d="M11 11c.3-1.7 1.3-2.8 2.8-3.4M18.5 8.2c1 .6 1.7 1.5 2 2.8" />
+                </svg>
+              )}
             </div>
             <div className="app-sidebar-copy min-w-0">
-              <div className="text-[23px] font-bold leading-none tracking-tight">Restora</div>
-              <div className="mt-1 text-[10px] tracking-wide text-zinc-500">{dict.brandSubtitle}</div>
+              <div className="text-[23px] font-bold leading-none tracking-tight">{brand.name || 'Restora'}</div>
+              <div className="mt-1 text-[10px] tracking-wide text-zinc-500">{brand.tagline || dict.brandSubtitle}</div>
             </div>
           </div>
         </div>

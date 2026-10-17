@@ -502,6 +502,32 @@ byte-for-byte the same.
 | `AI_RATE_WINDOW_MS` | Rate-limit window | `60000` |
 | `AI_CACHE_TTL_MS` | Response cache TTL | `300000` |
 
+### Deployment brand (super admin)
+
+One brand for the whole Restora instance — the sign-in screen, the boot
+screen, the workspace sidebar, and the browser tab. It is public to read
+(the sign-in screen has no session yet) and super-admin-only to write:
+
+- `GET /api/branding` — `{ branding: { name, tagline, logoUrl, iconUrl,
+  updatedAt, updatedBy } }`, no session required. Empty strings mean “use
+  the built-in Restora mark / the localized tagline”.
+- `PUT /api/branding` — name, tagline, logo, icon. Long text is clamped;
+  images are size-capped (logo ~300KB, icon ~120KB) and must be
+  `data:image/*`, a same-origin path, or `http(s)`.
+- Stored in SQLite `kv` under a reserved platform owner (`server/db.js`
+  `getBranding`/`setBranding`), **never in the synced reducer state** —
+  `/api/state` is served to guests and the brand is instance-wide, not
+  per-tenant.
+- **Logo vs icon:** the wide logo shows where there is room (sign-in and
+  boot screens); the square icon is the mark for the sidebar badge, the
+  browser tab (favicon + `apple-touch-icon`), and the phone home-screen
+  icon via a dynamically re-pointed web manifest (`src/lib/branding.js`).
+  Clearing either falls back to the built-in `/favicon.svg`.
+- Edited at **Settings → App brand** (visible to super admins only); a
+  save applies instantly on the current terminal and on the next load
+  everywhere. Restaurants keep their own name/logo (Settings → Business
+  profile) for documents and the guest menu.
+
 ## Multi-location
 
 Two demo stores — **Downtown** (16 tables) and **Riverside** (10 tables, softer
@@ -572,9 +598,9 @@ Express + SQLite (`better-sqlite3`) via action log + SSE when a server is presen
 | 6 | Dashboard alerts | ✅ Done | KPIs, tappable alert rail, rush watch, sparkline, sellers/losers, SLA, floor snapshot — now fully on semantic tokens (`components/ui` primitives, sections under `src/screens/Dashboard/`), with spec §9.1 widgets and an empty "shift not started" state |
 | 7 | Recipe cost + matrix | ✅ Done | Recipe coster w/ snapshots, 86 write-through, menu matrix, ingredient shocks, in-place reprice |
 | 8 | Reports | ✅ Done | Sales/hour/category/day, service, voids audit, variance, P&L-lite — every report ends in an action |
-| 9 | Configuration, documents & catalog | ✅ Done | Settings sections (identity · money · templates · stock · POS · alerts · data), invoice/receipt/ticket/report designer + print, multi-currency, document registry, category tree, suppliers, live preview/print from Tickets & Reports |
+| 9 | Configuration, documents & catalog | ✅ Done | Settings sections (identity · money · templates · stock · POS · alerts · app brand · data), invoice/receipt/ticket/report designer + print, multi-currency, document registry, category tree, suppliers, live preview/print from Tickets & Reports |
 | 10 | Buy side, units & Telegram | ✅ Done | Purchase CRUD → stock with pack conversion, the signed movement ledger, sell/buy + P&L + top/bottom reports, units of measure, item photos, bot console + push notices + digest, and the Telegram mini app |
-| 11 | Accounts, roles & multi-tenant | ✅ Done | Owner accounts + owner-scoped users/roles, a super-admin host-owner console, per-owner isolation of every state table, read model, action log, and SSE stream (schema v3 migrates a legacy single-tenant file); a user can be pinned to one branch, which locks their snapshot, catalog reads, actions, and stream to it |
+| 11 | Accounts, roles & multi-tenant | ✅ Done | Owner accounts + owner-scoped users/roles, a super-admin host-owner console, per-owner isolation of every state table, read model, action log, and SSE stream (schema v3 migrates a legacy single-tenant file); a user can be pinned to one branch, which locks their snapshot, catalog reads, actions, and stream to it; one deployment-wide app brand (`/api/branding`, Settings → App brand) drives the sign-in screen, boot screen, shell, and browser tab |
 | 12 | AI ops copilot | ✅ Done | Provider-agnostic, read-only assistant (`/api/ai/*`) with the Ops Copilot screen; Dashboard advisors (alert explainer, menu advisor, prep forecast) + shift briefing cards; guest/mini-app menu concierge; Telegram briefing push. Off by default — no `AI_API_KEY`, no AI. (Smart-reorder draft on Purchases deferred.) |
 | 13 | Operations integrity, one money model & the 3D customer surface | ✅ Done | Ticket status is derived from its lines (a course fired after service puts the ticket back in the kitchen); the status machine is enforced in the reducer (a ticket is served only when nothing is cooking, a check settles once); one money model shared by the ticket, the receipt, the shift report and the sales report; a 3D dish stage on the guest menu behind a lazy chunk with photo + reduced-motion fallback; app toasts and confirm dialogs in place of every native browser dialog |
 

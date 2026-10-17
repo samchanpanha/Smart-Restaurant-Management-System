@@ -342,6 +342,33 @@ export function setAiConfig(ownerId, config) {
   }
   setKv.run(owner, AI_CONFIG_KEY, JSON.stringify(config))
 }
+
+// Deployment branding (name · tagline · logo · icon) is instance-wide, not
+// per tenant: it brands the sign-in screen, the boot screen, the workspace
+// sidebar, and the browser tab — surfaces that exist before (or outside)
+// any one restaurant. A reserved owner id keeps it in the same kv table,
+// and the whole object is public, served by /api/branding.
+const BRANDING_KEY = 'branding'
+const PLATFORM_OWNER = '__platform__'
+
+export function getBranding() {
+  const row = getKv.get(PLATFORM_OWNER, BRANDING_KEY)
+  if (!row) return null
+  try {
+    const parsed = JSON.parse(row.v)
+    return parsed && typeof parsed === 'object' ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+export function setBranding(branding) {
+  if (!branding || typeof branding !== 'object' || Object.keys(branding).length === 0) {
+    delKv.run(PLATFORM_OWNER, BRANDING_KEY)
+    return
+  }
+  setKv.run(PLATFORM_OWNER, BRANDING_KEY, JSON.stringify(branding))
+}
 const insertAction = db.prepare('INSERT INTO actions (owner_id, client_id, type, action, ts) VALUES (?, ?, ?, ?, ?)')
 const selectSince = db.prepare('SELECT seq, client_id AS clientId, action FROM actions WHERE owner_id = ? AND seq > ? ORDER BY seq ASC LIMIT ?')
 const countActions = db.prepare('SELECT COUNT(*) AS n, MAX(seq) AS max FROM actions WHERE owner_id = ?')

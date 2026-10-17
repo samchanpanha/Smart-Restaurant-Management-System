@@ -8,6 +8,7 @@
 // staff terminals stay pinned (?loc= kiosk param or the first branch).
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react'
+import { useBrand } from './branding'
 import { ClockProvider } from './clock'
 import { ROLE_NAV, TARGETS } from './constants'
 import { baseCurrencyConfig, setActiveCurrency } from './currency'
@@ -151,6 +152,7 @@ function withOwner(path, params = {}) {
 // lands. Terminals pass `waitForServer` (the default) so a shared tablet
 // never shows another shift's numbers while it syncs.
 export function RestoraProvider({ children, waitForServer = true }) {
+  const brand = useBrand()
   const empireInit = useMemo(() => loadPersisted() || buildEmpire(), [])
   const kiosk = useMemo(() => kioskParams(empireInit), [empireInit])
   const [empire, rawDispatch] = useReducer(reducer, empireInit)
@@ -771,7 +773,12 @@ export function RestoraProvider({ children, waitForServer = true }) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--color-ink-950)]">
         <div className="text-center">
-          <div className="text-2xl font-bold tracking-tight text-zinc-100">Restora</div>
+          {brand.logoUrl ? (
+            <img src={brand.logoUrl} alt="" className="mx-auto mb-3 h-12 max-w-[240px] object-contain" />
+          ) : brand.iconUrl ? (
+            <img src={brand.iconUrl} alt="" className="mx-auto mb-3 h-12 w-12 object-contain" />
+          ) : null}
+          <div className="text-2xl font-bold tracking-tight text-zinc-100">{brand.name || 'Restora'}</div>
           <div className="mt-2 text-sm text-zinc-500">Connecting to service…</div>
         </div>
       </div>

@@ -14,10 +14,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Icon } from '../../components/Icon'
 import StatusPill from '../../components/StatusPill'
 import { configurationAudit } from '../../lib/settings'
+import { useAuth } from '../../lib/auth'
 import { useI18n } from '../../lib/i18n'
 import { useRestora } from '../../lib/store'
 import { AiSection } from './sections/Ai'
 import { AlertsSection } from './sections/Alerts'
+import { BrandSection } from './sections/Brand'
 import { BusinessSection } from './sections/Business'
 import { BranchesSection } from './sections/Branches'
 import { DataSection } from './sections/Data'
@@ -40,6 +42,7 @@ const SECTIONS = [
   { id: 'pos', label: 'Service & POS', blurb: 'Tips, splits, printers, QR' },
   { id: 'alerts', label: 'Alerts', blurb: 'What pings whom, and when' },
   { id: 'ai', label: 'AI assistant & Guides', blurb: 'Provider, model, API key, how-to guides' },
+  { id: 'brand', label: 'App brand', blurb: 'Name, tagline, logo, icon' },
   { id: 'data', label: 'Data & backup', blurb: 'Registry, export, reset' },
 ]
 
@@ -52,12 +55,20 @@ const SECTION_ICON = {
   pos: 'pos',
   alerts: 'bell',
   ai: 'sparkles',
+  brand: 'photo',
   food: 'dish',
   data: 'layers',
 }
 
 export default function SettingsScreen({ initialSection = 'business' }) {
   const { state, settings, dispatch, dispatchEverywhere, empire, locId, link, role, issueDocument, resync } = useRestora()
+  const { user } = useAuth()
+  // The deployment brand is super-admin territory: one brand for every
+  // restaurant on this server, stored outside the tenant state.
+  const visibleSections = useMemo(
+    () => SECTIONS.filter((entry) => entry.id !== 'brand' || Boolean(user?.isSuperAdmin)),
+    [user],
+  )
   const { lang, dict } = useI18n()
   const st = dict.settings || {}
   const [section, setSection] = useState(initialSection)
@@ -80,6 +91,7 @@ export default function SettingsScreen({ initialSection = 'business' }) {
     pos: st.posTab || 'Service & POS',
     alerts: st.notificationsTab || 'Alerts & notifications',
     ai: st.aiTab || 'AI assistant & Guides',
+    brand: 'App brand',
     data: st.dataTab || 'Data & reset',
   }
 
@@ -172,6 +184,8 @@ export default function SettingsScreen({ initialSection = 'business' }) {
         return <AlertsSection draft={draft} patch={patch} />
       case 'ai':
         return <AiSection />
+      case 'brand':
+        return <BrandSection />
       case 'data':
         return <DataSection state={state} draft={draft} dispatch={dispatch} empire={empire} locId={locId} link={link} resync={resync} />
       default:
@@ -258,7 +272,7 @@ export default function SettingsScreen({ initialSection = 'business' }) {
 
       <div className="grid gap-4 xl:grid-cols-[248px_1fr]">
         <nav className="space-y-1 self-start rounded-2xl border border-zinc-200 bg-white p-2 shadow-sm xl:sticky xl:top-4" aria-label="Settings sections">
-          {SECTIONS.map((entry) => (
+          {visibleSections.map((entry) => (
             <button
               key={entry.id}
               type="button"
@@ -293,9 +307,9 @@ export default function SettingsScreen({ initialSection = 'business' }) {
         <div className="space-y-4">
           {renderSection(section)}
 
-          {/* The AI section saves itself against the server, so it does not
-              use the draft-first section save bar. */}
-          {section !== 'ai' && section !== 'branches' && (
+          {/* The AI and App brand sections save themselves against the
+              server, so they do not use the draft-first section save bar. */}
+          {section !== 'ai' && section !== 'branches' && section !== 'brand' && (
           <div className="sticky bottom-2 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur">
             <span className="text-xs text-zinc-500" data-testid="section-save-status">
               {sectionDirty(section) ? 'Unsaved edits in this section' : 'This section has no unsaved edits'}
