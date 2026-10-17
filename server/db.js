@@ -349,6 +349,33 @@ export function setAiConfig(ownerId, config) {
   setKv.run(owner, AI_CONFIG_KEY, JSON.stringify(config))
 }
 
+// The Telegram bot token follows the same rule as the AI key: it is a
+// secret, so it lives in kv — never in the reducer state that /api/state
+// serves to guests. Only the privileged /api/telegram/config routes read it
+// back, and they report `hasToken` / `tokenSource` instead of the token.
+const TELEGRAM_CONFIG_KEY = 'telegram_config'
+
+export function getTelegramConfig(ownerId) {
+  const owner = ownerId || DEFAULT_OWNER
+  const row = getKv.get(owner, TELEGRAM_CONFIG_KEY)
+  if (!row) return null
+  try {
+    const parsed = JSON.parse(row.v)
+    return parsed && typeof parsed === 'object' ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+export function setTelegramConfig(ownerId, config) {
+  const owner = ownerId || DEFAULT_OWNER
+  if (!config || typeof config !== 'object' || Object.keys(config).length === 0) {
+    delKv.run(owner, TELEGRAM_CONFIG_KEY)
+    return
+  }
+  setKv.run(owner, TELEGRAM_CONFIG_KEY, JSON.stringify(config))
+}
+
 // Deployment branding (name · tagline · logo · icon) is instance-wide, not
 // per tenant: it brands the sign-in screen, the boot screen, the workspace
 // sidebar, and the browser tab — surfaces that exist before (or outside)

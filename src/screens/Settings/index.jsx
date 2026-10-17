@@ -29,6 +29,7 @@ import { FoodSection } from './sections/Food'
 import { MoneySection } from './sections/Money'
 import { PosSection } from './sections/Pos'
 import { StockSection } from './sections/Stock'
+import { TelegramSection } from './sections/Telegram'
 import { SetupWizard } from './SetupWizard'
 
 const SETUP_STEPS = ['business', 'money', 'documents', 'stock', 'food', 'pos']
@@ -44,6 +45,7 @@ const SECTIONS = [
   { id: 'dashboard', label: 'Dashboard', blurb: 'Hero, KPI cards, section toggles, targets' },
   { id: 'alerts', label: 'Alerts', blurb: 'What pings whom, and when' },
   { id: 'ai', label: 'AI assistant & Guides', blurb: 'Provider, model, API key, how-to guides' },
+  { id: 'telegram', label: 'Telegram bot & mini app', blurb: 'Bot token for chat commands and QR ordering' },
   { id: 'brand', label: 'App brand', blurb: 'Name, tagline, logo, icon' },
   { id: 'data', label: 'Data & backup', blurb: 'Registry, export, reset' },
 ]
@@ -58,6 +60,7 @@ const SECTION_ICON = {
   dashboard: 'dashboard',
   alerts: 'bell',
   ai: 'sparkles',
+  telegram: 'message',
   brand: 'photo',
   food: 'dish',
   data: 'layers',
@@ -106,6 +109,7 @@ export default function SettingsScreen({ initialSection = 'business' }) {
     dashboard: st.dashboardTab || 'Dashboard',
     alerts: st.notificationsTab || 'Alerts & notifications',
     ai: st.aiTab || 'AI assistant & Guides',
+    telegram: 'Telegram bot & mini app',
     brand: 'App brand',
     data: st.dataTab || 'Data & reset',
   }
@@ -201,6 +205,8 @@ export default function SettingsScreen({ initialSection = 'business' }) {
         return <AlertsSection draft={draft} patch={patch} />
       case 'ai':
         return <AiSection />
+      case 'telegram':
+        return <TelegramSection />
       case 'brand':
         return <BrandSection />
       case 'data':
@@ -324,9 +330,10 @@ export default function SettingsScreen({ initialSection = 'business' }) {
         <div className="space-y-4">
           {renderSection(section)}
 
-          {/* The AI and App brand sections save themselves against the
-              server, so they do not use the draft-first section save bar. */}
-          {section !== 'ai' && section !== 'branches' && section !== 'brand' && (
+          {/* The AI, Telegram, and App brand sections save themselves
+              against the server, so they do not use the draft-first
+              section save bar. */}
+          {section !== 'ai' && section !== 'telegram' && section !== 'branches' && section !== 'brand' && (
           <div className="sticky bottom-2 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur">
             <span className="text-xs text-zinc-500" data-testid="section-save-status">
               {sectionDirty(section) ? 'Unsaved edits in this section' : 'This section has no unsaved edits'}

@@ -49,8 +49,8 @@ import { STATE_VERSION, buildEmpire, migrateToEmpire, reducer } from '../src/lib
 import { DOC_KINDS } from '../src/lib/settings.js'
 import {
   db, DEFAULT_OWNER, actionsSince, commitAction, findDuplicateAction, getAiConfig, getBranding, getCategories,
-  getDocumentTotals, getDocuments, getInventory, getMenuCatalog, getSettings, getSuppliers, loadSnapshot, logStats,
-  saveSnapshot, setAiConfig, setBranding, syncMenuCatalog,
+  getDocumentTotals, getDocuments, getInventory, getMenuCatalog, getSettings, getSuppliers, getTelegramConfig,
+  loadSnapshot, logStats, saveSnapshot, setAiConfig, setBranding, setTelegramConfig, syncMenuCatalog,
 } from './db.js'
 
 const PORT = Number(process.env.PORT || 3001)
@@ -676,6 +676,12 @@ function applyActionServer(action, locId = 'downtown') {
 
 let notifier = null
 
+// The bot's token: whatever the tenant saved from Settings → Telegram
+// (kv, write-only) first, then the TELEGRAM_BOT_TOKEN environment. The bot
+// is bound to one tenant, so the saved token is read from it.
+const botToken = () =>
+  String(getTelegramConfig(DEFAULT_TENANT)?.token || process.env.TELEGRAM_BOT_TOKEN || '').trim()
+
 const telegram = createTelegramRouter({
   getState: () => runtimeFor(DEFAULT_TENANT).state,
   applyAction: applyActionServer,
@@ -683,6 +689,12 @@ const telegram = createTelegramRouter({
   ownerSlug: getOwnerById(DEFAULT_TENANT)?.slug || '',
   onChat: (chatId) => notifier?.registerChat(chatId),
   notifier: () => notifier,
+  getToken: botToken,
+  resolveTenant,
+  // Same owner / super admin gate the AI config uses.
+  requireAdmin: requireAiAdmin,
+  getConfig: (ownerId) => getTelegramConfig(ownerId),
+  setConfig: (ownerId, config) => setTelegramConfig(ownerId, config),
 })
 app.use(telegram.router)
 
@@ -696,7 +708,7 @@ notifier = createNotifier({
   chatRoles: telegram.chatRoles,
   // Pushes arrive with the same reply keyboard the bot answers with, so the
   // buttons in the chat match the role the chat actually has.
-  send: (chatId, text) => sendTelegramMessage(chatId, text, { keyboard: replyKeyboard(roleForChat(chatId)) }),
+  send: (chatId, text) => sendTelegramMessage(chatId, text, { token: botToken(), keyboard: replyKeyboard(roleForChat(chatId)) }),
 })
 
 // The digest is checked once a minute; it only sends once a day, after its hour.

@@ -341,3 +341,74 @@ test('a bot action really changes the location through the reducer', () => {
   assert.equal(shopOf(received).inventory.find((item) => item.id === 'inv_lettuce').onHand, 40 + 24)
   assert.equal(shopOf(received).purchases.find((entry) => entry.id === 'po_seed_3').status, 'received')
 })
+
+// ─── Settings → Telegram bot & mini app ────────────────────────────
+// The token is write-only: a save is visible only as hasToken/tokenSource,
+// and the value must never come back in a response body.
+
+test('the token config is owner-gated, validated, and write-only', async () => {
+  const stored = { default: {} }
+  const app = express()
+  app.use(express.json())
+  app.use(createTelegramRouter({
+    getState: () => buildEmpire(),
+    applyAction: () => true,
+    // Fake tenant resolution: X-Tenant names the owner, X-Role the caller.
+    resolveTenant: (req, _res, next) => { req.tenantId = req.get('x-tenant') || 'default'; next() },
+    requireAdmin: (req, res, next) => (req.get('x-role') === 'owner' ? next() : res.status(403).json({ error: 'owner access required' })),
+    getConfig: (ownerId) => stored[ownerId] || null,
+    setConfig: (ownerId, config) => { stored[ownerId] = config },
+    getToken: () => '111:AAHtenanttoken',
+    publicUrl: 'https://restora.test',
+  }).router)
+  const srv = await new Promise((resolve) => { const s = app.listen(0, '127.0.0.1', () => resolve(s)) })
+  const url = (p) => `http://127.0.0.1:${srv.address().port}${p}`
+  const call = (method, path, body, headers = {}) => fetch(url(path), {
+    method,
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body: body ? JSON.stringify(body) : undefined,
+  })
+  const owner = { 'x-role': 'owner', 'x-tenant': 'acme' }
+  const previousEnv = process.env.TELEGRAM_BOT_TOKEN
+  process.env.TELEGRAM_BOT_TOKEN = '999:AAH-env_token_123456'
+
+  try {
+    // Not an owner: the routes refuse.
+    assert.equal((await fetch(url('/api/telegram/config'))).status, 403)
+
+    // Fresh config: nothing saved, but the env token still counts.
+    const initial = await (await call('GET', '/api/telegram/config', null, owner)).json()
+    assert.equal(initial.hasToken, false)
+    assert.equal(initial.tokenSource, 'environment')
+    assert.equal(initial.configured, true)
+
+    // A token that is not BotFather-shaped is rejected.
+    const bad = await call('PUT', '/api/telegram/config', { token: 'not-a-token' }, owner)
+    assert.equal(bad.status, 400)
+
+    // A real save is stored per tenant and never echoed.
+    const good = '123456789:AAF-abc_DEF0123456789xyz'
+    const saved = await call('PUT', '/api/telegram/config', { token: good }, owner)
+    const savedBody = await saved.json()
+    assert.equal(saved.status, 200)
+    assert.equal(savedBody.hasToken, true)
+    assert.equal(savedBody.tokenSource, 'tenant')
+    assert.equal(stored.acme.token, good)
+    assert.ok(!JSON.stringify(savedBody).includes(good), 'the token never travels back')
+
+    // Another tenant is unaffected.
+    assert.equal(stored.default.token, undefined)
+
+    // The status route now reports the saved token (per the getToken hook).
+    assert.equal((await (await fetch(url('/api/telegram/status'))).json()).configured, true)
+
+    // Clearing removes it again.
+    const cleared = await call('PUT', '/api/telegram/config', { token: '' }, owner)
+    assert.equal((await cleared.json()).hasToken, false)
+    assert.equal(stored.acme.token, undefined)
+  } finally {
+    if (previousEnv === undefined) delete process.env.TELEGRAM_BOT_TOKEN
+    else process.env.TELEGRAM_BOT_TOKEN = previousEnv
+    await new Promise((resolve) => srv.close(resolve))
+  }
+})
