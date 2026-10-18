@@ -402,6 +402,32 @@ export function setBranding(branding) {
   }
   setKv.run(PLATFORM_OWNER, BRANDING_KEY, JSON.stringify(branding))
 }
+
+// The machine-translation cache (server/translate.js) is instance-wide for
+// the same reason branding is: the strings are UI copy, not tenant data, and
+// every restaurant on this server asks Google for the same few hundred of
+// them. It lives in the same reserved platform row — never in reducer state,
+// which /api/state serves to guests.
+const TRANSLATE_CACHE_KEY = 'translate_cache'
+
+export function getTranslateCache() {
+  const row = getKv.get(PLATFORM_OWNER, TRANSLATE_CACHE_KEY)
+  if (!row) return null
+  try {
+    const parsed = JSON.parse(row.v)
+    return parsed && typeof parsed === 'object' ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+export function setTranslateCache(entries) {
+  if (!entries || typeof entries !== 'object' || Object.keys(entries).length === 0) {
+    delKv.run(PLATFORM_OWNER, TRANSLATE_CACHE_KEY)
+    return
+  }
+  setKv.run(PLATFORM_OWNER, TRANSLATE_CACHE_KEY, JSON.stringify(entries))
+}
 const insertAction = db.prepare('INSERT INTO actions (owner_id, client_id, type, action, ts, lid) VALUES (?, ?, ?, ?, ?, ?)')
 const selectSince = db.prepare('SELECT seq, client_id AS clientId, action FROM actions WHERE owner_id = ? AND seq > ? ORDER BY seq ASC LIMIT ?')
 const selectActionByLid = db.prepare('SELECT seq FROM actions WHERE owner_id = ? AND client_id = ? AND lid = ?')

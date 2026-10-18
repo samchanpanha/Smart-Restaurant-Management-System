@@ -4,7 +4,13 @@
 // workspace tabs, catalog items, and guest QR / Telegram mini-app views.
 
 import { useCallback, useEffect, useState } from 'react'
-import { translateText } from './i18n-phrases.js'
+import { translateText as translateWithPhrases } from './i18n-phrases.js'
+import {
+  TRANSLATE_UPDATE_EVENT,
+  getCachedTranslation,
+  isMachineTranslationEnabled,
+  queueTranslations,
+} from './google-translate.js'
 import {
   DEFAULT_DISH_GALLERY,
   DEFAULT_KITCHEN_LANG,
@@ -46,6 +52,44 @@ export {
 export const DEFAULT_LANG = DEFAULT_KITCHEN_LANG
 export const LANGUAGES = KITCHEN_LANGUAGES
 const LANG_EVENT = 'restora:lang-change'
+
+// ─── Two-layer translation ────────────────────────────────────────────
+// Layer 1 is the hand-written dictionary (src/lib/i18n-phrases.js): tuned
+// restaurant vocabulary that machine translation gets wrong ("86'd", "bump",
+// "covers"), instant, offline, and the layer the tests pin.
+// Layer 2 is Google Translate's free endpoint, reached through the
+// same-origin /api/translate proxy (server/translate.js, or the Vite dev
+// middleware) and read here from its cache — so a machine-translated string
+// paints synchronously on every visit after the first one that fetched it.
+// The dictionary always wins; Google only answers what it missed.
+
+const EDGE_WHITESPACE = /^(\s*)([\s\S]*?)(\s*)$/
+
+export function translateText(raw, lang = 'km') {
+  if (!raw || typeof raw !== 'string' || lang === 'en') return raw
+  const fromDictionary = translateWithPhrases(raw, lang)
+  if (fromDictionary && fromDictionary !== raw) return fromDictionary
+  if (!isMachineTranslationEnabled()) return raw
+  const match = EDGE_WHITESPACE.exec(raw)
+  if (!match) return raw
+  const [, lead, trimmed, trail] = match
+  const machine = getCachedTranslation(trimmed, lang)
+  return machine ? `${lead}${machine}${trail}` : raw
+}
+
+// One import site for screens: the machine layer is part of i18n as far as
+// the UI is concerned (Settings → Language, the switcher's status dot).
+export {
+  TRANSLATE_UPDATE_EVENT,
+  clearTranslationCache,
+  fetchTranslateStatus,
+  flushTranslations,
+  getTranslateStatus,
+  isMachineTranslationEnabled,
+  setMachineTranslationEnabled,
+  translationCacheStats,
+  useTranslateStatus,
+} from './google-translate.js'
 
 export function getAppLang() {
   return loadKitchenLang()
@@ -2146,6 +2190,12 @@ const isSkipped = (element) => !!element?.closest?.(SKIP_SELECTOR)
  * observer quiet.
  * Also maintains a hidden `.sr-only` mirror inside `#workspace-panel` so
  * existing English substring assertions in JSDOM tests continue to pass.
+ *
+ * Machine layer: every string the dictionary could not answer is collected
+ * during a sweep and handed to `queueTranslations()` (Google Translate, free,
+ * through the same-origin proxy). When answers land, one debounced forced
+ * sweep repaints them — the same path a language switch takes, so nothing new
+ * can loop the observer.
  */
 export function useDomTranslator(rootRef, lang) {
   useEffect(() => {
@@ -2156,10 +2206,19 @@ export function useDomTranslator(rootRef, lang) {
     const Observer = view.MutationObserver
     const SHOW_TEXT = view.NodeFilter ? view.NodeFilter.SHOW_TEXT : 4
     const srOriginals = new Set()
+    // English the dictionary could not answer, collected during a sweep and
+    // sent to Google Translate in one debounced batch afterwards.
+    const misses = new Set()
     let poolDirty = false
     let running = false
     let queued = null // null → nothing pending; else a Set of nodes to re-scan
     let obs = null
+    let machineSweepTimer = null
+
+    function noteMiss(source) {
+      if (lang === 'en' || !source) return
+      misses.add(source)
+    }
 
     function writeText(node, value) {
       node.nodeValue = value
@@ -2189,6 +2248,7 @@ export function useDomTranslator(rootRef, lang) {
 
       const translated = translateText(orig, lang)
       if (translated && translated !== orig) srOriginals.add(orig.trim())
+      else noteMiss(orig)
       const next = translated || orig
       if (next !== current) {
         writeText(node, next)
@@ -2207,7 +2267,9 @@ export function useDomTranslator(rootRef, lang) {
         el[ORIG_PLACEHOLDER] = current
       }
       const orig = el[ORIG_PLACEHOLDER] || ''
-      const next = lang === 'en' ? orig : (translateText(orig, lang) || orig)
+      const translated = lang === 'en' ? orig : translateText(orig, lang)
+      if (lang !== 'en' && (!translated || translated === orig)) noteMiss(orig)
+      const next = translated || orig
       el[WROTE_PLACEHOLDER] = next
       if (next !== current) el.setAttribute('placeholder', next)
     }
@@ -2222,7 +2284,9 @@ export function useDomTranslator(rootRef, lang) {
         el[ORIG_TITLE] = current
       }
       const orig = el[ORIG_TITLE] || ''
-      const next = lang === 'en' ? orig : (translateText(orig, lang) || orig)
+      const translated = lang === 'en' ? orig : translateText(orig, lang)
+      if (lang !== 'en' && (!translated || translated === orig)) noteMiss(orig)
+      const next = translated || orig
       el[WROTE_TITLE] = next
       if (next !== current) el.setAttribute('title', next)
     }
@@ -2268,6 +2332,14 @@ export function useDomTranslator(rootRef, lang) {
       if (pool.textContent !== nextSr) pool.textContent = nextSr
     }
 
+    /** Hand this sweep's dictionary gaps to Google Translate (one batch). */
+    function flushMisses() {
+      if (lang === 'en' || !misses.size) return
+      const batch = [...misses]
+      misses.clear()
+      queueTranslations(batch, lang)
+    }
+
     /** One pass at a time: sweeps are coalesced instead of dropped. */
     function sweep(scopes, force = false) {
       if (running) return
@@ -2275,6 +2347,7 @@ export function useDomTranslator(rootRef, lang) {
       try {
         for (const scope of scopes) translateScope(scope, force)
         syncPool()
+        flushMisses()
       } finally {
         running = false
       }
@@ -2317,7 +2390,30 @@ export function useDomTranslator(rootRef, lang) {
     // A full sweep on mount and on every language switch.
     sweep([rootEl], true)
 
-    if (!Observer) return undefined
+    // Machine answers land after the paint. One debounced forced sweep per
+    // batch repaints them — the same path a language switch takes, so the
+    // observer's own-write discipline still holds and nothing can loop.
+    function onMachineUpdate(event) {
+      const target = event?.detail?.target
+      if (target && target !== lang) return
+      if (machineSweepTimer) clearTimeout(machineSweepTimer)
+      machineSweepTimer = setTimeout(() => {
+        machineSweepTimer = null
+        sweep([rootEl], true)
+      }, 60)
+      machineSweepTimer.unref?.()
+    }
+    view.addEventListener?.(TRANSLATE_UPDATE_EVENT, onMachineUpdate)
+
+    function teardownMachine() {
+      view.removeEventListener?.(TRANSLATE_UPDATE_EVENT, onMachineUpdate)
+      if (machineSweepTimer) {
+        clearTimeout(machineSweepTimer)
+        machineSweepTimer = null
+      }
+    }
+
+    if (!Observer) return teardownMachine
     obs = new Observer((records) => {
       let external = !records.length
       for (const record of records) {
@@ -2344,8 +2440,9 @@ export function useDomTranslator(rootRef, lang) {
     return () => {
       obs.disconnect()
       queued = null
+      teardownMachine()
     }
   }, [rootRef, lang])
 }
 
-export { translateText }
+export { translateWithPhrases }

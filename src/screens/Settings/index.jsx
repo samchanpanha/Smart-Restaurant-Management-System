@@ -26,6 +26,7 @@ import { DashboardSection } from './sections/Dashboard'
 import { DataSection } from './sections/Data'
 import { DocumentsSection } from './sections/Documents'
 import { FoodSection } from './sections/Food'
+import { LanguageSection } from './sections/Language'
 import { MoneySection } from './sections/Money'
 import { PaymentsSection } from './sections/Payments'
 import { PosSection } from './sections/Pos'
@@ -45,6 +46,7 @@ const SECTIONS = [
   { id: 'pos', label: 'Service & POS', blurb: 'Tips, splits, printers, QR' },
   { id: 'payments', label: 'Payments', blurb: 'Guest QR and cash at checkout' },
   { id: 'dashboard', label: 'Dashboard', blurb: 'Hero, KPI cards, section toggles, targets' },
+  { id: 'language', label: 'Language & translation', blurb: 'Interface language, Google Translate, cache' },
   { id: 'alerts', label: 'Alerts', blurb: 'What pings whom, and when' },
   { id: 'ai', label: 'AI assistant & Guides', blurb: 'Provider, model, API key, how-to guides' },
   { id: 'telegram', label: 'Telegram bot & mini app', blurb: 'Bot token for chat commands and QR ordering' },
@@ -61,6 +63,7 @@ const SECTION_ICON = {
   pos: 'pos',
   payments: 'wallet',
   dashboard: 'dashboard',
+  language: 'globe',
   alerts: 'bell',
   ai: 'sparkles',
   telegram: 'message',
@@ -209,6 +212,8 @@ export default function SettingsScreen({ initialSection = 'business' }) {
         return <DashboardSection draft={draft} patch={patch} />
       case 'alerts':
         return <AlertsSection draft={draft} patch={patch} />
+      case 'language':
+        return <LanguageSection />
       case 'ai':
         return <AiSection />
       case 'telegram':

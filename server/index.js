@@ -43,6 +43,7 @@ import { createTelegramRouter, sendTelegramMessage } from './telegram.js'
 import { createAiRouter } from './ai.js'
 import { createAiConfigRouter } from './ai-config.js'
 import { createBrandingRouter, requireSuperAdmin } from './branding.js'
+import { createTranslateRouter } from './translate.js'
 import { createNotifier, sendTelegramEvent } from './notify.js'
 import { replyKeyboard } from '../src/lib/telegram.js'
 import { STATE_VERSION, buildEmpire, migrateToEmpire, reducer } from '../src/lib/reducer.js'
@@ -50,7 +51,8 @@ import { DOC_KINDS } from '../src/lib/settings.js'
 import {
   db, DEFAULT_OWNER, actionsSince, commitAction, findDuplicateAction, getAiConfig, getBranding, getCategories,
   getDocumentTotals, getDocuments, getInventory, getMenuCatalog, getSettings, getSuppliers, getTelegramConfig,
-  loadSnapshot, logStats, saveSnapshot, setAiConfig, setBranding, setTelegramConfig, syncMenuCatalog,
+  getTranslateCache, loadSnapshot, logStats, saveSnapshot, setAiConfig, setBranding, setTelegramConfig,
+  setTranslateCache, syncMenuCatalog,
 } from './db.js'
 
 const PORT = Number(process.env.PORT || 3001)
@@ -779,6 +781,19 @@ const branding = createBrandingRouter({
   setBranding: (brand) => setBranding(brand),
 })
 app.use(branding.router)
+
+// ─── Machine translation (free Google Translate) ────────────────
+// Same-origin proxy for Google's key-less translate endpoint, which sends no
+// CORS headers and so cannot be called from the browser. Public (the guest QR
+// menu needs it) but rate-limited per tenant/IP, cached in memory and — via
+// the platform kv row — across restarts. The dictionary in
+// src/lib/i18n-phrases.js still wins; this only fills what it misses.
+const translate = createTranslateRouter({
+  resolveTenant,
+  loadCache: () => getTranslateCache(),
+  saveCache: (entries) => setTranslateCache(entries),
+})
+app.use(translate.router)
 
 // ─── SSE fan-out ────────────────────────────────────────────────
 
