@@ -15,6 +15,10 @@ const SCALE_MAX = 3
 const SCALE_STEP = 0.25
 const ZONE_MIN = 10
 
+// px a pointer must travel before an armed tile/zone drag becomes a drag.
+// Below it the gesture stays available to a second finger (pinch) or a tap.
+const DRAG_THRESHOLD = 4
+
 // Room pixels per axis. 0 means auto-fit; the steppers land on 50s.
 const ROOM_MIN_W = 600
 const ROOM_MAX_W = 3000
@@ -47,12 +51,32 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
   const zoneResizeRef = useRef(null)
   const roomResizeRef = useRef(null)
   const panRef = useRef(null)
+  // Live pointers on the viewport: two of them are a pinch (zoom + pan),
+  // one is a background drag. The map never swallows page scroll — see the
+  // wheel effect and the touch-action class on the viewport.
+  const pointersRef = useRef(new Map())
+  const pinchRef = useRef(null) // { dist, z0, p0x, p0y } — gesture snapshot
+  // A tile/zone drag arms on pointerdown but only activates after the pointer
+  // actually moves, so a second finger can still turn the gesture into a pinch.
+  const tileDragIntentRef = useRef(null)
+  const zoneDragIntentRef = useRef(null)
   // Mirrored into a ref for native pointer math (drag deltas read it
   // outside the render cycle).
   const zoomRef = useRef(1)
+  const arrangeRef = useRef(false)
   useEffect(() => {
     zoomRef.current = zoom
   }, [zoom])
+  useEffect(() => {
+    arrangeRef.current = arrange
+  }, [arrange])
+  useEffect(() => {
+    const pointers = pointersRef.current
+    return () => {
+      pointers.clear()
+      pinchRef.current = null
+    }
+  }, [])
 
   const roomW = Math.max(0, Math.round(Number(floor?.roomW) || 0))
   const roomH = Math.max(0, Math.round(Number(floor?.roomH) || 0))
@@ -116,25 +140,48 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
 
   function startTileDrag(event, table) {
     if (!arrange) return
-    event.stopPropagation()
+    // Deliberately no stopPropagation: the viewport still has to see this
+    // pointer so a second finger can turn the gesture into a pinch. The drag
+    // arms here and only activates once the pointer actually moves.
     event.preventDefault()
     const rect = event.currentTarget.getBoundingClientRect()
-    dragRef.current = { id: table.id, offsetX: event.clientX - rect.left - rect.width / 2, offsetY: event.clientY - rect.top - rect.height / 2 }
-    const point = toPct(event.clientX - dragRef.current.offsetX, event.clientY - dragRef.current.offsetY)
-    setDrag({ id: table.id, x: snapPct(point.x), y: snapPct(point.y) })
-    event.currentTarget.setPointerCapture?.(event.pointerId)
+    tileDragIntentRef.current = {
+      id: table.id,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      offsetX: event.clientX - rect.left - rect.width / 2,
+      offsetY: event.clientY - rect.top - rect.height / 2,
+      node: event.currentTarget,
+      active: false,
+    }
   }
 
   function moveTileDrag(event) {
-    if (!dragRef.current) return
-    const point = toPct(event.clientX - dragRef.current.offsetX, event.clientY - dragRef.current.offsetY)
-    setDrag({ id: dragRef.current.id, x: snapPct(point.x), y: snapPct(point.y) })
+    const intent = tileDragIntentRef.current
+    if (!intent || intent.pointerId !== event.pointerId) return
+    if (pinchRef.current) {
+      tileDragIntentRef.current = null
+      return
+    }
+    if (!intent.active) {
+      if (Math.hypot(event.clientX - intent.startX, event.clientY - intent.startY) < DRAG_THRESHOLD) return
+      intent.active = true
+      intent.node.setPointerCapture?.(event.pointerId)
+      dragRef.current = intent
+    }
+    const point = toPct(event.clientX - intent.offsetX, event.clientY - intent.offsetY)
+    setDrag({ id: intent.id, x: snapPct(point.x), y: snapPct(point.y) })
   }
 
-  function endTileDrag() {
-    if (!dragRef.current) return
-    const id = dragRef.current.id
+  function endTileDrag(event) {
+    const intent = tileDragIntentRef.current
+    if (!intent || (event && intent.pointerId !== event.pointerId)) return
+    tileDragIntentRef.current = null
     dragRef.current = null
+    // A tap, not a drag: the tile stays exactly where it was.
+    if (!intent.active) return
+    const id = intent.id
     setDrag((current) => {
       if (current && current.id === id) {
         dispatch({ type: 'SET_TABLE_LAYOUT', tableId: id, posX: current.x, posY: current.y })
@@ -192,46 +239,66 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
     })
   }
 
-  // Zone rectangles: drag the body to move, the SE grip to resize.
+  // Zone rectangles: drag the body to move, the SE grip to resize. Like the
+  // tiles, the body drag arms first and activates on movement so a pinch that
+  // starts over a zone still works.
   function startZoneDrag(event, zone) {
     if (!arrange) return
-    event.stopPropagation()
     event.preventDefault()
     const rectScreen = event.currentTarget.getBoundingClientRect()
     const fullH = (zone.h ?? 100) >= 99.5
     const w = rectScreen.width || 1
     const h = rectScreen.height || 1
-    zoneDragRef.current = {
+    zoneDragIntentRef.current = {
       id: zone.id,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      x: Number.isFinite(Number(zone.x)) ? Number(zone.x) : 0,
+      y: Number.isFinite(Number(zone.y)) ? Number(zone.y) : 0,
       fullH,
       offXPct: ((event.clientX - rectScreen.left) / w) * (zone.w || 1) || 0,
       offYPct: fullH ? undefined : ((event.clientY - rectScreen.top) / h) * (zone.h || 1) || 0,
+      node: event.currentTarget,
+      active: false,
     }
-    setZoneDrag({ id: zone.id, x: zone.x, y: zone.y })
-    event.currentTarget.setPointerCapture?.(event.pointerId)
   }
 
   function moveZoneDrag(event) {
-    if (!zoneDragRef.current) return
+    const intent = zoneDragIntentRef.current
+    if (!intent || intent.pointerId !== event.pointerId) return
+    if (pinchRef.current) {
+      zoneDragIntentRef.current = null
+      return
+    }
+    if (!intent.active) {
+      if (Math.hypot(event.clientX - intent.startX, event.clientY - intent.startY) < DRAG_THRESHOLD) return
+      intent.active = true
+      intent.node.setPointerCapture?.(event.pointerId)
+      zoneDragRef.current = intent
+      setZoneDrag({ id: intent.id, x: intent.x, y: intent.y })
+      return
+    }
     const point = toPct(event.clientX, event.clientY)
-    const ref = zoneDragRef.current
     setZoneDrag((current) => {
-      if (!current || current.id !== ref.id) return current
+      if (!current || current.id !== intent.id) return current
       return {
-        id: ref.id,
-        x: snapPct(point.x - ref.offXPct),
-        y: ref.fullH ? current.y : snapPct(point.y - ref.offYPct),
+        id: intent.id,
+        x: snapPct(point.x - intent.offXPct),
+        y: intent.fullH ? current.y : snapPct(point.y - intent.offYPct),
       }
     })
   }
 
-  function endZoneDrag() {
-    if (!zoneDragRef.current) return
-    const id = zoneDragRef.current.id
+  function endZoneDrag(event) {
+    const intent = zoneDragIntentRef.current
+    if (!intent || (event && intent.pointerId !== event.pointerId)) return
+    zoneDragIntentRef.current = null
     zoneDragRef.current = null
+    if (!intent.active) return
     setZoneDrag((current) => {
-      if (current && current.id === id) {
-        dispatch({ type: 'UPDATE_FLOOR_ZONE', zoneId: id, patch: { rect: { x: current.x, y: current.y } } })
+      if (current && current.id === intent.id) {
+        dispatch({ type: 'UPDATE_FLOOR_ZONE', zoneId: intent.id, patch: { rect: { x: current.x, y: current.y } } })
       }
       return null
     })
@@ -319,9 +386,62 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
     resetView()
   }
 
+  // ── Pan + pinch ──────────────────────────────────────────────────────
+  // The viewport owns two gestures: one finger drags the room, two fingers
+  // pinch-zoom around their midpoint (and pan with it). Both write the same
+  // `pan`/`zoom` pair the buttons and Fit use.
+  function viewportCenter() {
+    const viewport = viewportRef.current
+    if (!viewport) return null
+    const rect = viewport.getBoundingClientRect()
+    return { cx: rect.left + rect.width / 2, cy: rect.top + rect.height / 2 }
+  }
+
+  function startPinch() {
+    const points = [...pointersRef.current.values()]
+    const center = viewportCenter()
+    if (points.length < 2 || !center) return
+    const [a, b] = points
+    const dist = Math.max(8, Math.hypot(a.x - b.x, a.y - b.y))
+    const ux = (a.x + b.x) / 2 - center.cx
+    const uy = (a.y + b.y) / 2 - center.cy
+    const current = zoomRef.current || 1
+    pinchRef.current = {
+      dist,
+      z0: current,
+      // The floor point under the finger midpoint — held still for the gesture.
+      p0x: (ux - pan.x) / current,
+      p0y: (uy - pan.y) / current,
+    }
+    // A pinch beats any armed tile/zone drag and the background pan.
+    panRef.current = null
+    tileDragIntentRef.current = null
+    zoneDragIntentRef.current = null
+  }
+
+  function movePinch() {
+    const pinch = pinchRef.current
+    const center = viewportCenter()
+    const points = [...pointersRef.current.values()]
+    if (!pinch || !center || points.length < 2) return
+    const [a, b] = points
+    const dist = Math.max(8, Math.hypot(a.x - b.x, a.y - b.y))
+    const nextZoom = Math.max(MIN_SCALE, Math.min(MAX_SCALE, pinch.z0 * (dist / pinch.dist)))
+    const ux = (a.x + b.x) / 2 - center.cx
+    const uy = (a.y + b.y) / 2 - center.cy
+    setZoom(nextZoom)
+    setPan({ x: ux - pinch.p0x * nextZoom, y: uy - pinch.p0y * nextZoom })
+  }
+
   function startPan(event) {
-    if (dragRef.current || tileResizeRef.current || zoneDragRef.current || zoneResizeRef.current || roomResizeRef.current) return
     if (event.pointerType === 'mouse' && event.button !== 0) return
+    pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
+    if (pointersRef.current.size === 2) {
+      startPinch()
+      return
+    }
+    if (pointersRef.current.size > 1) return
+    if (dragRef.current || tileResizeRef.current || zoneDragRef.current || zoneResizeRef.current || roomResizeRef.current) return
     // Let tile taps stay taps — capturing here would swallow the click.
     if (event.target.closest?.('button')) return
     panRef.current = { x: event.clientX, y: event.clientY, ox: pan.x, oy: pan.y }
@@ -329,6 +449,13 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
   }
 
   function movePan(event) {
+    if (pointersRef.current.has(event.pointerId)) {
+      pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
+    }
+    if (pinchRef.current) {
+      movePinch()
+      return
+    }
     if (!panRef.current) return
     setPan({
       x: panRef.current.ox + (event.clientX - panRef.current.x),
@@ -336,8 +463,30 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
     })
   }
 
-  function endPan() {
+  function endPan(event) {
+    if (event?.pointerId != null) pointersRef.current.delete(event.pointerId)
+    if (pointersRef.current.size < 2) pinchRef.current = null
     panRef.current = null
+  }
+
+  // Double-click / double-tap the empty floor: zoom in on that spot.
+  function zoomAtPoint(clientX, clientY, factor) {
+    const center = viewportCenter()
+    if (!center) return
+    const current = zoom || 1
+    const nextZoom = Math.max(MIN_SCALE, Math.min(MAX_SCALE, current * factor))
+    const ux = clientX - center.cx
+    const uy = clientY - center.cy
+    setPan({
+      x: ux - ((ux - pan.x) / current) * nextZoom,
+      y: uy - ((uy - pan.y) / current) * nextZoom,
+    })
+    setZoom(nextZoom)
+  }
+
+  function handleDoubleClick(event) {
+    if (arrange || event.target.closest?.('button')) return
+    zoomAtPoint(event.clientX, event.clientY, 1.4)
   }
 
   function nudge(event, table) {
@@ -367,11 +516,14 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
     })
   }
 
-  // Wheel zoom lives on a native listener so it can preventDefault.
+  // Wheel zoom lives on a native listener so it can preventDefault — but only
+  // when the user asked for it (Ctrl/⌘ + wheel) or is arranging the room.
+  // Plain wheel is page scroll: the map must never trap the workspace.
   useEffect(() => {
     const node = viewportRef.current
     if (!node) return undefined
     const onWheel = (event) => {
+      if (!event.ctrlKey && !event.metaKey && !arrangeRef.current) return
       event.preventDefault()
       setZoom((value) => Math.max(MIN_SCALE, Math.min(MAX_SCALE, value - event.deltaY * 0.0015)))
     }
@@ -391,8 +543,8 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
           </h2>
           <p className="mt-0.5 text-[var(--fs-caption)] text-[var(--text-muted)]">
             {arrange
-              ? (lang === 'km' ? 'អូសតុ/តំបន់ដើម្បីរៀបចំ · ប្រើសង្កត់ក្រោមដើម្បីធ្វើឱ្យធំជាង · អូសផ្ទៃខាងក្រោយដើម្បីផ្លាស់ទី' : lang === 'zh' ? '拖动餐桌/区域调整布局 · 用角柄缩放 · 拖动空白区域平移' : 'Drag tables & zones to arrange · corner grips resize · drag the room to pan')
-              : (lang === 'km' ? 'ស្ថានភាពតុផ្ទាល់ · ចុចលើតុសម្រាប់សកម្មភាព' : lang === 'zh' ? '实时桌台状态 · 点击餐桌进行操作' : 'Live table status · tap a table for actions')}
+              ? (lang === 'km' ? 'អូសតុ/តំបន់ដើម្បីរៀបចំ · ប្រើសង្កត់ក្រោមដើម្បីធ្វើឱ្យធំជាង · ច្របាច់ពីរម្រាម ឬ Ctrl+កង់កណ្ដុរដើម្បីពង្រីក · អូសផ្ទៃខាងក្រោយដើម្បីផ្លាស់ទី' : lang === 'zh' ? '拖动餐桌/区域调整布局 · 用角柄缩放 · 双指捏合或 Ctrl+滚轮缩放 · 拖动空白区域平移' : 'Drag tables & zones to arrange · corner grips resize · pinch or Ctrl+wheel to zoom · drag empty space to pan')
+              : (lang === 'km' ? 'ស្ថានភាពតុផ្ទាល់ · ចុចលើតុសម្រាប់សកម្មភាព · ចុចពីរដងដើម្បីពង្រីក' : lang === 'zh' ? '实时桌台状态 · 点击餐桌进行操作 · 双击放大' : 'Live table status · tap a table for actions · double-click to zoom in')}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -442,8 +594,10 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
         onPointerDown={startPan}
         onPointerMove={movePan}
         onPointerUp={endPan}
+        onPointerCancel={endPan}
         onPointerLeave={endPan}
-        className="relative min-h-[420px] cursor-grab touch-none overflow-hidden bg-[var(--surface-sunken)] active:cursor-grabbing"
+        onDoubleClick={handleDoubleClick}
+        className={`relative min-h-[420px] cursor-grab overflow-hidden bg-[var(--surface-sunken)] active:cursor-grabbing ${arrange ? 'touch-none' : 'touch-pan-y'}`}
       >
         <div
           ref={contentRef}
