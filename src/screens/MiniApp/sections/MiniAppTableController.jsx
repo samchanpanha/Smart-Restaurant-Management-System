@@ -316,7 +316,8 @@ function MiniAppTableController({ onTableReady, activeTable, waitMin = 15, onOpe
                   <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-amber-700">Active dining move</p>
                   <h3 className="mt-1 text-lg font-extrabold text-[var(--guest-ink)]">Select a new table</h3>
                   <p className="mt-1 text-sm text-stone-500">
-                    Currently at <strong>{tableName}</strong>. Choose an open table to request a move.
+                    Currently at <strong>{tableName}</strong>.{' '}
+                    <span>Choose an open table to request a move.</span>
                   </p>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
@@ -520,7 +521,7 @@ function MiniAppTableController({ onTableReady, activeTable, waitMin = 15, onOpe
                 <div className="font-bold text-amber-950">Active booking: {selectedResBooking.name}</div>
                 <div>
                   {copy.guests ? copy.guests(selectedResBooking.partySize) : `${selectedResBooking.partySize} guests`} ·{' '}
-                  {new Date(selectedResBooking.time).toLocaleDateString()} at{' '}
+                  {new Date(selectedResBooking.time).toLocaleDateString()} ·{' '}
                   {new Date(selectedResBooking.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </div>
                 <div className="mt-1 text-[11px] text-amber-800">

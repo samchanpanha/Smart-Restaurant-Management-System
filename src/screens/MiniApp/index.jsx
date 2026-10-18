@@ -159,7 +159,7 @@ function MiniAppScreen({ tableId }) {
               {table && orderMode === 'dine_in' && lang !== 'en' && <span className="sr-only"> {table.name}</span>}
             </div>
           </div>
-          <LanguageSwitcher compact testIdPrefix="miniapp-lang" className="shrink-0" />
+          <LanguageSwitcher compact tone="dark" testIdPrefix="miniapp-lang" className="shrink-0" />
           {state.tables.length > 0 && orderMode === 'dine_in' && (
             <button
               type="button"
