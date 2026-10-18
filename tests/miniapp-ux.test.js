@@ -101,6 +101,28 @@ after(async () => {
   await server.close()
 })
 
+test('the mini app header keeps the table and language one tap away', async () => {
+  await fresh('http://localhost:5173/?tg=1&guest=t14')
+
+  const header = document.querySelector('header')
+  assert.ok(header, 'the mini app chrome is present')
+  assert.match(header.textContent, /Restora/)
+  assert.match(header.textContent, /Table 14/)
+
+  const tableButton = header.querySelector('button[aria-label^="Change table"]')
+  assert.ok(tableButton, 'the table line is itself the table switcher')
+  click(tableButton)
+  await settle(60)
+  assert.ok(document.querySelector('[data-testid="table-picker"]'), 'tapping the table opens the one picker')
+  click(tableButton)
+  await settle(60)
+  assert.ok(!document.querySelector('[data-testid="table-picker"]'), 'tapping it again closes the picker')
+
+  const language = document.querySelector('[data-testid="miniapp-lang-switcher"] summary')
+  assert.ok(language, 'the header has one compact language trigger')
+  assert.match(language.textContent, /English|ខ្មែរ|中文/)
+})
+
 test('the welcome card seats the party size the guest chose in one tap', async () => {
   await fresh('http://localhost:5173/?tg=1&guest=t12')
 

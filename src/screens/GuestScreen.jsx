@@ -1003,7 +1003,7 @@ export default function GuestScreen({
                   </span>
                 )}
               </div>
-              <LanguageSwitcher compact testIdPrefix="guest-lang" />
+              <LanguageSwitcher compact menu testIdPrefix="guest-lang" className="shrink-0" />
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <button

@@ -107,6 +107,18 @@ function MiniAppScreen({ tableId }) {
   }, [])
 
   const table = state.tables.find((entry) => entry.id === picked) || null
+  const onDineIn = orderMode === 'dine_in'
+  const restaurantName = state.settings?.restaurantName || 'The Olive Restaurant'
+  const modeLabel = orderMode === 'delivery'
+    ? (dict.miniapp?.deliveryOrder || '🛵 Delivery order')
+    : orderMode === 'pickup'
+      ? (dict.miniapp?.pickupOrder || '🍽 Pickup order')
+      : ''
+  const tableLabel = table
+    ? `${translateTableName(table.name, lang)} · ${translateZone(table.zone, lang)}`
+    : state.tables.length > 0
+      ? (dict.miniapp?.noTableSelected || 'No table selected')
+      : (dict.miniapp?.tableNotFound || 'Table not found')
   const waitMin = quoteWait(state, partySize)
   // Delivery and pickup skip the table picker entirely.
   const offTable = orderMode === 'delivery' || orderMode === 'pickup'
@@ -145,60 +157,57 @@ function MiniAppScreen({ tableId }) {
   return (
     <div className="min-h-screen bg-[var(--guest-page)]">
       <header ref={headerRef} className="sticky top-0 z-40 border-b border-black/5 bg-[var(--guest-chrome)] text-white">
-        <div className="mx-auto flex max-w-md items-center gap-3 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-amber-400">
-            <Icon name="send" size={18} />
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-bold">{state.settings?.restaurantName || 'The Olive Restaurant'}</div>
-            <div className="text-[11px] text-white/60">
-              {orderMode === 'delivery'
-                ? (dict.miniapp?.deliveryOrder || '🛵 Delivery order')
-                : orderMode === 'pickup'
-                  ? (dict.miniapp?.pickupOrder || '🍽 Pickup order')
-                  : table
-                    ? `${translateTableName(table.name, lang)} · ${translateZone(table.zone, lang)}`
-                    : state.tables.length > 0 ? (dict.miniapp?.noTableSelected || 'No table selected') : (dict.miniapp?.tableNotFound || 'Table not found')}
-              {table && orderMode === 'dine_in' && lang !== 'en' && <span className="sr-only"> {table.name}</span>}
-            </div>
-          </div>
-          <LanguageSwitcher compact tone="dark" testIdPrefix="miniapp-lang" className="shrink-0" />
-          {state.tables.length > 0 && orderMode === 'dine_in' && (
+        <div className="mx-auto flex max-w-md items-center gap-2.5 px-4 pb-2.5 pt-[max(0.75rem,env(safe-area-inset-top))]">
+          {onDineIn && state.tables.length > 0 ? (
             <button
               type="button"
               onClick={() => setPickerOpen((open) => !open)}
-              aria-label={dict.miniapp?.changeTable || 'Change table'}
-              className="inline-flex min-h-11 max-w-[8.5rem] shrink-0 items-center gap-1 rounded-full border border-white/15 bg-white/10 px-3 text-[11px] font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+              aria-label={table
+                ? `${dict.miniapp?.changeTable || 'Change table'} — ${translateTableName(table.name, lang)}`
+                : (dict.miniapp?.choose || 'Choose a table')}
+              className="group flex min-h-11 min-w-0 flex-1 items-center gap-2.5 rounded-2xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
             >
-              <span aria-hidden="true">🪑</span>
-              <span className="truncate">
-                {table ? translateTableName(table.name, lang) : (dict.miniapp?.choose || 'Choose')}
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 text-amber-400">
+                <Icon name="send" size={18} />
               </span>
-              <span className="sr-only">Table</span>
-              <span aria-hidden="true" className="text-white/60">▾</span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-bold">{restaurantName}</span>
+                <span className="mt-0.5 flex items-center gap-1 text-[11px] font-medium text-white/60">
+                  <span className="truncate">{tableLabel}</span>
+                  <span aria-hidden="true" className="text-[9px] text-white/45 transition-transform group-hover:translate-y-0.5">▾</span>
+                  {table && lang !== 'en' && <span className="sr-only"> {table.name}</span>}
+                </span>
+              </span>
             </button>
-          )}
-          {offTable && (
-            <button
-              type="button"
-              onClick={() => setOrderMode('dine_in')}
-              className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-full border border-white/15 bg-white/10 px-3 text-[11px] font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
-            >
-              <span aria-hidden="true">↩</span>
-              <span>{dict.miniapp?.change || 'Change'}</span>
-            </button>
-          )}
-          {inTelegram ? (
-            <span className="rounded-full bg-emerald-500/15 px-2 py-1 text-[10px] font-bold text-emerald-300">
-              {dict.miniapp?.inTelegram || 'In Telegram'}
-              {lang !== 'en' && <span className="sr-only"> In Telegram</span>}
-            </span>
           ) : (
-            <span className="rounded-full bg-amber-500/15 px-2 py-1 text-[10px] font-bold text-amber-300">
-              {dict.miniapp?.webPreview || 'Web preview'}
-              {lang !== 'en' && <span className="sr-only"> Web preview</span>}
-            </span>
+            <div className="flex min-h-11 min-w-0 flex-1 items-center gap-2.5">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 text-amber-400">
+                <Icon name="send" size={18} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-bold">{restaurantName}</div>
+                {offTable ? (
+                  <button
+                    type="button"
+                    onClick={() => setOrderMode('dine_in')}
+                    className="mt-0.5 flex min-h-7 max-w-full items-center gap-1 text-[11px] font-medium text-white/60 transition-colors hover:text-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+                  >
+                    <span className="truncate">{modeLabel}</span>
+                    <span className="shrink-0 underline decoration-white/30 underline-offset-2">
+                      {dict.miniapp?.change || 'Change'}
+                    </span>
+                  </button>
+                ) : (
+                  <div className="truncate text-[11px] font-medium text-white/60">
+                    {tableLabel}
+                    {table && onDineIn && lang !== 'en' && <span className="sr-only"> {table.name}</span>}
+                  </div>
+                )}
+              </div>
+            </div>
           )}
+          <LanguageSwitcher compact menu tone="dark" testIdPrefix="miniapp-lang" className="shrink-0" />
+          <span className="sr-only">{inTelegram ? 'In Telegram' : 'Web preview'}</span>
           <span className="sr-only">Telegram mini app</span>
         </div>
       </header>
@@ -217,13 +226,6 @@ function MiniAppScreen({ tableId }) {
             }}
           />
         </div>
-      )}
-
-      {!inTelegram && (
-        <p className="mx-auto max-w-md px-4 pt-3 text-[11px] leading-relaxed text-stone-500">
-          This page is the mini app a guest opens from the bot. Opened outside Telegram it behaves exactly like the
-          table QR page — the platform calls (ready, expand, theme, haptics) simply do nothing.
-        </p>
       )}
 
       <main className="mx-auto max-w-md">
