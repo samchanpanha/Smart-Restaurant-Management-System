@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Button } from '../../../components/ui'
-import { TABLE_STATUS_META } from '../../../lib/constants'
+import { Icon } from '../../../components/Icon'
+import { Button, EmptyState } from '../../../components/ui'
+import { TABLE_STATUS_META, TARGETS } from '../../../lib/constants'
 import { translateTableName, translateTableStatus, translateZone, useI18n } from '../../../lib/i18n'
-import { useRestora } from '../../../lib/store'
+import { formatClock, minutesBetween } from '../../../lib/models'
+import { useNow, useRestora } from '../../../lib/store'
+import { FloorToolbar } from './FloorToolbar.jsx'
 import { ZoneEditorModal } from './ZoneEditorModal.jsx'
 import { SNAP, MIN_SCALE, MAX_SCALE, toneClass, clampPct, snapPct, zoneBands } from '../shared.js'
 
-// Tile geometry in px (w-16 h-12 on the button) so the resize knob tracks
+// Tile geometry in px (w-20 h-14 on the button) so the resize knob tracks
 // the scaled footprint without inventing a second layout.
-const TILE_W = 64
-const TILE_H = 48
+const TILE_W = 80
+const TILE_H = 56
 const SCALE_MIN = 0.75
 const SCALE_MAX = 3
 const SCALE_STEP = 0.25
@@ -18,6 +21,43 @@ const ZONE_MIN = 10
 // px a pointer must travel before an armed tile/zone drag becomes a drag.
 // Below it the gesture stays available to a second finger (pinch) or a tap.
 const DRAG_THRESHOLD = 4
+
+// A turn is "long" once it passes the alert ratio of the table's target.
+// Module-level so the filter counter and the tile agree without a clock dep.
+const isLongTurn = (table) => {
+  if (!table || (table.status !== 'seated' && table.status !== 'ordered') || !table.seatedAt) return false
+  const target = Number(table.targetTurnMinutes) || 0
+  return target > 0 && minutesBetween(table.seatedAt) / target >= TARGETS.turnAlertRatio
+}
+
+// Dirty, waiting on the bill, or running long — the host should look here first.
+const needsAttention = (table) => ['dirty', 'cleaning', 'billing', 'billed'].includes(table.status) || isLongTurn(table)
+
+// Live meta line for one tile. The shared 30s clock ticks *here* and nowhere
+// else, so elapsed minutes stay fresh without re-rendering the whole plan
+// (the KDS rule: isolate every clock read in a leaf).
+function TileMeta({ table, seatsLabel }) {
+  useNow(30000)
+  const occupied = table.status === 'seated' || table.status === 'ordered'
+  if (!occupied || !table.seatedAt) {
+    return (
+      <span className="text-[10px] font-semibold opacity-90">
+        {table.seats} {seatsLabel || 'seats'}
+      </span>
+    )
+  }
+  const mins = minutesBetween(table.seatedAt)
+  const long = isLongTurn(table)
+  return (
+    <span
+      className={`tnum mt-0.5 rounded-full px-1.5 text-[10px] font-bold leading-4 ${
+        long ? 'bg-[var(--surface)] text-[var(--danger)]' : 'bg-black/25 text-white'
+      }`}
+    >
+      {table.partySize ? `${table.partySize}p · ` : ''}{mins}m
+    </span>
+  )
+}
 
 // Room pixels per axis. 0 means auto-fit; the steppers land on 50s.
 const ROOM_MIN_W = 600
@@ -30,7 +70,17 @@ const scaleClamp = (value) => Math.min(SCALE_MAX, Math.max(SCALE_MIN, Math.round
 const roomClampW = (value) => Math.min(ROOM_MAX_W, Math.max(ROOM_MIN_W, Math.round(Number(value) / ROOM_STEP) * ROOM_STEP))
 const roomClampH = (value) => Math.min(ROOM_MAX_H, Math.max(ROOM_MIN_H, Math.round(Number(value) / ROOM_STEP) * ROOM_STEP))
 
-function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
+function FloorMap({
+  tables,
+  orders,
+  onOpen,
+  floorZones,
+  floor,
+  reservations = [],
+  filter = 'all',
+  onFilterChange,
+  onAddTable,
+}) {
   const { dispatch } = useRestora()
   const { lang, dict } = useI18n()
   const f = dict.floor || {}
@@ -97,6 +147,90 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
     const orphans = (tables || []).filter((table) => !defined.has(table.zone || 'Main'))
     return zoneBands(orphans)
   }, [tables, zoneList])
+
+  // The soonest booked reservation per table — the tile wears a small ◷ so a
+  // host can see the room is spoken for before it fills.
+  const reservationsByTable = useMemo(() => {
+    const map = new Map()
+    for (const booking of reservations || []) {
+      if (!booking || booking.status !== 'booked' || !booking.tableId) continue
+      const current = map.get(booking.tableId)
+      if (!current || new Date(booking.time) < new Date(current.time)) map.set(booking.tableId, booking)
+    }
+    return map
+  }, [reservations])
+
+  // Filter values: 'all' | 'attention' | 'z:<zone name>' | 's:<status>'.
+  const matchesFilter = (table) => {
+    if (filter === 'all') return true
+    if (filter === 'attention') return needsAttention(table)
+    if (filter === 'occupied') return ['seated', 'ordered', 'billed', 'billing', 'occupied'].includes(table.status)
+    if (filter.startsWith('z:')) return (table.zone || 'Main') === filter.slice(2)
+    if (filter.startsWith('s:')) return table.status === filter.slice(2)
+    return true
+  }
+
+  const counts = useMemo(() => {
+    const byStatus = {}
+    const zoneCounts = new Map()
+    let attention = 0
+    let dimmed = 0
+    for (const table of tables || []) {
+      byStatus[table.status] = (byStatus[table.status] || 0) + 1
+      const zoneName = table.zone || 'Main'
+      zoneCounts.set(zoneName, (zoneCounts.get(zoneName) || 0) + 1)
+      if (needsAttention(table)) attention += 1
+      if (filter !== 'all') {
+        const match = filter.startsWith('z:')
+          ? zoneName === filter.slice(2)
+          : filter.startsWith('s:')
+            ? table.status === filter.slice(2)
+            : filter === 'occupied'
+              ? ['seated', 'ordered', 'billed', 'billing', 'occupied'].includes(table.status)
+              : needsAttention(table)
+        if (!match) dimmed += 1
+      }
+    }
+    return {
+      total: (tables || []).length,
+      attention,
+      dimmed,
+      byStatus,
+      zones: zoneList.map((zone) => ({ id: zone.id, name: zone.name, count: zoneCounts.get(zone.name) || 0 })),
+    }
+  }, [tables, zoneList, filter])
+
+  // Frame one percent-rect of the floor in the viewport (zone chips).
+  function focusRect(rect) {
+    const viewport = viewportRef.current
+    const content = contentRef.current
+    if (!viewport || !content) return
+    const bounds = viewport.getBoundingClientRect()
+    const vw = viewport.clientWidth || bounds.width
+    const vh = viewport.clientHeight || bounds.height
+    const cw = content.offsetWidth || vw
+    const ch = content.offsetHeight || vh
+    if (!(cw > 0) || !(ch > 0) || !(vw > 0) || !(vh > 0)) return
+    const w = Math.max(Number(rect.w) || 0, 1)
+    const h = Math.max(Number(rect.h) || 0, 1)
+    const nextZoom = Math.max(
+      MIN_SCALE,
+      Math.min(MAX_SCALE, Math.min(vw / ((w / 100) * cw), vh / ((h / 100) * ch)) * 0.9),
+    )
+    const cxRel = (((Number(rect.x) || 0) + w / 2) / 100 - 0.5) * cw
+    const cyRel = (((Number(rect.y) || 0) + h / 2) / 100 - 0.5) * ch
+    setZoom(nextZoom)
+    setPan({ x: -cxRel * nextZoom, y: -cyRel * nextZoom })
+  }
+
+  // Choosing a zone chip reframes the room on that zone; other filters leave
+  // the current view alone (the user is already looking at the right place).
+  useEffect(() => {
+    if (!filter.startsWith('z:')) return
+    const zone = zoneList.find((entry) => entry.name === filter.slice(2))
+    if (zone) focusRect(zone)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter])
 
   const itemCount = (table) => {
     const order = table.currentCheckId ? ordersByCheck.get(table.currentCheckId) : null
@@ -589,6 +723,10 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
         </div>
       </div>
 
+      {counts.total > 0 && (
+        <FloorToolbar zones={counts.zones} counts={counts} filter={filter} onFilter={onFilterChange} />
+      )}
+
       <div
         ref={viewportRef}
         onPointerDown={startPan}
@@ -599,6 +737,25 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
         onDoubleClick={handleDoubleClick}
         className={`relative min-h-[420px] cursor-grab overflow-hidden bg-[var(--surface-sunken)] active:cursor-grabbing ${arrange ? 'touch-none' : 'touch-pan-y'}`}
       >
+        {counts.total === 0 && (
+          <div className="absolute inset-0 z-40 flex items-center justify-center bg-[var(--surface-sunken)] p-6">
+            <EmptyState
+              icon="tables"
+              title={lang === 'km' ? 'មិនមានតុនៅឡើយទេ' : lang === 'zh' ? '暂无餐桌' : 'No tables yet'}
+              sub={lang === 'km'
+                ? 'បន្ថែមតុដំបូង រួចអូសវាទៅទីតាំងរបស់វានៅលើប្លង់។'
+                : lang === 'zh'
+                  ? '添加第一张餐桌，然后在平面图上把它拖到位置。'
+                  : 'Add the first table, then drag it into place on the plan.'}
+              action={(
+                <Button size="md" onClick={() => onAddTable?.()}>
+                  {lang === 'km' ? 'បន្ថែមតុ' : lang === 'zh' ? '添加餐桌' : 'Add table'}
+                  {lang !== 'en' && <span className="sr-only"> Add table</span>}
+                </Button>
+              )}
+            />
+          </div>
+        )}
         <div
           ref={contentRef}
           className="relative min-h-[420px]"
@@ -685,14 +842,22 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
             const count = itemCount(table)
             const dragging = drag?.id === table.id
             const resizing = resize?.id === table.id
+            const longTurn = isLongTurn(table)
             const showBill = table.status === 'billed' || table.status === 'billing'
             const showSelf = Boolean(table.selfSeated)
+            const showMove = Boolean(table.pendingTransfer && table.pendingTransfer.status === 'pending')
+            const booking = reservationsByTable.get(table.id)
+            const dim = !matchesFilter(table)
             // The shipped hover/drag transforms stay untouched while the
             // tile is at its default size; a custom scale takes over the
             // transform entirely (inline style beats any hover class).
             const usesInlineTransform = scale !== 1
             return (
-              <div key={table.id} className="absolute -translate-x-1/2 -translate-y-1/2" style={{ left: `${x}%`, top: `${y}%` }}>
+              <div
+                key={table.id}
+                className={`absolute -translate-x-1/2 -translate-y-1/2 transition-opacity duration-200 ${dim ? 'opacity-25' : ''}`}
+                style={{ left: `${x}%`, top: `${y}%` }}
+              >
                 <button
                   type="button"
                   onClick={() => { if (!arrange && !dragging) onOpen(table) }}
@@ -705,17 +870,20 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
                   aria-grabbed={arrange ? dragging : undefined}
                   title={`${translateTableName(table.name, lang)} · ${translateTableStatus(table.status, lang)}`}
                   style={usesInlineTransform ? { transform: `scale(${scale})` } : undefined}
-                  className={`group relative flex h-12 w-16 flex-col items-center justify-center ${shape} text-sm font-bold shadow-[var(--shadow-md)] ring-4 ring-[var(--surface)]/80 ${toneClass(table.status)} ${dragging ? 'ring-[var(--accent)]' : ''} ${!arrange && !usesInlineTransform ? 'hover:-translate-y-0.5 hover:scale-105' : ''} ${arrange ? 'cursor-grab' : ''}`}
+                  className={`group relative flex h-14 w-20 flex-col items-center justify-center ${shape} text-sm font-bold shadow-[var(--shadow-md)] ring-4 ${longTurn ? 'ring-[var(--warning)]' : 'ring-[var(--surface)]/80'} ${toneClass(table.status)} ${dragging ? 'ring-[var(--accent)]' : ''} ${!arrange && !usesInlineTransform ? 'hover:-translate-y-0.5 hover:scale-105' : ''} ${arrange ? 'cursor-grab' : ''}`}
                 >
                   <span className="absolute -top-2 left-1/2 h-2 w-5 -translate-x-1/2 rounded-t-full bg-current opacity-30" />
                   <span className="absolute -bottom-2 left-1/2 h-2 w-5 -translate-x-1/2 rounded-b-full bg-current opacity-30" />
-                  {table.name.replace('Table ', '')}
+                  <span className="max-w-full truncate px-1 leading-none">{table.name.replace('Table ', '')}</span>
+                  <TileMeta table={table} seatsLabel={f.seats || 'seats'} />
 
-                  {(showBill || showSelf || count > 0) && (
-                    <span className="absolute -right-1.5 -top-1.5 flex items-center gap-0.5">
-                      {showSelf && <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--info)] px-1 text-[8px] font-bold text-white ring-2 ring-[var(--surface)]" title="Self-seated">S</span>}
-                      {showBill && <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--warning)] px-1 text-[8px] font-bold text-white ring-2 ring-[var(--surface)]" title="Bill requested">$</span>}
-                      {count > 0 && <span className="tnum flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--text-strong)]/85 px-1 text-[8px] font-bold text-[var(--surface)] ring-2 ring-[var(--surface)]" title={`${count} items on the check`}>{count}</span>}
+                  {(showBill || showSelf || showMove || booking || count > 0) && (
+                    <span className="absolute -right-2 -top-2 flex items-center gap-0.5">
+                      {showMove && <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--warning)] px-1 text-[9px] font-bold text-white ring-2 ring-[var(--surface)]" title="Move requested">⇄</span>}
+                      {booking && <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--info)] px-1 text-[9px] font-bold text-white ring-2 ring-[var(--surface)]" title={`Booked ${formatClock(booking.time)} · ${booking.name}`}>◷</span>}
+                      {showSelf && <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--info)] px-1 text-[9px] font-bold text-white ring-2 ring-[var(--surface)]" title="Self-seated">S</span>}
+                      {showBill && <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--warning)] px-1 text-[9px] font-bold text-white ring-2 ring-[var(--surface)]" title="Bill requested">$</span>}
+                      {count > 0 && <span className="tnum flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--text-strong)]/85 px-1 text-[9px] font-bold text-[var(--surface)] ring-2 ring-[var(--surface)]" title={`${count} items on the check`}>{count}</span>}
                     </span>
                   )}
                 </button>
@@ -738,7 +906,9 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
                   </button>
                 )}
                 <span className="pointer-events-none mt-1 flex items-center justify-center gap-1">
-                  <span className="rounded-full bg-[var(--surface)]/90 px-1.5 py-0.5 text-[9px] font-semibold text-[var(--text-muted)] shadow-[var(--shadow-sm)]">{table.seats} {f.seats || 'seats'}</span>
+                  <span className="whitespace-nowrap rounded-full bg-[var(--surface)]/90 px-1.5 py-0.5 text-[9px] font-semibold text-[var(--text-muted)] shadow-[var(--shadow-sm)]">
+                    {translateTableStatus(table.status, lang) || meta.label}
+                  </span>
                 </span>
               </div>
             )
@@ -761,15 +931,15 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-x-5 gap-y-2 border-t border-[var(--border-subtle)] px-5 py-3 text-[var(--fs-caption)] text-[var(--text-muted)]">
-        {Object.entries(TABLE_STATUS_META)
-          .filter(([status]) => ['free', 'reserved', 'seated', 'ordered', 'billed', 'dirty'].includes(status))
-          .map(([status, meta]) => (
-            <span key={status} className="inline-flex items-center gap-2">
-              <i className={`h-2.5 w-2.5 rounded-full ${toneClass(status).split(' ')[0]}`} />
-              {translateTableStatus(status, lang) || meta.label}
-            </span>
-          ))}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-[var(--border-subtle)] px-5 py-2.5 text-[var(--fs-caption)] text-[var(--text-subtle)]">
+        <span className="inline-flex items-center gap-1.5">
+          <Icon name="tables" size={12} />
+          {lang === 'km' ? 'ចុចលើតុដើម្បីមើលសកម្មភាព' : lang === 'zh' ? '点击餐桌查看操作' : 'Tap a table for actions'}
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <Icon name="swap" size={12} />
+          {lang === 'km' ? 'អូសផ្ទៃទំនេរដើម្បីផ្លាស់ទី · Ctrl+កង់ ដើម្បីពង្រីក' : lang === 'zh' ? '拖动空白处平移 · Ctrl+滚轮缩放' : 'Drag empty space to pan · Ctrl+wheel to zoom'}
+        </span>
       </div>
 
       {zoneEditor && (

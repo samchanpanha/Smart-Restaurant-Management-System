@@ -33,6 +33,9 @@ function FloorScreen() {
   const [editor, setEditor] = useState(null) // { table } to edit, {} to add
   const [zoneEditor, setZoneEditor] = useState(null) // 'create' | zone record | null
   const [selectedTableIds, setSelectedTableIds] = useState([])
+  // Map filter: 'all' | 'attention' | 'occupied' | 'z:<zone>' | 's:<status>'.
+  // The KPI cards and the map's own chip strip write the same value.
+  const [mapFilter, setMapFilter] = useState('all')
 
   const label = (key) => VIEW_LABEL[key][lang] || VIEW_LABEL[key].en
 
@@ -61,11 +64,14 @@ function FloorScreen() {
   const pendingTransfers = state.tables.filter((t) => t.pendingTransfer && t.pendingTransfer.status === 'pending')
 
   const floorPct = state.tables.length ? Math.round((occupied / state.tables.length) * 100) : 0
+  // Each KPI card doubles as a map filter — tap "Needs cleaning" and the plan
+  // dims everything else (it never hides a table, the geography stays put).
   const stats = useMemo(() => ([
     {
       key: 'occupied',
       icon: 'tables',
       tone: 'accent',
+      filter: 'occupied',
       label: f.occupied || 'Occupied',
       value: occupied,
       foot: typeof f.ofFloor === 'function' ? f.ofFloor(floorPct) : `${floorPct}% of floor`,
@@ -74,6 +80,7 @@ function FloorScreen() {
       key: 'free',
       icon: 'check',
       tone: 'success',
+      filter: 's:free',
       label: f.free || 'Available',
       value: freeCount,
       foot: f.readyToSeat || translateTableStatus('free', lang),
@@ -82,6 +89,7 @@ function FloorScreen() {
       key: 'reserved',
       icon: 'calendar',
       tone: 'info',
+      filter: 's:reserved',
       label: f.reserved || translateTableStatus('reserved', lang),
       value: reservedCount,
       foot: f.heldForGuests || f.booked || 'Booked',
@@ -90,6 +98,7 @@ function FloorScreen() {
       key: 'dirty',
       icon: 'sparkles',
       tone: 'danger',
+      filter: 's:dirty',
       label: f.dirty || 'Needs cleaning',
       value: dirtyCount,
       foot: f.cleanTable || 'Bus & reset',
@@ -258,21 +267,43 @@ function FloorScreen() {
       )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {stats.map((item) => (
-          <StatTile
-            key={item.key}
-            icon={item.icon}
-            tone={item.tone}
-            label={item.label}
-            value={item.value}
-            foot={item.foot}
-          />
-        ))}
+        {stats.map((item) => {
+          const active = mapFilter === item.filter
+          return (
+            <StatTile
+              key={item.key}
+              icon={item.icon}
+              tone={item.tone}
+              label={item.label}
+              value={item.value}
+              foot={item.foot}
+              aria-pressed={active}
+              title={`${item.label} — ${active ? 'clear this filter' : 'filter the map'}`}
+              className={active ? 'border-[var(--accent)] ring-2 ring-[var(--accent-soft)]' : undefined}
+              onClick={() => {
+                setView('map')
+                setMapFilter(active ? 'all' : item.filter)
+              }}
+            />
+          )
+        })}
       </div>
 
       <div className="grid items-start gap-4 xl:grid-cols-12">
         <div className="space-y-4 xl:col-span-8">
-          {view === 'map' ? <FloorMap tables={state.tables} orders={state.orders} onOpen={openTable} floorZones={zoneRecords} floor={state.floor || {}} /> : (
+          {view === 'map' ? (
+            <FloorMap
+              tables={state.tables}
+              orders={state.orders}
+              onOpen={openTable}
+              floorZones={zoneRecords}
+              floor={state.floor || {}}
+              reservations={state.reservations || []}
+              filter={mapFilter}
+              onFilterChange={setMapFilter}
+              onAddTable={() => { setView('list'); setManaging(true); setEditor({}) }}
+            />
+          ) : (
             <div className="space-y-4">
               {managing && (
                 <div className="grid gap-2 sm:grid-cols-2">
