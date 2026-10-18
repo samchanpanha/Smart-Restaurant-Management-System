@@ -1,7 +1,7 @@
 import { Icon } from '../../../components/Icon'
 import { TABLE_STATUS_META } from '../../../lib/constants'
-import { translateTableStatus, translateZone, useI18n } from '../../../lib/i18n'
-import { toneClass } from '../shared.js'
+import { translateZone, useI18n } from '../../../lib/i18n'
+import { statusLabel, toneClass } from '../shared.js'
 
 // The floor plan's filter strip: zones on the first row, the status legend on
 // the second. Both act like filters — a chip dims every table that does not
@@ -10,7 +10,7 @@ import { toneClass } from '../shared.js'
 const LEGEND_STATUSES = ['free', 'reserved', 'seated', 'ordered', 'billed', 'dirty']
 
 const chipBase =
-  'inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-[var(--fs-label)] font-semibold transition-colors'
+  'inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border px-3 text-[var(--fs-label)] font-semibold transition-colors'
 const chipIdle =
   'border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--text)]'
 const chipActive = 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]'
@@ -25,6 +25,12 @@ function FloorToolbar({ zones, counts, filter, onFilter }) {
 
   return (
     <div className="space-y-2 border-b border-[var(--border-subtle)] px-5 py-3">
+      {/* Screen readers get the count the dimming shows at a glance. */}
+      {filter !== 'all' && counts.dimmed > 0 && (
+        <span role="status" aria-live="polite" className="sr-only">
+          {counts.total - counts.dimmed} of {counts.total} tables match this filter
+        </span>
+      )}
       <div className="flex items-center gap-2 overflow-x-auto pb-0.5">
         <span className="flex shrink-0 items-center gap-1 pr-1 text-[var(--fs-caption)] font-semibold uppercase tracking-widest text-[var(--text-subtle)]">
           <Icon name="layers" size={12} />
@@ -92,7 +98,7 @@ function FloorToolbar({ zones, counts, filter, onFilter }) {
               className={`${chipBase} ${active ? chipActive : chipIdle} disabled:opacity-40`}
             >
               <i className={`h-2.5 w-2.5 rounded-full ${toneClass(status).split(' ')[0]}`} aria-hidden="true" />
-              {translateTableStatus(status, lang) || meta.label}
+              {statusLabel(status, lang)}
               <span className={`${pill} opacity-70`}>{count}</span>
             </button>
           )

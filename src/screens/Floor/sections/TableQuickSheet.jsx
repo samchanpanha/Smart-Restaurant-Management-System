@@ -3,10 +3,10 @@ import { Icon } from '../../../components/Icon'
 import { Badge, Button, Field, Progress, Sheet, Stepper } from '../../../components/ui'
 import QrModal from '../../../components/QrModal'
 import { TABLE_STATUS_META } from '../../../lib/constants'
-import { translateTableName, translateTableStatus, translateZone, useI18n } from '../../../lib/i18n'
+import { translateTableName, translateZone, useI18n } from '../../../lib/i18n'
 import { formatClock, isSeatBlocked, minutesBetween, needsOverSeatConfirm } from '../../../lib/models'
 import { useRestora } from '../../../lib/store'
-import { badgeToneFor } from '../shared.js'
+import { badgeToneFor, statusLabel } from '../shared.js'
 import { TransferTableModal } from './TransferTableModal.jsx'
 
 // One tap on a table opens this sheet: every action that table can take right
@@ -56,7 +56,7 @@ function TableQuickSheet({ table, onClose, onDetails, onFlash, onError }) {
     >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <Badge tone={badgeToneFor(table.status)} dot>
-          {translateTableStatus(table.status, lang) || meta.label}
+          {statusLabel(table.status, lang)}
         </Badge>
         <span className="text-[var(--fs-caption)] text-[var(--text-muted)]">
           {translateZone(table.zone, lang)}

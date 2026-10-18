@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { Badge, Button, Field, Modal, Stepper } from '../../../components/ui'
 import { Icon } from '../../../components/Icon'
 import { TABLE_STATUS_META } from '../../../lib/constants'
-import { translateTableName, translateTableStatus, useI18n } from '../../../lib/i18n'
+import { translateTableName, useI18n } from '../../../lib/i18n'
 import { isSeatBlocked, needsOverSeatConfirm } from '../../../lib/models'
+import { statusLabel } from '../shared.js'
 import { useRestora } from '../../../lib/store'
 
 // Seat a party at a chosen table. The picker is a grid of real tables, not a
@@ -61,7 +62,7 @@ function SeatDialog({ tableId, initialParty = 2, reservationId = null, waitlistI
     >
       <div className="mt-4 space-y-4">
         <Field label="Table">
-          <div className="grid max-h-64 grid-cols-2 gap-2 overflow-y-auto pr-0.5 sm:grid-cols-3" role="radiogroup" aria-label="Table">
+          <div className="grid max-h-64 grid-cols-2 gap-2 overflow-y-auto pr-0.5 sm:grid-cols-3" role="group" aria-label="Table">
             {seatable.map((option) => {
               const active = option.id === chosenTableId
               const fits = option.seats >= party
@@ -69,8 +70,7 @@ function SeatDialog({ tableId, initialParty = 2, reservationId = null, waitlistI
                 <button
                   key={option.id}
                   type="button"
-                  role="radio"
-                  aria-checked={active}
+                  aria-pressed={active}
                   onClick={() => { setChosenTableId(option.id); setOverConfirm(false) }}
                   className={`flex flex-col items-start gap-1 rounded-[var(--radius-lg)] border p-2.5 text-left transition-colors ${
                     active
@@ -88,7 +88,7 @@ function SeatDialog({ tableId, initialParty = 2, reservationId = null, waitlistI
                     {option.seats} seats · {option.zone}
                   </span>
                   <span className="text-[var(--fs-caption)] text-[var(--text-subtle)]">
-                    {translateTableStatus(option.status, lang)}
+                    {statusLabel(option.status, lang)}
                   </span>
                 </button>
               )
@@ -107,7 +107,7 @@ function SeatDialog({ tableId, initialParty = 2, reservationId = null, waitlistI
                 type="button"
                 aria-pressed={source === option}
                 onClick={() => setSource(option)}
-                className={`min-h-9 rounded-full border px-3 text-[var(--fs-label)] font-semibold transition-colors ${
+                className={`min-h-11 rounded-full border px-3 text-[var(--fs-label)] font-semibold transition-colors ${
                   source === option
                     ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]'
                     : 'border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--surface-hover)]'

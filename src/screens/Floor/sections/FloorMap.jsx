@@ -2,12 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from '../../../components/Icon'
 import { Button, EmptyState } from '../../../components/ui'
 import { TABLE_STATUS_META, TARGETS } from '../../../lib/constants'
-import { translateTableName, translateTableStatus, translateZone, useI18n } from '../../../lib/i18n'
+import { translateTableName, translateZone, useI18n } from '../../../lib/i18n'
 import { formatClock, minutesBetween } from '../../../lib/models'
 import { useNow, useRestora } from '../../../lib/store'
 import { FloorToolbar } from './FloorToolbar.jsx'
 import { ZoneEditorModal } from './ZoneEditorModal.jsx'
-import { SNAP, MIN_SCALE, MAX_SCALE, toneClass, clampPct, snapPct, zoneBands } from '../shared.js'
+import { SNAP, MIN_SCALE, MAX_SCALE, toneClass, statusLabel, clampPct, snapPct, zoneBands } from '../shared.js'
 
 // Tile geometry in px (w-20 h-14 on the button) so the resize knob tracks
 // the scaled footprint without inventing a second layout.
@@ -685,19 +685,19 @@ function FloorMap({
         <div className="flex flex-wrap items-center gap-2">
           {arrange && (
             <div className="flex items-center gap-1.5 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5 shadow-[var(--shadow-sm)]">
-              <button type="button" onClick={() => bumpRoom('w', -ROOM_STEP)} aria-label="Room width smaller" className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] hover:bg-[var(--surface-hover)]">−</button>
+              <button type="button" onClick={() => bumpRoom('w', -ROOM_STEP)} aria-label="Room width smaller" className="flex h-11 w-11 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] hover:bg-[var(--surface-hover)]">−</button>
               <span className="tnum min-w-[64px] text-center text-[var(--fs-caption)] font-semibold text-[var(--text)]" title="Room width">
                 W {roomDrag ? roomDrag.w : roomW || (lang === 'km' ? 'ស្វ័យប្រវត្តិ' : lang === 'zh' ? '自适应' : 'auto')}
               </span>
-              <button type="button" onClick={() => bumpRoom('w', ROOM_STEP)} aria-label="Room width larger" className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] hover:bg-[var(--surface-hover)]">+</button>
+              <button type="button" onClick={() => bumpRoom('w', ROOM_STEP)} aria-label="Room width larger" className="flex h-11 w-11 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] hover:bg-[var(--surface-hover)]">+</button>
               <span className="mx-1 h-4 w-px bg-[var(--border)]" />
-              <button type="button" onClick={() => bumpRoom('h', -ROOM_STEP)} aria-label="Room height smaller" className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] hover:bg-[var(--surface-hover)]">−</button>
+              <button type="button" onClick={() => bumpRoom('h', -ROOM_STEP)} aria-label="Room height smaller" className="flex h-11 w-11 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] hover:bg-[var(--surface-hover)]">−</button>
               <span className="tnum min-w-[64px] text-center text-[var(--fs-caption)] font-semibold text-[var(--text)]" title="Room height">
                 H {roomDrag ? roomDrag.h : roomH || (lang === 'km' ? 'ស្វ័យប្រវត្តិ' : lang === 'zh' ? '自适应' : 'auto')}
               </span>
-              <button type="button" onClick={() => bumpRoom('h', ROOM_STEP)} aria-label="Room height larger" className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] hover:bg-[var(--surface-hover)]">+</button>
+              <button type="button" onClick={() => bumpRoom('h', ROOM_STEP)} aria-label="Room height larger" className="flex h-11 w-11 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] hover:bg-[var(--surface-hover)]">+</button>
               <span className="mx-1 h-4 w-px bg-[var(--border)]" />
-              <button type="button" onClick={fitRoom} className="rounded-[var(--radius-md)] px-2 text-[var(--fs-caption)] font-bold text-[var(--accent)] hover:bg-[var(--accent-soft)]">
+              <button type="button" onClick={fitRoom} className="min-h-11 rounded-[var(--radius-md)] px-3 text-[var(--fs-caption)] font-bold text-[var(--accent)] hover:bg-[var(--accent-soft)]">
                 {lang === 'km' ? 'ធ្វើឱ្យសម' : lang === 'zh' ? '适合窗口' : 'Fit'}
               </button>
             </div>
@@ -716,12 +716,11 @@ function FloorMap({
             </span>
           )}
           <div className="flex items-center rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] p-0.5 shadow-[var(--shadow-sm)]" role="group" aria-label="Zoom">
-            <button type="button" onClick={() => zoomBy(1 / 1.2)} aria-label="Zoom out" className="flex h-9 w-9 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] hover:bg-[var(--surface-hover)]">−</button>
-            <button type="button" onClick={resetView} aria-label="Reset view" className="tnum min-w-[44px] rounded-[var(--radius-md)] px-1 text-[var(--fs-label)] font-semibold text-[var(--text-muted)] hover:bg-[var(--surface-hover)]">{Math.round(zoom * 100)}%</button>
-            <button type="button" onClick={() => zoomBy(1.2)} aria-label="Zoom in" className="flex h-9 w-9 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] hover:bg-[var(--surface-hover)]">+</button>
+            <button type="button" onClick={() => zoomBy(1 / 1.2)} aria-label="Zoom out" className="flex h-11 w-11 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] hover:bg-[var(--surface-hover)]">−</button>
+            <button type="button" onClick={resetView} aria-label="Reset view" className="tnum min-h-11 min-w-[44px] rounded-[var(--radius-md)] px-1 text-[var(--fs-label)] font-semibold text-[var(--text-muted)] hover:bg-[var(--surface-hover)]">{Math.round(zoom * 100)}%</button>
+            <button type="button" onClick={() => zoomBy(1.2)} aria-label="Zoom in" className="flex h-11 w-11 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] hover:bg-[var(--surface-hover)]">+</button>
           </div>
           <Button
-            size="sm"
             variant={arrange ? 'primary' : 'secondary'}
             onClick={() => setArrange((value) => !value)}
             aria-pressed={arrange}
@@ -739,6 +738,8 @@ function FloorMap({
 
       <div
         ref={viewportRef}
+        role="region"
+        aria-label="Floor plan"
         onPointerDown={startPan}
         onPointerMove={movePan}
         onPointerUp={endPan}
@@ -878,7 +879,7 @@ function FloorMap({
                   onKeyDown={(event) => nudge(event, table)}
                   aria-label={`${table.name}, ${meta.label}, ${table.seats} seats`}
                   aria-grabbed={arrange ? dragging : undefined}
-                  title={`${translateTableName(table.name, lang)} · ${translateTableStatus(table.status, lang)}`}
+                  title={`${translateTableName(table.name, lang)} · ${statusLabel(table.status, lang)}`}
                   style={usesInlineTransform ? { transform: `scale(${scale})` } : undefined}
                   className={`group relative flex h-14 w-20 flex-col items-center justify-center ${shape} text-sm font-bold shadow-[var(--shadow-md)] ring-4 ${longTurn ? 'ring-[var(--warning)]' : 'ring-[var(--surface)]/80'} ${toneClass(table.status)} ${dragging ? 'ring-[var(--accent)]' : ''} ${!arrange && !usesInlineTransform ? 'hover:-translate-y-0.5 hover:scale-105' : ''} ${arrange ? 'cursor-grab' : ''}`}
                 >
@@ -917,7 +918,7 @@ function FloorMap({
                 )}
                 <span className="pointer-events-none mt-1 flex items-center justify-center gap-1">
                   <span className="whitespace-nowrap rounded-full bg-[var(--surface)]/90 px-1.5 py-0.5 text-[9px] font-semibold text-[var(--text-muted)] shadow-[var(--shadow-sm)]">
-                    {translateTableStatus(table.status, lang) || meta.label}
+                    {statusLabel(table.status, lang)}
                   </span>
                 </span>
               </div>

@@ -1,4 +1,5 @@
 import { TABLE_STATUS_META } from '../../lib/constants'
+import { translateTableStatus } from '../../lib/i18n'
 import { minutesBetween } from '../../lib/models'
 import { quoteWait } from '../../lib/reducer'
 
@@ -36,6 +37,14 @@ const toneClass = (status) => TONE_STYLES[TABLE_STATUS_META[status]?.tone] || TO
 const BADGE_TONES = { ok: 'success', warn: 'warning', bad: 'danger', info: 'info', muted: 'neutral' }
 const badgeToneFor = (status) => BADGE_TONES[TABLE_STATUS_META[status]?.tone] || 'neutral'
 
+// Localized status word. The i18n dict covers the six everyday statuses; the
+// edge ones it has never heard of (`occupied`, `billing`, `cleaning`) would
+// otherwise leak their raw key — fall back to the shared meta label instead.
+const statusLabel = (status, lang) => {
+  const translated = translateTableStatus(status, lang)
+  return translated === status ? (TABLE_STATUS_META[status]?.label || status) : translated
+}
+
 const clampPct = (value) => Math.max(0, Math.min(100, value))
 const snapPct = (value) => Math.round(clampPct(value) / SNAP) * SNAP
 
@@ -70,4 +79,4 @@ function zoneBands(tables) {
 }
 
 
-export { slotLabel, localInputDefault, SNAP, MIN_SCALE, MAX_SCALE, TONE_STYLES, toneClass, badgeToneFor, clampPct, snapPct, zoneBands, nextFreeTable }
+export { slotLabel, localInputDefault, SNAP, MIN_SCALE, MAX_SCALE, TONE_STYLES, toneClass, badgeToneFor, statusLabel, clampPct, snapPct, zoneBands, nextFreeTable }

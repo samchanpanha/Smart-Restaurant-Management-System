@@ -2,9 +2,9 @@ import { useState } from 'react'
 import QrModal from '../../../components/QrModal'
 import { Badge, Button, Modal } from '../../../components/ui'
 import { formatClock, minutesBetween } from '../../../lib/models'
-import { translateTableStatus, useI18n } from '../../../lib/i18n'
+import { useI18n } from '../../../lib/i18n'
 import { useNow, useRestora } from '../../../lib/store'
-import { badgeToneFor } from '../shared.js'
+import { badgeToneFor, statusLabel } from '../shared.js'
 import { TransferTableModal } from './TransferTableModal.jsx'
 
 function TableDetail({ table, onClose, onSeat, onError, onFlash }) {
@@ -27,7 +27,7 @@ function TableDetail({ table, onClose, onSeat, onError, onFlash }) {
     >
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <Badge tone={badgeToneFor(table.status)} dot>
-          {translateTableStatus(table.status, lang)}
+          {statusLabel(table.status, lang)}
         </Badge>
         {(table.status === 'seated' || table.status === 'ordered') && (
           <span className="tnum text-[var(--fs-body)] text-[var(--text)]">
