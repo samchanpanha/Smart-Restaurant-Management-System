@@ -697,7 +697,7 @@ function FloorMap({
               </span>
               <button type="button" onClick={() => bumpRoom('h', ROOM_STEP)} aria-label="Room height larger" className="flex h-11 w-11 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] hover:bg-[var(--surface-hover)]">+</button>
               <span className="mx-1 h-4 w-px bg-[var(--border)]" />
-              <button type="button" onClick={fitRoom} className="min-h-11 rounded-[var(--radius-md)] px-3 text-[var(--fs-caption)] font-bold text-[var(--accent)] hover:bg-[var(--accent-soft)]">
+              <button type="button" onClick={fitRoom} className="min-h-11 rounded-[var(--radius-md)] px-3 text-[var(--fs-caption)] font-bold text-[var(--accent-text)] hover:bg-[var(--accent-soft)]">
                 {lang === 'km' ? 'ធ្វើឱ្យសម' : lang === 'zh' ? '适合窗口' : 'Fit'}
               </button>
             </div>
@@ -816,7 +816,7 @@ function FloorMap({
                     type="button"
                     onPointerDown={(event) => event.stopPropagation()}
                     onClick={() => { if (arrange) setZoneEditor(zone) }}
-                    className={`rounded-full bg-[var(--surface)]/90 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] shadow-[var(--shadow-sm)] ${arrange ? 'pointer-events-auto cursor-pointer ring-1 ring-[var(--accent)]/40 hover:text-[var(--accent)]' : ''}`}
+                    className={`rounded-full bg-[var(--surface)]/90 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] shadow-[var(--shadow-sm)] ${arrange ? 'pointer-events-auto cursor-pointer ring-1 ring-[var(--accent)]/40 hover:text-[var(--accent-text)]' : ''}`}
                   >
                     {translateZone(zone.name, lang)} · {count}{arrange ? ' ✎' : ''}
                   </button>

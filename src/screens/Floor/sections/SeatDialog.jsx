@@ -109,7 +109,7 @@ function SeatDialog({ tableId, initialParty = 2, reservationId = null, waitlistI
                 onClick={() => setSource(option)}
                 className={`min-h-11 rounded-full border px-3 text-[var(--fs-label)] font-semibold transition-colors ${
                   source === option
-                    ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]'
+                    ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent-text)]'
                     : 'border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--surface-hover)]'
                 }`}
               >

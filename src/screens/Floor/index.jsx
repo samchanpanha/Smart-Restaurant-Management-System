@@ -166,7 +166,7 @@ function FloorScreen() {
     <div className="space-y-5">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <div className="mb-1 flex items-center gap-1.5 text-[var(--fs-label)] font-semibold text-[var(--accent)]">
+          <div className="mb-1 flex items-center gap-1.5 text-[var(--fs-label)] font-semibold text-[var(--accent-text)]">
             <Icon name="tables" size={14} />
             {f.kicker || 'Floor operations'}
             {lang !== 'en' && <span className="sr-only"> Floor operations</span>}
@@ -318,7 +318,7 @@ function FloorScreen() {
                   <button
                     type="button"
                     onClick={() => setEditor({})}
-                    className="flex min-h-11 items-center justify-center gap-2 rounded-[var(--radius-xl)] border-2 border-dashed border-[var(--accent)]/40 bg-[var(--accent-soft)] px-4 py-3 text-[var(--fs-body)] font-bold text-[var(--accent)] transition-colors hover:bg-[var(--accent-soft)]"
+                    className="flex min-h-11 items-center justify-center gap-2 rounded-[var(--radius-xl)] border-2 border-dashed border-[var(--accent)]/40 bg-[var(--accent-soft)] px-4 py-3 text-[var(--fs-body)] font-bold text-[var(--accent-text)] transition-colors hover:bg-[var(--accent-soft)]"
                     aria-label="Add table"
                   >
                     <Icon name="plus" size={16} />
@@ -467,7 +467,7 @@ function FloorScreen() {
 
       {selectedTableIds.length > 0 && (
         <div className="surface-dark fixed left-1/2 bottom-6 z-40 flex -translate-x-1/2 flex-wrap items-center gap-2 rounded-[var(--radius-xl)] border border-[var(--border-strong)] bg-[var(--surface)] px-4 py-2.5 text-[var(--text)] shadow-[var(--shadow-lg)]">
-          <span className="text-[var(--fs-label)] font-bold text-[var(--accent)]">
+          <span className="text-[var(--fs-label)] font-bold text-[var(--accent-text)]">
             {selectedTableIds.length} {selectedTableIds.length === 1 ? 'table' : 'tables'} selected
           </span>
           <span className="mx-1 h-4 w-px bg-[var(--border-strong)]" />

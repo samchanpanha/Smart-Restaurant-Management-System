@@ -273,7 +273,7 @@ function Composer({ order }) {
                   <button
                     type="button"
                     onClick={() => setSubCategory('')}
-                    className="ml-1 text-amber-300 hover:text-white"
+                    className="ml-1 text-amber-300 hover:text-[var(--text-strong)]"
                     aria-label="Clear sub-category filter"
                   >
                     ×

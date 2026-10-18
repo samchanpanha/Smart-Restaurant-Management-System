@@ -28,7 +28,7 @@ const URL_SOURCE_LABEL = {
 function StepLabel({ step, children }) {
   return (
     <span className="flex items-center gap-2">
-      <span aria-hidden="true" className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--accent-soft)] text-[10px] font-bold text-[var(--accent)]">
+      <span aria-hidden="true" className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--accent-soft)] text-[10px] font-bold text-[var(--accent-text)]">
         {step}
       </span>
       <span>{children}</span>
@@ -104,7 +104,7 @@ function TelegramSection() {
     <div className="space-y-4">
       <Card as="section">
         <SectionHeader
-          icon={<Icon name="message" size={16} className="text-[var(--accent)]" />}
+          icon={<Icon name="message" size={16} className="text-[var(--accent-text)]" />}
           title="Step 1 · Connect your bot"
           sub="Paste the bot token BotFather sent you and the public address of this deployment. Owner only — the server enforces it."
           actions={(
@@ -217,7 +217,7 @@ function TelegramSection() {
 
       <Card as="section">
         <SectionHeader
-          icon={<Icon name="sparkles" size={16} className="text-[var(--accent)]" />}
+          icon={<Icon name="sparkles" size={16} className="text-[var(--accent-text)]" />}
           title="What happens next"
           sub="Saved on the server, never in the synced state guests can read."
         />

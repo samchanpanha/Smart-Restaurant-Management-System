@@ -35,11 +35,98 @@ const SCAN_PATH = process.env.I18N_SCAN || ''
 // PINNED_*: English that belongs on screen in every language — seeded
 // content (dish, supplier and people names), brand words, language
 // endonyms, and machine codes. These are data, not copy.
+// Seeded demo content and machine identifiers. The DOM walk cannot tell a
+// supplier name from a button label, so this is the explicit line between
+// "copy we owe a translation for" and "data that must survive translation":
+// people and business names, addresses, tax ids, bot commands, WebApp API
+// names, the data-model diagrams on the System screen, and worked examples
+// whose numbers come from state. Translating any of these would be wrong.
+const SEEDED_DATA = [
+  // Telegram / mini-app API identifiers and bot commands — code, never copy
+  '/help',
+  '/low',
+  '/orders',
+  '/pnl',
+  '/stock salmon',
+  '/today',
+  'BackButton',
+  'HapticFeedback',
+  'MainButton',
+  'Telegram.WebApp.ready()',
+  'expand()',
+  'themeParams',
+  'true',
+  // Data-model diagram labels (System screen): the arrows are the point
+  ', never a static card. Spec check: Restora Burger $16.00 / plate $4.10 → 74.4% →',
+  '1 · Model',
+  '2 · Floor',
+  '3 · Tickets',
+  '7 · Costing',
+  '8 · Reports',
+  'free → seated → ordered → billed → dirty → free · reserved overlays free',
+  'open → sent → in_prep → ready → served → paid · void branches anywhere (manager)',
+  // Seeded people, parties and staff names from src/lib/seed.js
+  'Alex Smith',
+  'Carter party',
+  'Jordan',
+  'Jordan Lee',
+  'Kim Park',
+  'Lopez party',
+  'Maya',
+  'Maya Chen',
+  'Nguyen party',
+  'Sam Rivera',
+  'Taylor Morgan',
+  // Seeded businesses, branches, addresses, shift names and document codes
+  '10 × Ribeye 10oz @ $8.50 · 48 × Beef patty 6oz @ $2.25',
+  '12–24 house · 16 seeded',
+  '44 Industrial Way, Portland, OR, 97210, United States',
+  'All-day lead',
+  'Bakery Co',
+  'BevCo',
+  'Brunch kitchen',
+  'Chef lead',
+  'Dairy Direct',
+  'Dinner lead',
+  'Dinner line',
+  'Dinner rush',
+  'Dinner seating',
+  'Dry Goods Co',
+  'EIN 91-2201843',
+  'English',
+  'Expo & cook',
+  'Floor flow',
+  'Floor lunch',
+  'Floor service',
+  'Fresh Farms',
+  'Full day',
+  'Grill & close',
+  'Harbor Fish',
+  'Kitchen prep & lunch',
+  'Lunch opener',
+  'Lunch service',
+  'Prep & line',
+  'Prime Meats',
+  'Restora',
+  'Restora Hospitality LLC',
+  'Restora · Downtown',
+  'Restora · Riverside',
+  'Sunday brunch',
+  'Weekend dinner rush',
+  'Weekend prep',
+  'downtown',
+  'primemeats.example',
+  // Numeric worked examples printed inside help copy
+  '· acct PM-4471',
+  '· mods: Temp*',
+]
+
 const PINNED_KM = new Set([
   'English',
   'Khmer',
   'Chinese',
   'Restora',
+  ...SEEDED_DATA,
 ])
 
 // ALLOW_*: real untranslated copy we have not filled yet. Target: empty.
@@ -51,6 +138,7 @@ const PINNED_ZH = new Set([
   'Khmer',
   'Chinese',
   'Restora',
+  ...SEEDED_DATA,
 ])
 
 const ALLOW_ZH = new Set([])
@@ -127,6 +215,17 @@ const LOANWORDS = new Set([
   'Telegram', 'BotFather', 'Webhook', 'Bot', 'Chat', 'Token', 'Logo', 'Waste', 'Mini', 'App',
   'Ops', 'Copilot', 'SQLite', 'SQL', 'CSV', 'PDF', 'Excel', 'WhatsApp', 'Viber',
   'PNG', 'SVG', 'JPG', 'KB', 'MB', 'GB', 'Par', 'Restora',
+  // Lowercase forms of the same product nouns, as they appear mid-sentence.
+  'chat', 'bot',
+  // Dietary and keyboard vocabulary the team keeps in Latin.
+  'Gluten', 'Ctrl', 'Alt', 'Shift',
+  // The translation provider's brand name is not translated.
+  'Google', 'Translate',
+  // Seeded person names are data: they ride inside otherwise-translated
+  // sentences ("Maya · 店长/总经理"), so the word list is the only place they
+  // can be cleared without pinning whole sentences.
+  'Maya', 'Chen', 'Jordan', 'Lee', 'Kim', 'Park', 'Alex', 'Smith', 'Sam',
+  'Rivera', 'Taylor', 'Morgan', 'Dana', 'Whitfield',
   // Language endonyms ride in every locale by design.
   'Khmer', 'English', 'Chinese',
 ])

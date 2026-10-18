@@ -103,7 +103,7 @@ export function DashboardSection({ draft, patch }) {
                 <button
                   type="button"
                   onClick={() => set('heroImage', '')}
-                  className="min-h-9 shrink-0 rounded-lg border border-[var(--color-ink-300)] px-3 text-xs font-semibold text-[var(--color-ink-700)] hover:bg-black/5"
+                  className="min-h-9 shrink-0 rounded-lg border border-[var(--border-strong)] px-3 text-xs font-semibold text-[var(--text)] hover:bg-[var(--surface-hover)]"
                 >
                   Reset
                 </button>

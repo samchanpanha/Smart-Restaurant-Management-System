@@ -1288,6 +1288,78 @@ export const PHRASES_KM = {
   'Confirm reschedule': 'បញ្ជាក់ការកែពេល',
   'Date': 'កាលបរិច្ឆេទ',
   'This page is the mini app a guest opens from the bot. Opened outside Telegram it behaves exactly like the table QR page — the platform calls (ready, expand, theme, haptics) simply do nothing.': 'ទំព័រនេះគឺជាកម្មវិធីតូចដែលភ្ញៀវបើកពីរូបយន្តសន្ទនា។ នៅខាងក្រៅកម្មវិធី វាដំណើរការដូចទំព័រស្កេនកូដរបស់តុ — ការហៅវេទិកាមិនធ្វើអ្វីទេ។',
+  // Coverage pass: section headings, role names, report lines and help copy that the DOM walk found untranslated (Google Translate fills anything still missing at runtime).
+  '+ New': '+ ថ្មី',
+  'All roles (': 'គ្រប់តួនាទី (',
+  'Billing': 'គិតលុយ',
+  'Branch transfer': 'ការប្តូរសាខា',
+  'Branches': 'សាខា',
+  'Cash Tender': 'ប្រាក់មុខ',
+  'Cleaning': 'សម្អាត',
+  'Credit / Debit Card': 'កាតឥណទាន / កាតដកប្រាក់',
+  'Dine-in Floor': 'ផ្ទៃញ៉ាំនៅហាង',
+  'Dining Channels': 'បណ្តាញភ្ញៀវ',
+  'Discounts given:': 'ការបញ្ចុះតម្លៃ:',
+  'Door / Host stand': 'ទ្វារ / កន្លែងទទួលភ្ញៀវ',
+  'Filter role:': 'ត្រងតួនាទី:',
+  'Food Cost %': 'ភាគរយថ្លៃដើមម្ហូប',
+  'Guest QR and cash at checkout': 'QR ភ្ញៀវ និងប្រាក់មុខពេលគិតលុយ',
+  'Guests (Covers)': 'ភ្ញៀវ (ចំនួនគ្រប់)',
+  'Host': 'អ្នកទទួលភ្ញៀវ',
+  'Insight': 'វិភាគ',
+  'Interface language, Google Translate, cache': 'ភាសាកម្មវិធី Google Translate និងឃ្លាំងទិន្នន័យ',
+  'Kitchen': 'ផ្ទះបាយ',
+  'Language & translation': 'ភាសា និងការបកប្រែ',
+  'Live': 'ផ្ទាល់',
+  'Manage multiple locations/branches': 'គ្រប់គ្រងទីតាំង និងសាខាច្រើន',
+  'Manager': 'អ្នកគ្រប់គ្រង',
+  'Move items…': 'ប្តូរទីមុខ…',
+  'Move…': 'ប្តូរទី…',
+  'Occupancy': 'អត្រាកាន់កាប់',
+  'Paid checks for the selected range, compared against the always-on 7-day baseline.': 'ប្រាក់បង់សម្រាប់ចន្លោះពេលដែលបានជ្រើស ប្រៀបធៀបនឹងមូលដ្ឋាន ៧ ថ្ងៃដែលដំណើរការជានិច្ច។',
+  'Payment & Tender Mix': 'លាយបញ្ចូលការទូទាត់ និងប្រាក់មុខ',
+  'Payments': 'ការទូទាត់',
+  'Peak Sales Hour:': 'ម៉ោងលក់ដាច់បំផុត:',
+  'Primary reason': 'មូលហេតុចម្បង',
+  'Provider, model, API key, how-to guides': 'អ្នកផ្តល់ ម៉ូដែល សោ API និងមគ្គុទ្ទេសក៍',
+  'Role Cards': 'កាតតួនាទី',
+  'Saved views…': 'ទិដ្ឋភាពដែលបានរក្សា…',
+  'Screens & Permissions': 'អេក្រង់ និងសិទ្ធិ',
+  'Seated, Reserved, Occupied, Ordered': 'អង្គុយ កក់ មានភ្ញៀវ បានកម្មង់',
+  'Select all': 'ជ្រើសរើសទាំងអស់',
+  'Server': 'អ្នកបម្រើ',
+  'Settings': 'ការកំណត់',
+  'Setup wizard': 'ជំនួយការដំឡើង',
+  'Switch': 'ប្តូរ',
+  'TUE THU SAT': 'អង្គារ ព្រហ សៅរ៍',
+  'Takeout': 'វេចខ្ចប់',
+  'Tax collected:': 'ពន្ធបានប្រមូល:',
+  'Team & Access': 'ក្រុមការងារ និងសិទ្ធិ',
+  'This section has no unsaved edits': 'ផ្នែកនេះគ្មានការកែប្រែដែលមិនទាន់បានរក្សាទុក',
+  'Tickets →': 'ការកម្មង់ →',
+  'Tips collected:': 'ប្រាក់ធីបបានប្រមូល:',
+  'Today\'s Sales': 'ការលក់ថ្ងៃនេះ',
+  '＋ Save view': '＋ រក្សាទុកទិដ្ឋភាព',
+  '· this terminal (offline)': '· ម៉ាស៊ីននេះ (ក្រៅបណ្តាញ)',
+  '· Entrées fired from the grill and sauté.': '· មុខចម្អិនពីចង្ក្រានយ៉ាង និងឆា។',
+  '· First bites and shared plates.': '· មុខបើកកម្មវិធី និងចានចែកគ្នា។',
+  'dine_in': 'ញ៉ាំនៅហាង',
+  'people': 'បុគ្គលិក',
+  'most recent log': 'កំណត់ហេតុចុងក្រោយ',
+  'trails at': 'យឺតនៅ',
+  'Split at menu medians — popularity ≥': 'បែងចែកតាមមធ្យមមុខម្ហូប — ប្រជាប្រិយភាព ≥',
+  'sold · margin ≥': 'បានលក់ · ចំណេញ ≥',
+  '%. Absolute bands (high ≥70 / ok 55–70 / low 10–55 / loss <10) ride on each dish.': '%។ កម្រិតដាច់ខាត (ខ្ពស់ ≥70 / ល្អ 55–70 / ទាប 10–55 / ខាត <10) ភ្ជាប់នឹងមុខម្ហូបនីមួយៗ។',
+  'Saving writes a': 'ការរក្សាទុកបង្កើត',
+  'already-fired line': 'បន្ទាត់ដែលបានចម្អិនរួច',
+  '• Menu items store a': '• មុខម្ហូបនីមួយៗរក្សាទុក',
+  'the old plate cost for honest history. Costs use last invoice, never a static card.': 'ថ្លៃដើមចាស់សម្រាប់ប្រវត្តិពិត។ ថ្លៃដើមប្រើវិក្កយបត្រចុងក្រោយ មិនមែនកាតថេរទេ។',
+  '— check its dishes in the matrix before pushing them.': '— ពិនិត្យមុខម្ហូបរបស់វាក្នុងតារាងមុនពេលជំរុញ។',
+  '• Renaming a category re-labels its items everywhere. Drag to reorder categories within each tier.': '• ការប្តូរឈ្មោះប្រភេទទំនិញនឹងប្តូរស្លាកមុខរបស់វាគ្រប់ទីកន្លែង។ អូសដើម្បីរៀបលំដាប់ប្រភេទក្នុងកម្រិតនីមួយៗ។',
+  '• Reports group sales by top-level category; the guest QR menu groups by the same names.': '• របាយការណ៍ចងជាក្រុមការលក់តាមប្រភេទកម្រិតខ្ពស់ ហើយម៉ឺនុយ QR ភ្ញៀវក៏ចងជាក្រុមតាមឈ្មោះដូចគ្នា។',
+  '• The SQLite projection keeps the same tree, so': '• ការព្យាករណ៍ SQLite រក្សារចនាសម្ព័ន្ធដូចគ្នា ដូច្នេះ',
+  '• Use "Move items…" to migrate products between categories cleanly.': '• ប្រើ "ប្តូរទីមុខ…" ដើម្បីផ្លាស់ប្តូរផលិតផលរវាងប្រភេទទំនិញដោយស្អាត។',
+
 }
 
 export const PHRASES_ZH = {
@@ -2390,6 +2462,78 @@ export const PHRASES_ZH = {
   'Confirm reschedule': '确认改期',
   'Date': '日期',
   'This page is the mini app a guest opens from the bot. Opened outside Telegram it behaves exactly like the table QR page — the platform calls (ready, expand, theme, haptics) simply do nothing.': '此页面是客人从对话机器人打开的小程序。在应用之外打开时，它的表现与餐桌扫码页面完全相同 — 平台调用不会有任何效果。',
+  // Coverage pass: same keys as PHRASES_KM — the two tables must stay at parity.
+  '+ New': '+ 新建',
+  'All roles (': '全部角色（',
+  'Billing': '收银',
+  'Branch transfer': '门店调拨',
+  'Branches': '门店',
+  'Cash Tender': '现金收款',
+  'Cleaning': '清洁',
+  'Credit / Debit Card': '信用卡 / 借记卡',
+  'Dine-in Floor': '堂食区域',
+  'Dining Channels': '用餐渠道',
+  'Discounts given:': '已给折扣：',
+  'Door / Host stand': '门口 / 领位台',
+  'Filter role:': '筛选角色：',
+  'Food Cost %': '菜品成本率',
+  'Guest QR and cash at checkout': '顾客二维码与结账现金',
+  'Guests (Covers)': '宾客（客数）',
+  'Host': '领位员',
+  'Insight': '洞察',
+  'Interface language, Google Translate, cache': '界面语言、Google 翻译、缓存',
+  'Kitchen': '厨房',
+  'Language & translation': '语言与翻译',
+  'Live': '实时',
+  'Manage multiple locations/branches': '管理多个地点/门店',
+  'Manager': '经理',
+  'Move items…': '移动商品…',
+  'Move…': '移动…',
+  'Occupancy': '入座率',
+  'Paid checks for the selected range, compared against the always-on 7-day baseline.': '所选区间内已结账的账单，并与始终开启的 7 天基准比较。',
+  'Payment & Tender Mix': '付款与收款构成',
+  'Payments': '收款方式',
+  'Peak Sales Hour:': '销售高峰时段：',
+  'Primary reason': '主要原因',
+  'Provider, model, API key, how-to guides': '服务商、模型、API 密钥、操作指南',
+  'Role Cards': '角色卡',
+  'Saved views…': '已保存视图…',
+  'Screens & Permissions': '页面与权限',
+  'Seated, Reserved, Occupied, Ordered': '已就座、已预订、占用中、已点单',
+  'Select all': '全选',
+  'Server': '服务员',
+  'Settings': '设置',
+  'Setup wizard': '设置向导',
+  'Switch': '切换',
+  'TUE THU SAT': '二 四 六',
+  'Takeout': '外带',
+  'Tax collected:': '已收税费：',
+  'Team & Access': '团队与权限',
+  'This section has no unsaved edits': '此部分没有未保存的更改',
+  'Tickets →': '订单 →',
+  'Tips collected:': '已收小费：',
+  'Today\'s Sales': '今日销售额',
+  '＋ Save view': '＋ 保存视图',
+  '· this terminal (offline)': '· 本终端（离线）',
+  '· Entrées fired from the grill and sauté.': '· 炙烤与香煎的主菜。',
+  '· First bites and shared plates.': '· 开胃小食与分享餐盘。',
+  'dine_in': '堂食',
+  'people': '人员',
+  'most recent log': '最近日志',
+  'trails at': '落后于',
+  'Split at menu medians — popularity ≥': '按菜单中位数划分 — 销量 ≥',
+  'sold · margin ≥': '已售 · 毛利 ≥',
+  '%. Absolute bands (high ≥70 / ok 55–70 / low 10–55 / loss <10) ride on each dish.': '%。绝对区间（高 ≥70 / 合格 55–70 / 低 10–55 / 亏损 <10）附着在每道菜品上。',
+  'Saving writes a': '保存会写入',
+  'already-fired line': '已出菜的行',
+  '• Menu items store a': '• 每个菜品都保存',
+  'the old plate cost for honest history. Costs use last invoice, never a static card.': '旧的菜品成本以保留真实历史。成本取自最近一次发票，而不是静态卡片。',
+  '— check its dishes in the matrix before pushing them.': '— 推广前先在矩阵中检查它的菜品。',
+  '• Renaming a category re-labels its items everywhere. Drag to reorder categories within each tier.': '• 重命名分类会在所有位置更新其商品标签。拖拽可在每个层级内重新排序分类。',
+  '• Reports group sales by top-level category; the guest QR menu groups by the same names.': '• 报表按顶级分类汇总销售；顾客二维码菜单使用相同的名称分组。',
+  '• The SQLite projection keeps the same tree, so': '• SQLite 投影保持相同的树结构，因此',
+  '• Use "Move items…" to migrate products between categories cleanly.': '• 使用“移动商品…”在分类之间干净地迁移商品。',
+
 }
 
 // ─── Extended coverage: every remaining label, fragment, hint & dynamic text ───
@@ -3054,6 +3198,39 @@ function translatePattern(trimmed, lang) {
   if (m) return `${m[1]}× ${lookupSingle(m[2], lang) || translateText(m[2], lang)} @ ${m[3]}`
   m = /^(.+?)\s+trails at\s+(.+?)\s*—\s*(.+)$/i.exec(trimmed)
   if (m) return isKm ? `${translateText(m[1], lang)} យឺតនៅ ${m[2]} — ពិនិត្យម្ហូបរបស់វាមុននឹងផ្សព្វផ្សាយ។` : `${translateText(m[1], lang)} 落后于 ${m[2]} — 推广前请检查其菜品。`
+
+  // Generated copy: counts and money the dictionary cannot key exactly.
+  m = /^7-day daily avg\s+(.+)$/i.exec(trimmed)
+  if (m) return isKm ? `មធ្យមភាគប្រចាំថ្ងៃ (៧ ថ្ងៃ) ${m[1]}` : `7天日均值 ${m[1]}`
+
+  m = /^\((\d+) direct · (\d+) in (\d+) sub-categor(?:y|ies)\)$/.exec(trimmed)
+  if (m) return isKm ? `(${m[1]} ផ្ទាល់ · ${m[2]} ក្នុង ${m[3]} ប្រភេទរង)` : `（${m[1]} 个直属 · ${m[2]} 个在 ${m[3]} 个子分类）`
+
+  m = /^(\d+) check\(s\) processed across (\d+) covers this shift\.?$/.exec(trimmed)
+  if (m) return isKm ? `បានដំណើរការ ${m[1]} ប្រាក់បង់ លើ ${m[2]} ភ្ញៀវ ក្នុងវេននេះ។` : `本班次处理了 ${m[1]} 张账单，覆盖 ${m[2]} 位宾客。`
+
+  m = /^(\d+) check\(s\)$/.exec(trimmed)
+  if (m) return isKm ? `${m[1]} ប្រាក់បង់` : `${m[1]} 张账单`
+
+  m = /^\$([\d,.]+) spend per guest$/.exec(trimmed)
+  if (m) return isKm ? `ចំណាយ $${m[1]} ក្នុងមួយភ្ញៀវ` : `每位宾客消费 $${m[1]}`
+
+  m = /^last drop (\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(trimmed)
+  if (m) return isKm ? `ដកចុងក្រោយ ${m[1]}/${m[2]}/${m[3]}` : `最近出货 ${m[1]}/${m[2]}/${m[3]}`
+
+  // Seeded demo dates stay data, but the month name and the day part read
+  // better localised than "Oct 16, 01:29 PM".
+  const MONTHS_KM = { Jan: 'មករា', Feb: 'កុម្ភៈ', Mar: 'មីនា', Apr: 'មេសា', May: 'ឧសភា', Jun: 'មិថុនា', Jul: 'កក្កដា', Aug: 'សីហា', Sep: 'កញ្ញា', Oct: 'តុលា', Nov: 'វិច្ឆិកា', Dec: 'ធ្នូ' }
+  const MONTHS_ZH = { Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6, Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12 }
+  m = /^([A-Z][a-z]{2}) (\d{1,2}), (\d{1,2}):(\d{2}) (AM|PM)$/.exec(trimmed)
+  if (m && MONTHS_KM[m[1]]) {
+    return isKm
+      ? `${MONTHS_KM[m[1]]} ${m[2]}, ${m[3]}:${m[4]} ${m[5] === 'AM' ? 'ព្រឹក' : 'ល្ងាច'}`
+      : `${MONTHS_ZH[m[1]]}月${m[2]}日 ${m[5] === 'AM' ? '上午' : '下午'}${m[3]}:${m[4]}`
+  }
+  m = /^([A-Z][a-z]{2}) (\d{1,2})$/.exec(trimmed)
+  if (m && MONTHS_KM[m[1]]) return isKm ? `${MONTHS_KM[m[1]]} ${m[2]}` : `${MONTHS_ZH[m[1]]}月${m[2]}日`
+
 
   return null
 }

@@ -52,7 +52,7 @@ export function InsightsPanel({
         <Card data-testid="assistant-answer">
           <SectionHeader
             title={title}
-            actions={<Icon name="sparkles" size={16} className="text-[var(--accent)]" />}
+            actions={<Icon name="sparkles" size={16} className="text-[var(--accent-text)]" />}
           />
           <p className="whitespace-pre-wrap break-words text-[var(--fs-body)] text-[var(--text)]">{result.reply}</p>
           <p className="mt-3 border-t border-[var(--border-subtle)] pt-2 text-[var(--fs-caption)] text-[var(--text-subtle)]">

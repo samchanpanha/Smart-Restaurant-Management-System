@@ -259,11 +259,11 @@ export function CommandPalette({ isOpen, onClose, onOpenShortcuts }) {
       aria-label="Command Palette"
     >
       <div
-        className="w-full max-w-2xl overflow-hidden rounded-2xl border border-zinc-700 bg-[var(--color-ink-900)] text-zinc-100 shadow-2xl animate-in fade-in zoom-in-95 duration-100"
+        className="surface-dark w-full max-w-2xl overflow-hidden rounded-2xl border border-zinc-700 bg-[var(--surface)] text-zinc-100 shadow-2xl animate-in fade-in zoom-in-95 duration-100"
         onKeyDown={handleKeyDown}
       >
         {/* Search Input Bar */}
-        <div className="flex items-center gap-3 border-b border-zinc-800 px-4 py-3.5 bg-[var(--color-ink-950)]">
+        <div className="flex items-center gap-3 border-b border-zinc-800 px-4 py-3.5 bg-[var(--surface-sunken)]">
           <Icon name="search" size={20} className="text-amber-400 shrink-0" />
           <input
             ref={inputRef}
@@ -280,7 +280,7 @@ export function CommandPalette({ isOpen, onClose, onOpenShortcuts }) {
         </div>
 
         {/* Filter Type Pills */}
-        <div className="flex gap-1.5 overflow-x-auto border-b border-zinc-800/80 px-4 py-2 text-xs bg-[var(--color-ink-950)]/50">
+        <div className="flex gap-1.5 overflow-x-auto border-b border-zinc-800/80 px-4 py-2 text-xs bg-[var(--surface-sunken)]/50">
           {[
             ['all', cp.types?.all || 'All'],
             ['screen', cp.types?.screen || 'Screens'],
@@ -361,7 +361,7 @@ export function CommandPalette({ isOpen, onClose, onOpenShortcuts }) {
         </ul>
 
         {/* Footer shortcuts helper */}
-        <div className="flex items-center justify-between border-t border-zinc-800 bg-[var(--color-ink-950)] px-4 py-2.5 text-[11px] text-zinc-500">
+        <div className="flex items-center justify-between border-t border-zinc-800 bg-[var(--surface-sunken)] px-4 py-2.5 text-[11px] text-zinc-500">
           <div className="flex items-center gap-3">
             <span>
               <kbd className="rounded border border-zinc-700 bg-zinc-800 px-1 py-0.5 font-mono">↑↓</kbd> navigate

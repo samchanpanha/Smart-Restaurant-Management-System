@@ -60,8 +60,8 @@ export function ShortcutOverlay({ isOpen, onClose }) {
       aria-modal="true"
       aria-label="Keyboard shortcuts"
     >
-      <div className="w-full max-w-xl overflow-hidden rounded-2xl border border-zinc-700 bg-[var(--color-ink-900)] text-zinc-100 shadow-2xl animate-in fade-in zoom-in-95 duration-100">
-        <div className="flex items-center justify-between border-b border-zinc-800 bg-[var(--color-ink-950)] px-6 py-4">
+      <div className="surface-dark w-full max-w-xl overflow-hidden rounded-2xl border border-zinc-700 bg-[var(--surface)] text-zinc-100 shadow-2xl animate-in fade-in zoom-in-95 duration-100">
+        <div className="flex items-center justify-between border-b border-zinc-800 bg-[var(--surface-sunken)] px-6 py-4">
           <div className="flex items-center gap-2.5">
             <span className="text-xl">⌨️</span>
             <div>
@@ -106,7 +106,7 @@ export function ShortcutOverlay({ isOpen, onClose }) {
           ))}
         </div>
 
-        <div className="flex items-center justify-between border-t border-zinc-800 bg-[var(--color-ink-950)] px-6 py-3 text-xs text-zinc-500">
+        <div className="flex items-center justify-between border-t border-zinc-800 bg-[var(--surface-sunken)] px-6 py-3 text-xs text-zinc-500">
           <span>Press <kbd className="rounded border border-zinc-700 bg-zinc-800 px-1 py-0.5 font-mono text-[11px]">?</kbd> anywhere to open</span>
           <button
             type="button"

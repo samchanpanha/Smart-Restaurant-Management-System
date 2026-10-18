@@ -373,7 +373,7 @@ export default function CostingScreen() {
                 className={`min-h-[44px] w-full rounded-lg text-sm font-bold transition-colors ${
                   selected.menu.available
                     ? 'border border-red-500/50 text-red-300 hover:bg-red-500/10'
-                    : 'bg-emerald-500 text-black hover:bg-emerald-400'
+                    : 'bg-emerald-500 text-white hover:bg-emerald-600'
                 }`}
               >
                 {selected.menu.available ? '86 this dish' : 'Back on menu'}

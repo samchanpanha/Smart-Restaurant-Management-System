@@ -5,7 +5,7 @@ import { Button, Card } from '../../../components/ui'
 const STATUS_CLASS = {
   free: 'bg-[var(--surface-hover)] text-[var(--text-subtle)]',
   seated: 'bg-[var(--info-soft)] text-[var(--info)]',
-  ordered: 'bg-[var(--accent-soft)] text-[var(--accent)]',
+  ordered: 'bg-[var(--accent-soft)] text-[var(--accent-text)]',
   billed: 'bg-[var(--warning-soft)] text-[var(--warning)]',
   dirty: 'bg-[var(--danger-soft)] text-[var(--danger)]',
   reserved: 'bg-[var(--surface-sunken)] text-[var(--text-muted)]',

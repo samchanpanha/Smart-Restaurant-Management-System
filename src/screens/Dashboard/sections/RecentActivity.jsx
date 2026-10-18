@@ -3,7 +3,7 @@ import { Icon } from '../../../components/Icon'
 
 const TONE_ICON = {
   success: 'bg-[var(--success-soft)] text-[var(--success)]',
-  accent: 'bg-[var(--accent-soft)] text-[var(--accent)]',
+  accent: 'bg-[var(--accent-soft)] text-[var(--accent-text)]',
 }
 
 export default function RecentActivity({ copy, items, onViewAll, relTime }) {
@@ -11,7 +11,7 @@ export default function RecentActivity({ copy, items, onViewAll, relTime }) {
     <Card>
       <SectionHeader
         title={copy.recentActivity}
-        actions={<button type="button" onClick={onViewAll} className="text-[var(--fs-label)] font-semibold text-[var(--accent)] hover:text-[var(--accent-hover)]">{copy.viewAll}</button>}
+        actions={<button type="button" onClick={onViewAll} className="text-[var(--fs-label)] font-semibold text-[var(--accent-text)] hover:text-[var(--accent-text)]">{copy.viewAll}</button>}
       />
       {items.length ? (
         <ul className="divide-y divide-[var(--border-subtle)]">

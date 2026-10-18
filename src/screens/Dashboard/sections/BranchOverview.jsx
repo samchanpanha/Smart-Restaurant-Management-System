@@ -80,7 +80,7 @@ export default function BranchOverview({ copy, locations, locId, onPick, empire,
                 <span>Transfer Stock</span>
               </button>
             )}
-            <span className="tnum text-sm font-bold text-[var(--accent)]">
+            <span className="tnum text-sm font-bold text-[var(--accent-text)]">
               {money(combined)} {copy.combined || 'Combined'}
             </span>
           </div>

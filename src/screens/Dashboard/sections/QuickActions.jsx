@@ -3,7 +3,7 @@ import { Icon } from '../../../components/Icon'
 import { cn } from '../../../lib/cn'
 
 const TONE_ICON = {
-  accent: 'bg-[var(--accent-soft)] text-[var(--accent)]',
+  accent: 'bg-[var(--accent-soft)] text-[var(--accent-text)]',
   success: 'bg-[var(--success-soft)] text-[var(--success)]',
   warning: 'bg-[var(--warning-soft)] text-[var(--warning)]',
   info: 'bg-[var(--info-soft)] text-[var(--info)]',
@@ -15,7 +15,7 @@ export default function QuickActions({ copy, actions, onOpen }) {
     <Card>
       <SectionHeader
         title={copy.quickActions}
-        actions={<span className="rounded-full bg-[var(--accent-soft)] px-2.5 py-1 text-[var(--fs-caption)] font-bold uppercase tracking-wide text-[var(--accent)]">{copy.shortcuts}</span>}
+        actions={<span className="rounded-full bg-[var(--accent-soft)] px-2.5 py-1 text-[var(--fs-caption)] font-bold uppercase tracking-wide text-[var(--accent-text)]">{copy.shortcuts}</span>}
       />
       <div className="grid grid-cols-2 gap-2">
         {actions.map((action) => {

@@ -11,7 +11,7 @@ export const buttonVariants = cva(
         primary: 'bg-[var(--accent)] text-[var(--text-on-accent)] hover:bg-[var(--accent-hover)]',
         secondary: 'border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] hover:bg-[var(--surface-hover)]',
         ghost: 'text-[var(--text)] hover:bg-[var(--surface-hover)]',
-        subtle: 'bg-[var(--accent-soft)] text-[var(--accent)] hover:bg-[var(--accent-soft)]',
+        subtle: 'bg-[var(--accent-soft)] text-[var(--accent-text)] hover:bg-[var(--accent-soft)]',
         danger: 'bg-[var(--danger)] text-white hover:opacity-90',
         dangerGhost: 'text-[var(--danger)] hover:bg-[var(--danger-soft)]',
       },
@@ -59,7 +59,7 @@ const badgeVariants = cva(
     variants: {
       tone: {
         neutral: 'bg-[var(--surface-hover)] text-[var(--text-muted)]',
-        accent: 'bg-[var(--accent-soft)] text-[var(--accent)]',
+        accent: 'bg-[var(--accent-soft)] text-[var(--accent-text)]',
         success: 'bg-[var(--success-soft)] text-[var(--success)]',
         warning: 'bg-[var(--warning-soft)] text-[var(--warning)]',
         danger: 'bg-[var(--danger-soft)] text-[var(--danger)]',

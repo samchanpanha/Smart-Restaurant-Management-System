@@ -75,7 +75,7 @@ function TableEditorModal({ table = null, zones, onClose }) {
                 <button
                   type="button"
                   onClick={() => setNewZone(false)}
-                  className="mt-1 text-[var(--fs-caption)] font-semibold text-[var(--accent)] hover:underline"
+                  className="mt-1 text-[var(--fs-caption)] font-semibold text-[var(--accent-text)] hover:underline"
                 >
                   {lang === 'km' ? 'ប្រើតំបន់ដែលមានស្រាប់' : lang === 'zh' ? '使用现有区域' : 'Use an existing zone'}
                 </button>

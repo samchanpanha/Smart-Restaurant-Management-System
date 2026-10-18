@@ -21,7 +21,7 @@ function HeldLine({ order, item, isSelected, onToggleSelect }) {
               checked={!!isSelected}
               onChange={() => onToggleSelect(item.id)}
               aria-label={`Select ${menu?.name || 'item'}`}
-              className="mt-0.5 h-4 w-4 rounded border-zinc-600 bg-zinc-800 text-amber-500 focus:ring-0 cursor-pointer shrink-0"
+              className="mt-0.5 h-4 w-4 rounded border-[var(--border-strong)] bg-white text-[var(--accent-text)] focus:ring-0 cursor-pointer shrink-0"
             />
           )}
           <div className="min-w-0">
@@ -103,7 +103,7 @@ function FiredLine({ order, item, onComp, onVoid, isSelected, onToggleSelect }) 
               checked={!!isSelected}
               onChange={() => onToggleSelect(item.id)}
               aria-label={`Select ${menu?.name || 'item'}`}
-              className="mt-0.5 h-4 w-4 rounded border-zinc-600 bg-zinc-800 text-amber-500 focus:ring-0 cursor-pointer shrink-0"
+              className="mt-0.5 h-4 w-4 rounded border-[var(--border-strong)] bg-white text-[var(--accent-text)] focus:ring-0 cursor-pointer shrink-0"
             />
           )}
           <div className="min-w-0">

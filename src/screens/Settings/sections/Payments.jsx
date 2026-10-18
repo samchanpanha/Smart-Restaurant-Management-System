@@ -187,7 +187,7 @@ function PaymentsSection({ draft, patch }) {
             />
           </Field>
         </div>
-        <div className="mt-4 rounded-2xl bg-zinc-900 p-4 text-center text-white">
+        <div className="surface-dark mt-4 rounded-2xl bg-zinc-900 p-4 text-center text-white">
           <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-amber-300">Guest preview</p>
           <p className="mt-2 text-sm font-bold">{payments.qrLabel || 'Scan to pay'}</p>
           <p className="mt-1 text-xs leading-relaxed text-zinc-400">{payments.qrNote || DEFAULTS.qrNote}</p>

@@ -20,7 +20,7 @@ export default function AlertsRail({ copy, lang, alerts, onOpen }) {
 
   return (
     <Card data-testid="dashboard-alerts" className="flex flex-col border-[var(--warning)]/30 bg-[var(--accent-soft)] lg:col-span-4">
-      <div className="flex items-center gap-2 text-[var(--accent)]">
+      <div className="flex items-center gap-2 text-[var(--accent-text)]">
         <Icon name="sparkles" size={18} />
         <h2 className="text-[var(--fs-h3)] font-bold">
           {copy.insightForYou}

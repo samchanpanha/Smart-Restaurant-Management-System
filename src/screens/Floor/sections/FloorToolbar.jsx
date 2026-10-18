@@ -13,7 +13,7 @@ const chipBase =
   'inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border px-3 text-[var(--fs-label)] font-semibold transition-colors'
 const chipIdle =
   'border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--text)]'
-const chipActive = 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]'
+const chipActive = 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent-text)]'
 const chipWarn = 'border-[var(--warning)] bg-[var(--warning-soft)] text-[var(--warning)]'
 const pill = 'tnum rounded-full bg-[var(--surface-hover)] px-1.5 text-[var(--fs-caption)] font-bold'
 

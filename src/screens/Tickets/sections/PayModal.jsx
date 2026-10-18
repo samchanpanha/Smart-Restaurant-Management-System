@@ -219,7 +219,7 @@ function PayModal({ order, onClose }) {
                   aria-pressed={curSeat === i}
                   className={`min-h-[40px] rounded-lg px-2.5 text-xs font-bold ring-1 ring-inset transition ${
                     curSeat === i
-                      ? 'bg-sky-500 text-black ring-sky-400 font-extrabold shadow-sm'
+                      ? 'bg-sky-500 text-white ring-sky-600 font-extrabold shadow-sm'
                       : 'text-[var(--text)] ring-[var(--border)] hover:bg-[var(--surface-hover)]'
                   }`}
                 >
@@ -507,7 +507,7 @@ function PayModal({ order, onClose }) {
           type="checkbox"
           checked={autoPrintReceipt}
           onChange={(e) => setAutoPrintReceipt(e.target.checked)}
-          className="h-4 w-4 rounded border-zinc-700 bg-black text-amber-500 focus:ring-amber-400"
+          className="h-4 w-4 rounded border-[var(--border-strong)] bg-white text-[var(--accent-text)] focus:ring-[var(--accent)]"
         />
         <label htmlFor="auto-receipt-chk" className="text-xs text-[var(--text)]">
           Auto-issue and file receipt document on close

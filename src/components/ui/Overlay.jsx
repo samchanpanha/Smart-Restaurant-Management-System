@@ -88,7 +88,7 @@ export function Modal({ title, sub, onClose, children, wide = false, className, 
         tabIndex={-1}
         onClick={(event) => event.stopPropagation()}
         className={cn(
-          'max-h-[92vh] w-full overflow-y-auto rounded-[var(--radius-2xl)] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[var(--shadow-lg)] outline-none',
+          'restora-light max-h-[92vh] w-full overflow-y-auto rounded-[var(--radius-2xl)] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-[var(--shadow-lg)] outline-none',
           wide ? 'max-w-2xl' : 'max-w-md',
           className,
         )}
@@ -127,7 +127,7 @@ export function Sheet({ title, label, onClose, children, tall = false, className
         tabIndex={-1}
         onClick={(event) => event.stopPropagation()}
         className={cn(
-          'w-full max-w-[520px] animate-status-in overflow-y-auto rounded-t-[var(--radius-2xl)] bg-[var(--surface)] text-[var(--text)] shadow-[var(--shadow-lg)] outline-none',
+          'restora-light w-full max-w-[520px] animate-status-in overflow-y-auto rounded-t-[var(--radius-2xl)] bg-[var(--surface)] text-[var(--text)] shadow-[var(--shadow-lg)] outline-none',
           tall ? 'max-h-[90vh]' : 'max-h-[86vh]',
           'pb-[max(28px,env(safe-area-inset-bottom))]',
           className,
@@ -158,7 +158,7 @@ export function Drawer({ title, onClose, children, side = 'right', width = 480, 
         tabIndex={-1}
         onClick={(event) => event.stopPropagation()}
         style={{ width, maxWidth: '100%' }}
-        className={cn('flex h-full flex-col overflow-y-auto bg-[var(--surface)] p-5 shadow-[var(--shadow-lg)] outline-none', className)}
+        className={cn('restora-light flex h-full flex-col overflow-y-auto bg-[var(--surface)] p-5 shadow-[var(--shadow-lg)] outline-none', className)}
       >
         <div className="mb-3 flex items-start justify-between gap-3">
           <h2 className="text-[var(--fs-h2)] font-bold text-[var(--text-strong)]">{title}</h2>

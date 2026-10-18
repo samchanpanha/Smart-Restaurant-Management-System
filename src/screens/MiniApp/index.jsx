@@ -155,8 +155,8 @@ function MiniAppScreen({ tableId }) {
   }
 
   return (
-    <div className="min-h-screen bg-[var(--guest-page)]">
-      <header ref={headerRef} className="sticky top-0 z-40 border-b border-black/5 bg-[var(--guest-chrome)] text-white">
+    <div className="restora-guest min-h-screen bg-[var(--guest-page)]">
+      <header ref={headerRef} className="surface-dark sticky top-0 z-40 border-b border-black/5 bg-[var(--guest-chrome)] text-white">
         <div className="mx-auto flex max-w-md items-center gap-2.5 px-4 pb-2.5 pt-[max(0.75rem,env(safe-area-inset-top))]">
           {onDineIn && state.tables.length > 0 ? (
             <button
