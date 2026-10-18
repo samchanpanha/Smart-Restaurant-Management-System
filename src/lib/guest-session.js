@@ -6,6 +6,7 @@
 export const GUEST_SESSION_KEY = 'restora_miniapp_session_v1'
 export const GUEST_ORDER_KEY = 'restora_guest_order_v1'
 export const GUEST_BOOKING_KEY = 'restora_guest_booking_v1'
+export const GUEST_WAITLIST_KEY = 'restora_guest_waitlist_v1'
 
 export function guestSessionToken() {
   try {
@@ -56,5 +57,25 @@ export function saveGuestBooking(entry) {
     else localStorage.setItem(GUEST_BOOKING_KEY, JSON.stringify(entry))
   } catch {
     // Private mode: the confirmation still renders from component state.
+  }
+}
+
+/** The waitlist request this browser joined (id + guest token). */
+export function loadGuestWaitlist() {
+  try {
+    const raw = localStorage.getItem(GUEST_WAITLIST_KEY)
+    const parsed = raw ? JSON.parse(raw) : null
+    return parsed && typeof parsed === 'object' ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+export function saveGuestWaitlist(entry) {
+  try {
+    if (!entry || !entry.id) localStorage.removeItem(GUEST_WAITLIST_KEY)
+    else localStorage.setItem(GUEST_WAITLIST_KEY, JSON.stringify(entry))
+  } catch {
+    // Private mode: the in-memory entry still carries the current visit.
   }
 }

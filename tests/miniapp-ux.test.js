@@ -216,9 +216,14 @@ test('the Book tab turns a live slot into a real reservation', async () => {
   assert.match(panel.textContent, /Book a table/)
   assert.match(panel.textContent, /Availability is live/)
 
-  const slot = $$('[data-testid="guest-booking"] button').find(
-    (button) => !button.disabled && /Available/.test(button.textContent),
-  )
+  // Two days out keeps the booking outside the self-service cutoff, so
+  // the confirmation can exercise reschedule and cancel.
+  const days = $$('[data-testid="booking-day"]')
+  assert.ok(days.length >= 3, 'the next seven days are on screen')
+  click(days[2])
+  await settle(40)
+
+  const slot = $$('[data-testid="booking-slot"]').find((button) => !button.disabled)
   assert.ok(slot, 'at least one live slot is bookable')
   click(slot)
   await settle(30)
@@ -241,6 +246,63 @@ test('the Book tab turns a live slot into a real reservation', async () => {
   const saved = JSON.parse(dom.window.localStorage.getItem('restora_guest_booking_v1'))
   assert.ok(saved?.id, 'the booking id is kept for later management')
   assert.ok(saved?.token, 'scoped to this guest session')
+
+  const reschedule = byText('button', 'Reschedule booking')
+  assert.ok(reschedule, 'the confirmation can manage the booking')
+  click(reschedule)
+  await settle(60)
+  const dialog = document.querySelector('[role="dialog"]')
+  assert.ok(dialog, 'the reschedule sheet opens')
+  assert.match(dialog.textContent, /Save new time/)
+  const moveSlot = $$('[data-testid="manage-slot"]').find((button) => !button.disabled)
+  assert.ok(moveSlot, 'another live slot is offered')
+  click(moveSlot)
+  await settle(20)
+  click(byText('button', 'Save new time'))
+  await settle(80)
+  assert.ok(!document.querySelector('[role="dialog"]'), 'the sheet closes after the change')
+  assert.match(document.querySelector('[data-testid="guest-booking-confirmed"]').textContent, /Your table is booked/)
+
+  click(byText('button', 'Cancel booking'))
+  await settle(20)
+  assert.match(document.body.textContent, /Cancel this booking\?/)
+  click(byText('button', 'Yes, cancel'))
+  await settle(50)
+  assert.match(document.body.textContent, /Booking cancelled/)
+  assert.equal(dom.window.localStorage.getItem('restora_guest_booking_v1'), null)
+
+  click(byText('button', 'Book another table'))
+  await settle(50)
+  assert.ok(document.querySelector('[data-testid="guest-booking"]'), 'the form returns after a cancel')
+})
+
+test('a guest can join and leave the waitlist when the day is full', async () => {
+  await fresh('http://localhost:5173/?tg=1')
+
+  click(byText('button', 'Book'))
+  await settle(60)
+
+  const inputs = $$('[data-testid="guest-booking"] input')
+  type(inputs[0], 'Sokha Chan')
+  type(inputs[1], '012345678')
+  await settle(20)
+
+  click(document.querySelector('[data-testid="booking-waitlist"]'))
+  await settle(60)
+
+  const confirmed = document.querySelector('[data-testid="guest-waitlist-confirmed"]')
+  assert.ok(confirmed, 'the waitlist confirms in place of the form')
+  assert.match(confirmed.textContent, /You're on the waitlist/)
+  assert.match(confirmed.textContent, /2 guests/)
+  assert.match(confirmed.textContent, /Reference/)
+
+  const saved = JSON.parse(dom.window.localStorage.getItem('restora_guest_waitlist_v1'))
+  assert.ok(saved?.id, 'the waitlist entry is kept for the visit')
+
+  click(byText('button', 'Leave waitlist'))
+  await settle(60)
+  assert.ok(document.querySelector('[data-testid="guest-booking"]'), 'leaving returns to booking')
+  assert.equal(dom.window.localStorage.getItem('restora_guest_waitlist_v1'), null)
 })
 
 test('pickup checkout quotes the fee, pays now, and opens tracking', async () => {

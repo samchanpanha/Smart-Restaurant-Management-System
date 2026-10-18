@@ -6,8 +6,15 @@
 
 import { useMemo, useState } from 'react'
 import { Icon } from '../../../components/Icon'
+import { Sheet } from '../../../components/ui'
 import { findAvailableTablesForSlot, uid } from '../../../lib/models'
-import { guestSessionToken, loadGuestBooking, saveGuestBooking } from '../../../lib/guest-session'
+import {
+  guestSessionToken,
+  loadGuestBooking,
+  saveGuestBooking,
+  loadGuestWaitlist,
+  saveGuestWaitlist,
+} from '../../../lib/guest-session'
 import { useRestora } from '../../../lib/store'
 import { translateTableName, useI18n } from '../../../lib/i18n'
 
@@ -74,7 +81,15 @@ export function BookingPanel({ defaultName = '' }) {
   const [notes, setNotes] = useState('')
   const [error, setError] = useState('')
   const [confirmedId, setConfirmedId] = useState('')
-  const [saved] = useState(loadGuestBooking)
+  const [saved, setSaved] = useState(loadGuestBooking)
+  const [rescheduleOpen, setRescheduleOpen] = useState(false)
+  const [manageDate, setManageDate] = useState('')
+  const [manageTime, setManageTime] = useState('')
+  const [manageError, setManageError] = useState('')
+  const [cancelArmed, setCancelArmed] = useState(false)
+  const [waitlistError, setWaitlistError] = useState('')
+  const [waitlistId, setWaitlistId] = useState('')
+  const [savedWaitlist, setSavedWaitlist] = useState(loadGuestWaitlist)
 
   const slots = useMemo(
     () => buildSlots(state.settings?.food?.menuWindows),
@@ -108,8 +123,55 @@ export function BookingPanel({ defaultName = '' }) {
     : null
   const booking = confirmed || savedBooking
 
+  const manageSlotOptions = useMemo(() => {
+    if (!booking || !manageDate) return []
+    return slots.map((time) => {
+      const at = new Date(`${manageDate}T${time}:00`)
+      const past = at.getTime() < Date.now() + 15 * 60 * 1000
+      const tables = past
+        ? []
+        : findAvailableTablesForSlot(state, {
+          time: at.toISOString(),
+          partySize: booking.partySize,
+          durationMinutes,
+          excludeBookingId: booking.id,
+        })
+      return { time, at, past, tables }
+    })
+  }, [booking, manageDate, slots, durationMinutes, state])
+
+  const savedWaitlistEntry = savedWaitlist
+    ? (state.waitlist || []).find((entry) => (
+      entry.id === savedWaitlist.id &&
+      (!entry.guestToken || entry.guestToken === savedWaitlist.token)
+    ))
+    : null
+  const waitlistEntry = (waitlistId
+    ? (state.waitlist || []).find((entry) => entry.id === waitlistId)
+    : null) || savedWaitlistEntry
+
+  const canManage = Boolean(
+    booking &&
+    booking.status !== 'cancelled' &&
+    booking.guestToken &&
+    booking.guestToken === guestSessionToken(),
+  )
+  const modCount = Number(booking?.modificationCount) || 0
+  const maxMods = Number(bookingPolicy.maxGuestReschedules) || 2
+  const cutoffMin = Number(bookingPolicy.rescheduleCutoffMinutes) || 60
+  const untilMs = booking ? new Date(booking.time).getTime() - Date.now() : 0
+  const rescheduleReason = bookingPolicy.allowGuestReschedule === false
+    ? 'Self-service changes are disabled for this restaurant.'
+    : modCount >= maxMods
+      ? `You have used the ${maxMods} self-service changes for this booking.`
+      : untilMs < cutoffMin * 60 * 1000
+        ? `Changes close ${cutoffMin} minutes before your booking.`
+        : ''
+  const canReschedule = canManage && !rescheduleReason
+
   function reset() {
     setConfirmedId('')
+    setSaved(null)
     saveGuestBooking(null)
     setSelectedTime('')
     setNotes('')
@@ -154,6 +216,88 @@ export function BookingPanel({ defaultName = '' }) {
     setConfirmedId(id)
   }
 
+  function openReschedule() {
+    if (!booking) return
+    const when = new Date(booking.time)
+    const time = `${String(when.getHours()).padStart(2, '0')}:${String(when.getMinutes()).padStart(2, '0')}`
+    setManageDate(toLocalIsoDate(when))
+    setManageTime(slots.includes(time) ? time : '')
+    setManageError('')
+    setRescheduleOpen(true)
+  }
+
+  function reschedule(event) {
+    event.preventDefault()
+    if (!booking) return
+    const slot = manageSlotOptions.find((option) => option.time === manageTime)
+    if (!slot || slot.past || slot.tables.length === 0) {
+      setManageError('That time just filled up. Pick another slot.')
+      return
+    }
+    try {
+      dispatch({
+        type: 'RESCHEDULE_BOOKING',
+        bookingId: booking.id,
+        newDate: manageDate,
+        newTime: manageTime,
+        actor: 'guest',
+      })
+      setRescheduleOpen(false)
+      setManageTime('')
+      setManageError('')
+    } catch (err) {
+      setManageError(err?.message || 'That change could not be saved.')
+    }
+  }
+
+  function cancelBooking() {
+    if (!booking) return
+    dispatch({
+      type: 'SET_RESERVATION',
+      id: booking.id,
+      patch: {
+        status: 'cancelled',
+        cancelledAt: new Date().toISOString(),
+        cancelledBy: 'guest',
+      },
+    })
+    saveGuestBooking(null)
+    setCancelArmed(false)
+  }
+
+  function joinWaitlist() {
+    setWaitlistError('')
+    if (!name.trim() || !phone.trim()) {
+      setWaitlistError('Add your name and phone so the host can call you.')
+      return
+    }
+    const id = uid('wl')
+    dispatch({
+      type: 'ADD_WAITLIST',
+      entry: {
+        id,
+        name: name.trim().slice(0, 60),
+        phone: phone.trim().slice(0, 30),
+        partySize,
+        date,
+        time: selectedTime || null,
+        notes: notes.trim().slice(0, 200),
+        source: 'online',
+        status: 'waiting',
+        guestToken: guestSessionToken(),
+      },
+    })
+    saveGuestWaitlist({ id, token: guestSessionToken() })
+    setWaitlistId(id)
+  }
+
+  function leaveWaitlist() {
+    if (waitlistEntry) dispatch({ type: 'REMOVE_WAITLIST', id: waitlistEntry.id })
+    setSavedWaitlist(null)
+    saveGuestWaitlist(null)
+    setWaitlistId('')
+  }
+
   if (booking) {
     const when = new Date(booking.time)
     const dayLabel = when.toLocaleDateString(locale, { weekday: 'long', month: 'short', day: 'numeric' })
@@ -195,6 +339,56 @@ export function BookingPanel({ defaultName = '' }) {
             Please arrive within 15 minutes of your booking. Call the restaurant if you are running late.
           </p>
         </div>
+        {canManage && (
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={openReschedule}
+              disabled={!canReschedule}
+              className={`min-h-[48px] w-full rounded-2xl bg-stone-900 text-sm font-extrabold text-white shadow-sm disabled:opacity-40 ${FOCUS}`}
+            >
+              Reschedule booking
+            </button>
+            {!canReschedule && (
+              <p className="rounded-2xl bg-amber-50 px-4 py-3 text-xs font-semibold leading-relaxed text-amber-900">
+                {rescheduleReason}
+              </p>
+            )}
+            {cancelArmed ? (
+              <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-left">
+                <p className="text-sm font-extrabold text-red-900">Cancel this booking?</p>
+                <p className="mt-1 text-xs leading-relaxed text-red-700">
+                  The table is released for other guests. You can book again at any time.
+                </p>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCancelArmed(false)}
+                    className="min-h-[44px] rounded-xl border border-red-200 bg-white text-xs font-bold text-red-800"
+                  >
+                    Keep booking
+                  </button>
+                  <button
+                    type="button"
+                    onClick={cancelBooking}
+                    className="min-h-[44px] rounded-xl bg-red-600 text-xs font-extrabold text-white"
+                  >
+                    Yes, cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setCancelArmed(true)}
+                className="min-h-[44px] w-full rounded-2xl text-xs font-bold text-red-600 underline underline-offset-2"
+              >
+                Cancel booking
+              </button>
+            )}
+          </div>
+        )}
+
         <button
           type="button"
           onClick={reset}
@@ -202,9 +396,157 @@ export function BookingPanel({ defaultName = '' }) {
         >
           Book another table
         </button>
+
+        {rescheduleOpen && canReschedule && (
+          <Sheet onClose={() => setRescheduleOpen(false)} label="Reschedule booking" tall>
+            <form onSubmit={reschedule}>
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-amber-700">Manage booking</p>
+              <h2 className="mt-0.5 text-xl font-extrabold text-stone-900">Reschedule booking</h2>
+              <p className="mt-1 text-xs leading-relaxed text-stone-500">
+                Pick a new date and time for {booking.partySize} {booking.partySize === 1 ? 'guest' : 'guests'}.
+              </p>
+
+              <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
+                {days.map((day) => {
+                  const value = toLocalIsoDate(day)
+                  const active = value === manageDate
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      data-testid="manage-day"
+                      data-value={value}
+                      onClick={() => { setManageDate(value); setManageTime(''); setManageError('') }}
+                      aria-pressed={active}
+                      className={`flex min-h-[58px] min-w-[54px] shrink-0 flex-col items-center justify-center rounded-2xl border text-xs font-bold ${FOCUS} ${
+                        active
+                          ? 'border-[var(--guest-accent)] bg-[var(--guest-accent)] text-[var(--guest-ink)]'
+                          : 'border-stone-200 bg-white text-stone-600'
+                      }`}
+                    >
+                      <span className="text-[10px] font-semibold uppercase tracking-wide opacity-70">
+                        {day.toLocaleDateString(locale, { weekday: 'short' })}
+                      </span>
+                      <span className="mt-0.5 text-base font-extrabold">{day.getDate()}</span>
+                    </button>
+                  )
+                })}
+              </div>
+
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {manageSlotOptions.map((option) => {
+                  const full = option.past || option.tables.length === 0
+                  const active = manageTime === option.time
+                  return (
+                    <button
+                      key={option.time}
+                      type="button"
+                      data-testid="manage-slot"
+                      data-time={option.time}
+                      disabled={full}
+                      onClick={() => { setManageTime(option.time); setManageError('') }}
+                      aria-pressed={active}
+                      className={`flex min-h-[50px] flex-col items-center justify-center rounded-2xl border text-xs font-bold disabled:opacity-40 ${FOCUS} ${
+                        active
+                          ? 'border-stone-900 bg-stone-900 text-white'
+                          : 'border-stone-200 bg-white text-stone-700'
+                      }`}
+                    >
+                      <span>{timeLabel(option.time, locale)}</span>
+                      <span className={`mt-0.5 text-[9px] font-semibold ${active ? 'text-white/70' : full ? 'text-stone-400' : 'text-emerald-700'}`}>
+                        {option.past ? 'Passed' : option.tables.length ? 'Available' : 'Full'}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+
+              {manageError && (
+                <p className="mt-3 rounded-2xl bg-red-50 px-4 py-3 text-xs font-semibold text-red-700" role="alert">
+                  {manageError}
+                </p>
+              )}
+
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setRescheduleOpen(false)}
+                  className="min-h-[48px] rounded-2xl border border-stone-200 bg-white text-sm font-bold text-stone-600"
+                >
+                  Keep current
+                </button>
+                <button
+                  type="submit"
+                  disabled={!manageTime}
+                  className="min-h-[48px] rounded-2xl bg-[var(--guest-accent)] text-sm font-extrabold text-[var(--guest-ink)] disabled:opacity-40"
+                >
+                  Save new time
+                </button>
+              </div>
+            </form>
+          </Sheet>
+        )}
       </section>
     )
   }
+
+  if (waitlistEntry) {
+    const waitDate = waitlistEntry.date ? new Date(`${waitlistEntry.date}T12:00`) : null
+    const waitDay = waitDate
+      ? waitDate.toLocaleDateString(locale, { weekday: 'long', month: 'short', day: 'numeric' })
+      : 'Next available'
+    return (
+      <section className="mt-4 space-y-3" aria-labelledby="guest-waitlist-title" data-testid="guest-waitlist-confirmed">
+        <div className="rounded-3xl bg-white p-6 text-center shadow-sm">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-50 text-2xl text-amber-600">
+            <Icon name="clock" size={26} />
+          </div>
+          <h2 id="guest-waitlist-title" className="mt-3 text-xl font-extrabold text-stone-900">
+            You&apos;re on the waitlist
+          </h2>
+          <p className="mt-1 text-sm leading-relaxed text-stone-500">
+            We will call {waitlistEntry.phone || 'you'} when a table opens.
+          </p>
+          <div className="mt-4 rounded-2xl bg-stone-50 p-4 text-left text-sm">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-stone-500">Date</span>
+              <strong className="text-stone-900">{waitDay}</strong>
+            </div>
+            <div className="mt-2 flex items-center justify-between gap-3">
+              <span className="text-stone-500">Party</span>
+              <strong className="text-stone-900">{waitlistEntry.partySize} {waitlistEntry.partySize === 1 ? 'guest' : 'guests'}</strong>
+            </div>
+            {waitlistEntry.time && (
+              <div className="mt-2 flex items-center justify-between gap-3">
+                <span className="text-stone-500">Around</span>
+                <strong className="text-stone-900">{timeLabel(waitlistEntry.time, locale)}</strong>
+              </div>
+            )}
+            <div className="mt-2 flex items-center justify-between gap-3">
+              <span className="text-stone-500">Reference</span>
+              <strong className="font-mono text-stone-900">{waitlistEntry.id.slice(-6).toUpperCase()}</strong>
+            </div>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={leaveWaitlist}
+          className={`min-h-[48px] w-full rounded-2xl bg-stone-900 text-sm font-extrabold text-white ${FOCUS}`}
+        >
+          Book a table instead
+        </button>
+        <button
+          type="button"
+          onClick={leaveWaitlist}
+          className="min-h-[44px] w-full rounded-2xl text-xs font-bold text-stone-500 underline underline-offset-2"
+        >
+          Leave waitlist
+        </button>
+      </section>
+    )
+  }
+
+  const waitlistDateLabel = new Date(`${date}T12:00`).toLocaleDateString(locale, { weekday: 'short', month: 'short', day: 'numeric' })
 
   return (
     <section className="mt-4 space-y-4" aria-labelledby="guest-booking-title" data-testid="guest-booking">
@@ -231,6 +573,8 @@ export function BookingPanel({ defaultName = '' }) {
               <button
                 key={value}
                 type="button"
+                data-testid="booking-day"
+                data-value={value}
                 onClick={() => { setDate(value); setSelectedTime(''); setError('') }}
                 aria-pressed={active}
                 className={`flex min-h-[62px] min-w-[58px] shrink-0 flex-col items-center justify-center rounded-2xl border text-xs font-bold transition-colors ${FOCUS} ${
@@ -285,6 +629,8 @@ export function BookingPanel({ defaultName = '' }) {
               <button
                 key={option.time}
                 type="button"
+                data-testid="booking-slot"
+                data-time={option.time}
                 disabled={full}
                 onClick={() => { setSelectedTime(option.time); setError('') }}
                 aria-pressed={active}
@@ -357,6 +703,27 @@ export function BookingPanel({ defaultName = '' }) {
             : 'Pick a time to continue'}
         </button>
       </form>
+
+      <div className="rounded-3xl border border-amber-200 bg-amber-50 p-4">
+        <p className="text-sm font-extrabold text-amber-950">Fully booked?</p>
+        <p className="mt-1 text-xs leading-relaxed text-amber-800">
+          Join the waitlist for {waitlistDateLabel}. The host will call if a table opens
+          {selectedTime ? ` around ${timeLabel(selectedTime, locale)}` : ''}.
+        </p>
+        {waitlistError && (
+          <p className="mt-2 rounded-xl bg-white/70 px-3 py-2 text-xs font-semibold text-red-700" role="alert">
+            {waitlistError}
+          </p>
+        )}
+        <button
+          type="button"
+          data-testid="booking-waitlist"
+          onClick={joinWaitlist}
+          className={`mt-3 min-h-[44px] w-full rounded-2xl border border-amber-300 bg-white text-xs font-extrabold text-amber-900 ${FOCUS}`}
+        >
+          Join the waitlist
+        </button>
+      </div>
     </section>
   )
 }
