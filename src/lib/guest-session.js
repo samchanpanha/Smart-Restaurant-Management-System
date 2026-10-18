@@ -5,6 +5,7 @@
 
 export const GUEST_SESSION_KEY = 'restora_miniapp_session_v1'
 export const GUEST_ORDER_KEY = 'restora_guest_order_v1'
+export const GUEST_BOOKING_KEY = 'restora_guest_booking_v1'
 
 export function guestSessionToken() {
   try {
@@ -35,5 +36,25 @@ export function saveGuestOrder(entry) {
     else localStorage.setItem(GUEST_ORDER_KEY, JSON.stringify(entry))
   } catch {
     // Private mode: the in-memory id still carries the current visit.
+  }
+}
+
+/** The last table booking this browser made (id + guest token). */
+export function loadGuestBooking() {
+  try {
+    const raw = localStorage.getItem(GUEST_BOOKING_KEY)
+    const parsed = raw ? JSON.parse(raw) : null
+    return parsed && typeof parsed === 'object' ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+export function saveGuestBooking(entry) {
+  try {
+    if (!entry || !entry.id) localStorage.removeItem(GUEST_BOOKING_KEY)
+    else localStorage.setItem(GUEST_BOOKING_KEY, JSON.stringify(entry))
+  } catch {
+    // Private mode: the confirmation still renders from component state.
   }
 }

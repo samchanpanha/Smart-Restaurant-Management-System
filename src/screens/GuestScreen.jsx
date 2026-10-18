@@ -4,7 +4,9 @@
 // consumer-friendly surface — the opposite of the dark ops screens.
 
 import { useEffect, useMemo, useState } from 'react'
+import { Icon } from '../components/Icon'
 import LanguageSwitcher from '../components/LanguageSwitcher'
+import { BookingPanel } from './Guest/sections/BookingPanel.jsx'
 import MenuConcierge from '../components/MenuConcierge'
 import DishShowcase from '../components/three/DishShowcase'
 import { Sheet } from '../components/ui'
@@ -573,7 +575,14 @@ function PaidCheckSummary({ table, paid, menuById, taxPct, onResetTable }) {
 // ─── Guest app ────────────────────────────────────────────────────
 
 // orderMode: 'dine_in' | 'pickup' | 'delivery'
-export default function GuestScreen({ tableId, allowPickup = false, onSelfSeat = null, initialOrderMode = null }) {
+export default function GuestScreen({
+  tableId,
+  allowPickup = false,
+  onSelfSeat = null,
+  initialOrderMode = null,
+  embedded = false,
+  defaultGuestName = '',
+}) {
   const { state, dispatch, locId, link } = useRestora()
   const { lang, dict } = useI18n()
   useDomTranslator(null, lang)
@@ -581,9 +590,11 @@ export default function GuestScreen({ tableId, allowPickup = false, onSelfSeat =
   const { items: catalogMenu } = useMenuCatalog(state.menu, locId, link.status)
   const online = useOnline()
   const [tab, setTab] = useState('menu')
-  const [cat, setCat] = useState('Mains')
+  const [cat, setCat] = useState('All')
+  const [query, setQuery] = useState('')
   const [cart, setCart] = useState([])
-  const [guestName, setGuestName] = useState('')
+  const [guestName, setGuestName] = useState(defaultGuestName)
+  const [guestPhone, setGuestPhone] = useState('')
   const [detail, setDetail] = useState(null)
   const [cartOpen, setCartOpen] = useState(false)
   const [payOpen, setPayOpen] = useState(false)
@@ -627,70 +638,40 @@ export default function GuestScreen({ tableId, allowPickup = false, onSelfSeat =
     const fromTree = menuTree.map((root) => root.name)
     return ['All', ...new Set([...fromTree, ...distinctCats])]
   }, [menuTree, distinctCats])
-  const available = activeMenu.filter((m) => m.available && (m.category === cat || cat === 'All'))
-  const [collapsedSubs, setCollapsedSubs] = useState({})
+  const needle = query.trim().toLowerCase()
+  const available = useMemo(() => activeMenu.filter((m) => {
+    if (!m.available) return false
+    if (cat !== 'All' && m.category !== cat) return false
+    if (!needle) return true
+    const hay = [m.name, m.description, m.category, translateDishName(m, lang)]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+    return hay.includes(needle)
+  }), [activeMenu, cat, needle, lang])
 
-  function toggleSubCollapse(subId) {
-    setCollapsedSubs((cur) => ({ ...cur, [subId]: !cur[subId] }))
-  }
-
-  const categorizedSections = useMemo(() => {
-    const targetRoots = cat === 'All'
-      ? (menuTree.length > 0 ? menuTree : distinctCats.map((name) => ({ id: `cat_${name}`, name, children: [] })))
-      : (menuTree.filter((root) => root.name.toLowerCase() === cat.toLowerCase()).length > 0
-          ? menuTree.filter((root) => root.name.toLowerCase() === cat.toLowerCase())
-          : [{ id: `cat_${cat}`, name: cat, children: [] }])
-
-    const matchedIds = new Set()
-    const sections = targetRoots.map((root) => {
-      const subGroups = (root.children || []).map((child) => {
-        const dishes = available.filter((m) => {
-          const matchesCat = m.category?.toLowerCase() === root.name.toLowerCase()
-          const matchesSub = m.subCategory?.toLowerCase() === child.name.toLowerCase()
-          return (matchesCat && matchesSub) || (!m.subCategory && m.category?.toLowerCase() === child.name.toLowerCase())
-        })
-        dishes.forEach((d) => matchedIds.add(d.id))
-        return { child, dishes }
-      })
-
-      const directDishes = available.filter((m) => {
-        if (matchedIds.has(m.id)) return false
-        return m.category?.toLowerCase() === root.name.toLowerCase()
-      })
-      directDishes.forEach((d) => matchedIds.add(d.id))
-
-      const totalCount = directDishes.length + subGroups.reduce((sum, sg) => sum + sg.dishes.length, 0)
-      return {
-        root,
-        directDishes,
-        subGroups,
-        totalCount,
-      }
-    })
-
-    const remainingDishes = available.filter((m) => !matchedIds.has(m.id))
-    if (remainingDishes.length > 0 && (cat === 'All' || remainingDishes.some((m) => m.category?.toLowerCase() === cat.toLowerCase()))) {
-      const extraByCat = new Map()
-      for (const d of remainingDishes) {
-        if (cat !== 'All' && d.category?.toLowerCase() !== cat.toLowerCase()) continue
-        const cName = d.category || 'Other'
-        if (!extraByCat.has(cName)) extraByCat.set(cName, [])
-        extraByCat.get(cName).push(d)
-      }
-      for (const [cName, dishes] of extraByCat.entries()) {
-        sections.push({
-          root: { id: `orphan_${cName}`, name: cName, color: '#f59e0b', children: [] },
-          directDishes: dishes,
-          subGroups: [],
-          totalCount: dishes.length,
-        })
-      }
+  // One flat section per category — no nested accordions, no sticky
+  // sub-headers fighting the Telegram chrome. Search and the category rail
+  // are the only navigation.
+  const menuSections = useMemo(() => {
+    const groups = new Map()
+    for (const m of available) {
+      const key = m.category || 'Other'
+      if (!groups.has(key)) groups.set(key, [])
+      groups.get(key).push(m)
     }
-
-    return sections
-  }, [available, cat, distinctCats, menuTree])
+    const order = [...menuTree.map((root) => root.name), ...distinctCats]
+    const rank = (name) => {
+      const index = order.indexOf(name)
+      return index === -1 ? 999 : index
+    }
+    return [...groups.entries()]
+      .sort((a, b) => rank(a[0]) - rank(b[0]))
+      .map(([name, dishes]) => ({ name, dishes }))
+  }, [available, menuTree, distinctCats])
 
   const myLines = order ? order.items.filter((i) => i.by === 'guest' && !i.voided) : []
+  const firingCount = myLines.filter((line) => line.status === 'fired').length
   const cartTotal = cart.reduce((s, c) => s + (menuById[c.menuItemId]?.price || 0) * c.qty, 0)
   const cartCount = cart.reduce((s, c) => s + c.qty, 0)
 
@@ -702,14 +683,35 @@ export default function GuestScreen({ tableId, allowPickup = false, onSelfSeat =
     setDetail(null)
   }
 
+  // Simple dishes go straight in; required modifiers still open the sheet.
+  function quickAdd(menuItem) {
+    if ((menuItem.modifiers || []).some((group) => group.required)) {
+      setDetail(menuItem)
+      return
+    }
+    addToCart(menuItem, { qty: 1, modifiers: [] })
+  }
+
+  function changeQty(key, delta) {
+    setCart((list) => list
+      .map((line) => (line.key === key
+        ? { ...line, qty: Math.max(0, Math.min(12, line.qty + delta)) }
+        : line))
+      .filter((line) => line.qty > 0))
+  }
+
   function sendCart() {
     if (!cart.length) return
     const name = guestName.trim()
+    const phone = guestPhone.trim()
+    if (delivery || pickup) {
+      if (!name) { setNameError(true); return }
+      setNameError(false)
+    }
     if (delivery) {
-      // Delivery: name required, address required.
-      if (!name) { setNameError(true); setCartOpen(false); return }
       const addr = deliveryAddress.trim()
-      if (!addr) { setAddressError(true); setCartOpen(false); return }
+      if (!addr) { setAddressError(true); return }
+      setAddressError(false)
       // Single atomic action — creates the delivery order + fires lines.
       // The client id travels with the action so tracking can find the
       // order the reducer actually created.
@@ -721,12 +723,11 @@ export default function GuestScreen({ tableId, allowPickup = false, onSelfSeat =
         orderType: 'delivery',
         orderId,
         guestToken,
-        customer: { name },
-        deliveryAddress: addr,
+        customer: { name, phone },
+        deliveryAddress: deliveryAddress.trim(),
         items: cart.map((c) => ({ ...c, guest: name })),
       })
     } else if (pickup) {
-      if (!name) { setNameError(true); setCartOpen(false); return }
       // One takeout ticket per guest session: create it once, then append.
       const orderId = pickupOrderId || uid('o')
       if (!pickupOrderId) {
@@ -737,7 +738,7 @@ export default function GuestScreen({ tableId, allowPickup = false, onSelfSeat =
           orderType: 'takeout',
           orderId,
           guestToken,
-          customer: { name },
+          customer: { name, phone },
           items: cart.map((c) => ({ ...c, guest: name })),
         })
       } else {
@@ -750,13 +751,13 @@ export default function GuestScreen({ tableId, allowPickup = false, onSelfSeat =
       dispatch({
         type: 'GUEST_SEND',
         tableId,
-        items: cart.map((c) => ({ ...c, guest: guestName.trim() || null })),
+        items: cart.map((c) => ({ ...c, guest: name || null })),
       })
     }
     setCart([])
     setCartOpen(false)
     setJustSent(true)
-    setTab('status')
+    setTab('orders')
     window.setTimeout(() => setJustSent(false), 5000)
     // The Telegram mini app listens for this to fire a haptic tap.
     window.dispatchEvent(new CustomEvent('restora:order-sent', { detail: { tableId: tableId || null, orderType: delivery ? 'delivery' : pickup ? 'takeout' : 'dine_in' } }))
@@ -949,60 +950,66 @@ export default function GuestScreen({ tableId, allowPickup = false, onSelfSeat =
   return (
     <div className="min-h-screen bg-[var(--guest-bg)] text-stone-900">
       <div className="mx-auto max-w-md px-4 pb-[calc(9rem+env(safe-area-inset-bottom))] pt-5">
-        <div className="mb-3 flex justify-end">
-          <LanguageSwitcher compact testIdPrefix="guest-lang" />
-        </div>
         {!online && (
           <div className="mb-3 rounded-2xl bg-stone-800 px-4 py-2.5 text-xs font-semibold text-white shadow-sm" role="status" data-testid="guest-offline">
             You&apos;re offline — reconnect to send your order.
           </div>
         )}
-        <header className="flex items-center justify-between">
-          <div>
-            <div className="text-xs font-bold uppercase tracking-widest text-amber-700">
-              {delivery
-                ? (gu.deliveryEyebrow || 'Restora · delivery order')
-                : pickup
-                  ? (gu.pickupEyebrow || 'Restora · order for pickup')
-                  : (gu.orderAtTable || 'Restora · order at table')}
-              {lang !== 'en' && <span className="sr-only"> {delivery ? 'Restora · delivery order' : pickup ? 'Restora · order for pickup' : 'Restora · order at table'}</span>}
+        {/* Embedded in the mini app, the Telegram chrome already carries the
+            restaurant, table, language and service actions. Rendering a second
+            header here was the biggest source of vertical noise. */}
+        {!embedded && (
+          <header className="mb-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-amber-700">
+                  {delivery
+                    ? (gu.deliveryEyebrow || 'Restora · delivery order')
+                    : pickup
+                      ? (gu.pickupEyebrow || 'Restora · order for pickup')
+                      : (gu.orderAtTable || 'Restora · order at table')}
+                  {lang !== 'en' && <span className="sr-only"> {delivery ? 'Restora · delivery order' : pickup ? 'Restora · order for pickup' : 'Restora · order at table'}</span>}
+                </div>
+                <h1 className="mt-0.5 text-2xl font-extrabold tracking-tight">
+                  {heading}
+                  {!pickup && lang !== 'en' && <span className="sr-only"> {table.name}</span>}
+                </h1>
+                {liveStatus && (
+                  <span
+                    className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-amber-800"
+                    role="status"
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden="true" />
+                    {liveStatus}
+                    {lang !== 'en' && <span className="sr-only"> {liveStatus}</span>}
+                  </span>
+                )}
+              </div>
+              <LanguageSwitcher compact testIdPrefix="guest-lang" />
             </div>
-            <h1 className="text-2xl font-extrabold tracking-tight">
-              {heading}
-              {!pickup && lang !== 'en' && <span className="sr-only"> {table.name}</span>}
-            </h1>
-            {liveStatus && (
-              <span
-                className="mt-1 inline-block rounded-full bg-amber-500/15 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-amber-800"
-                role="status"
-              >
-                {liveStatus}
-                {lang !== 'en' && <span className="sr-only"> {liveStatus}</span>}
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setAskOpen(true)}
-              data-testid="guest-ask-menu"
-              className="min-h-[44px] rounded-full bg-amber-500 px-3.5 text-xs font-bold text-stone-950 shadow-sm active:bg-amber-400"
-            >
-              ✨ {lang === 'km' ? 'សួរម្ហូប' : lang === 'zh' ? '咨询菜单' : 'Menu help'}
-              {lang !== 'en' && <span className="sr-only"> Ask about the menu</span>}
-            </button>
-            {!pickup && !delivery && (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={() => setMoveModalOpen(true)}
-                className="min-h-[44px] rounded-full border border-stone-200 bg-white px-3.5 text-xs font-bold text-stone-700 shadow-sm active:bg-stone-100"
+                onClick={() => setAskOpen(true)}
+                data-testid="guest-ask-menu"
+                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full bg-[var(--guest-accent)] px-3.5 text-xs font-bold text-[var(--guest-ink)] shadow-sm active:brightness-95"
               >
-                🔄 {dict.common?.transferTable || 'Move'}
+                <Icon name="sparkles" size={15} /> {lang === 'km' ? 'សួរម្ហូប' : lang === 'zh' ? '咨询菜单' : 'Menu help'}
+                {lang !== 'en' && <span className="sr-only"> Ask about the menu</span>}
               </button>
-            )}
-            {!pickup && !delivery && <ServerCallControl tableId={tableId} serverCalledAt={table?.serverCalledAt} />}
-          </div>
-        </header>
+              {!pickup && !delivery && (
+                <button
+                  type="button"
+                  onClick={() => setMoveModalOpen(true)}
+                  className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-stone-200 bg-white px-3.5 text-xs font-bold text-stone-700 shadow-sm active:bg-stone-100"
+                >
+                  <Icon name="swap" size={15} /> {dict.common?.transferTable || 'Move'}
+                </button>
+              )}
+              {!pickup && !delivery && <ServerCallControl tableId={tableId} serverCalledAt={table?.serverCalledAt} />}
+            </div>
+          </header>
+        )}
 
         {table?.pendingTransfer && table.pendingTransfer.status === 'pending' && (
           <div className="mt-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-xs text-amber-900 shadow-sm" role="status">
@@ -1020,41 +1027,6 @@ export default function GuestScreen({ tableId, allowPickup = false, onSelfSeat =
           </div>
         )}
 
-        <input
-          value={guestName}
-          onChange={(e) => { setGuestName(e.target.value); setNameError(false) }}
-          maxLength={24}
-          aria-label="Your name"
-          placeholder={delivery
-            ? (gu.deliveryNamePlaceholder || 'Your name — required for delivery')
-            : pickup
-              ? (gu.pickupNamePlaceholder || 'Your name — we\u2019ll call it when your order is ready')
-              : (gu.yourName || 'Your name (optional — helps the kitchen)')}
-          className={`mt-3 min-h-[44px] w-full rounded-2xl border bg-white px-4 text-sm shadow-sm ${nameError ? 'border-red-400 ring-2 ring-red-200' : 'border-stone-200'}`}
-        />
-        {nameError && (
-          <p className="mt-1 text-xs font-semibold text-red-600" role="alert">
-            {delivery ? 'Your name is required for delivery.' : 'Add your name so we can call your order.'}
-          </p>
-        )}
-        {delivery && (
-          <>
-            <input
-              value={deliveryAddress}
-              onChange={(e) => { setDeliveryAddress(e.target.value); setAddressError(false) }}
-              maxLength={120}
-              aria-label="Delivery address"
-              placeholder={gu.deliveryAddressPlaceholder || '📍 Delivery address — street, building, apt…'}
-              className={`mt-2 min-h-[44px] w-full rounded-2xl border bg-white px-4 text-sm shadow-sm ${addressError ? 'border-red-400 ring-2 ring-red-200' : 'border-stone-200'}`}
-            />
-            {addressError && (
-              <p className="mt-1 text-xs font-semibold text-red-600" role="alert">
-                Please enter a delivery address.
-              </p>
-            )}
-          </>
-        )}
-
         {justSent && (
           <div className="mt-3 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white shadow" role="status">
             {gu.sentToKitchen || 'Sent to the kitchen — watch it here live. 🔥'}
@@ -1063,166 +1035,169 @@ export default function GuestScreen({ tableId, allowPickup = false, onSelfSeat =
 
         {tab === 'menu' && (
           <>
-            <div className="sticky top-0 z-10 -mx-4 mt-4 bg-[var(--guest-bg)]/95 px-4 py-2 backdrop-blur">
-              <div className="flex gap-2 overflow-x-auto pb-1">
-                {cats.map((c) => (
+            <div className="mt-4 flex items-center gap-2">
+              <label className="relative flex-1">
+                <span className="sr-only">Search dishes</span>
+                <Icon name="search" size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" />
+                <input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search dishes"
+                  className="min-h-[46px] w-full rounded-2xl border border-stone-200/80 bg-white pl-10 pr-9 text-sm shadow-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-200"
+                />
+                {query && (
                   <button
-                    key={c} type="button" onClick={() => setCat(c)}
-                    className={`min-h-[44px] shrink-0 rounded-full px-4 text-sm font-bold transition-all ${cat === c ? 'bg-stone-900 text-white shadow-sm' : 'bg-white text-stone-600 shadow-xs'}`}
+                    type="button"
+                    onClick={() => setQuery('')}
+                    aria-label="Clear search"
+                    className="absolute right-1.5 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full text-lg text-stone-400"
                   >
-                    {c === 'All' ? 'All' : translateCategory(c, lang)}
-                    {lang !== 'en' && <span className="sr-only"> {c}</span>}
+                    ×
                   </button>
-                ))}
-              </div>
+                )}
+              </label>
+              <button
+                type="button"
+                onClick={() => setAskOpen(true)}
+                data-testid="guest-ask-menu"
+                aria-label="Ask about the menu"
+                className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-2xl bg-[var(--guest-accent)] text-[var(--guest-ink)] shadow-sm"
+              >
+                <Icon name="sparkles" size={18} />
+              </button>
             </div>
 
-            <div className="mt-2 space-y-6">
-              {categorizedSections.map(({ root, directDishes, subGroups, totalCount }) => {
-                if (totalCount === 0) return null
+            <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+              {cats.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setCat(c)}
+                  className={`min-h-[40px] shrink-0 rounded-full px-4 text-sm font-bold transition-colors ${
+                    cat === c
+                      ? 'bg-stone-900 text-white shadow-sm'
+                      : 'bg-white text-stone-600 ring-1 ring-stone-200/70'
+                  }`}
+                >
+                  {c === 'All' ? 'All' : translateCategory(c, lang)}
+                  {lang !== 'en' && <span className="sr-only"> {c}</span>}
+                </button>
+              ))}
+            </div>
 
-                return (
-                  <section key={root.id} id={`cat-sec-${root.id}`} className="space-y-3">
-                    {/* Sticky Section Header */}
-                    <div className="sticky top-14 z-10 -mx-4 flex items-center justify-between bg-[var(--guest-bg)]/95 px-4 py-2 backdrop-blur border-b border-stone-200/50">
-                      <div className="flex items-center gap-2">
-                        <span className="h-3.5 w-3.5 rounded-full ring-1 ring-black/10 shrink-0" style={{ background: root.color || '#f59e0b' }} />
-                        <h2 className="text-base font-extrabold text-stone-900 tracking-tight">
-                          {translateCategory(root.name, lang)}
-                        </h2>
-                      </div>
-                      <span className="rounded-full bg-white px-2.5 py-0.5 text-xs font-bold text-stone-500 shadow-xs">
-                        {totalCount} {totalCount === 1 ? 'dish' : 'dishes'}
-                      </span>
-                    </div>
-
-                    {/* Direct Dishes */}
-                    {directDishes.length > 0 && (
-                      <ul className="space-y-2.5">
-                        {directDishes.map((m) => (
-                          <li key={m.id}>
-                            <button
-                              type="button" onClick={() => setDetail(m)}
-                              className="w-full rounded-3xl bg-white p-4 text-left shadow-sm transition-transform active:scale-[0.99]"
-                            >
-                              {guestPhotos && m.imageUrl && (
-                                <DishImage src={m.imageUrl} className="mb-3 h-36 w-full rounded-2xl" />
-                              )}
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0">
-                                  <div className="font-extrabold">
-                                    {translateDishName(m, lang)}
-                                    {lang !== 'en' && <span className="sr-only"> {m.name}</span>}
-                                  </div>
-                                  <div className="mt-0.5 line-clamp-2 text-[13px] leading-snug text-stone-500">{m.description || DESC[m.id] || 'Prepared fresh to order.'}</div>
-                                </div>
-                                <div className="tnum shrink-0 font-extrabold text-amber-700">{money(m.price)}</div>
+            <div className="mt-4 space-y-7">
+              {menuSections.map(({ name, dishes }) => (
+                <section key={name} className="space-y-3">
+                  <div className="flex items-baseline justify-between">
+                    <h2 className="text-base font-extrabold tracking-tight text-stone-900">{translateCategory(name, lang)}</h2>
+                    <span className="text-[11px] font-bold text-stone-400">{dishes.length} {dishes.length === 1 ? 'dish' : 'dishes'}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    {dishes.map((m) => (
+                      <article key={m.id} className="relative overflow-hidden rounded-[22px] bg-white shadow-sm ring-1 ring-black/[0.03]">
+                        <button type="button" onClick={() => setDetail(m)} className="block w-full text-left">
+                          {guestPhotos && m.imageUrl ? (
+                            <DishImage src={m.imageUrl} className="h-28 w-full" />
+                          ) : (
+                            <div className="flex h-28 w-full items-center justify-center bg-gradient-to-br from-amber-50 to-stone-100 text-2xl" aria-hidden="true">🍽</div>
+                          )}
+                          <div className="p-3 pb-10">
+                            <h3 className="line-clamp-2 text-[13px] font-extrabold leading-snug text-stone-900">
+                              {translateDishName(m, lang)}
+                              {lang !== 'en' && <span className="sr-only"> {m.name}</span>}
+                            </h3>
+                            <p className="mt-1 line-clamp-2 text-[11px] leading-snug text-stone-500">
+                              {m.description || DESC[m.id] || 'Prepared fresh to order.'}
+                            </p>
+                            {!!m.dietaryTags?.length && (
+                              <div className="mt-1.5 flex flex-wrap gap-1">
+                                {m.dietaryTags.slice(0, 2).map((tag) => (
+                                  <span key={tag} className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold text-emerald-800">{tag}</span>
+                                ))}
                               </div>
-                              {!!m.dietaryTags?.length && (
-                                <div className="mt-2 flex flex-wrap gap-1.5">
-                                  {m.dietaryTags.map((tag) => <span key={tag} className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-800">{tag}</span>)}
-                                </div>
-                              )}
-                              {!!m.allergens?.length && (
-                                <div className="mt-1.5 text-[10px] font-semibold text-amber-800">Allergen notes · {m.allergens.join(', ')}</div>
-                              )}
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-
-                    {/* Sub-categories Accordions */}
-                    {subGroups.map(({ child, dishes }) => {
-                      if (dishes.length === 0) return null
-                      const isSubCollapsed = !!collapsedSubs[child.id]
-
-                      return (
-                        <div key={child.id} className="rounded-3xl border border-stone-200/80 bg-white/60 p-3 shadow-xs">
+                            )}
+                          </div>
+                        </button>
+                        <div className="absolute inset-x-3 bottom-3 flex items-center justify-between gap-2">
+                          <span className="tnum text-sm font-extrabold text-amber-700">{money(m.price)}</span>
                           <button
                             type="button"
-                            onClick={() => toggleSubCollapse(child.id)}
-                            className="flex w-full items-center justify-between py-1 text-left"
-                            aria-expanded={!isSubCollapsed}
+                            onClick={() => quickAdd(m)}
+                            aria-label={`Add ${m.name}`}
+                            className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--guest-accent)] text-[var(--guest-ink)] shadow-sm transition-transform active:scale-95"
                           >
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono text-xs text-stone-400" aria-hidden>└</span>
-                              <span className="text-sm font-bold text-stone-800">{translateCategory(child.name, lang)}</span>
-                              <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[11px] font-semibold text-stone-500">
-                                {dishes.length}
-                              </span>
-                            </div>
-                            <span className="text-xs text-stone-400 transition-transform">
-                              {isSubCollapsed ? '▼' : '▲'}
-                            </span>
+                            <Icon name="plus" size={17} />
                           </button>
-                          {!isSubCollapsed && (
-                            <ul className="mt-2.5 space-y-2.5">
-                              {dishes.map((m) => (
-                                <li key={m.id}>
-                                  <button
-                                    type="button" onClick={() => setDetail(m)}
-                                    className="w-full rounded-2xl bg-white p-3.5 text-left shadow-xs transition-transform active:scale-[0.99]"
-                                  >
-                                    {guestPhotos && m.imageUrl && (
-                                      <DishImage src={m.imageUrl} className="mb-2.5 h-32 w-full rounded-xl" />
-                                    )}
-                                    <div className="flex items-start justify-between gap-3">
-                                      <div className="min-w-0">
-                                        <div className="font-bold text-stone-900">
-                                          {translateDishName(m, lang)}
-                                          {lang !== 'en' && <span className="sr-only"> {m.name}</span>}
-                                        </div>
-                                        <div className="mt-0.5 line-clamp-2 text-xs leading-snug text-stone-500">{m.description || DESC[m.id] || 'Prepared fresh to order.'}</div>
-                                      </div>
-                                      <div className="tnum shrink-0 font-bold text-amber-700">{money(m.price)}</div>
-                                    </div>
-                                    {!!m.dietaryTags?.length && (
-                                      <div className="mt-2 flex flex-wrap gap-1.5">
-                                        {m.dietaryTags.map((tag) => <span key={tag} className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-800">{tag}</span>)}
-                                      </div>
-                                    )}
-                                  </button>
-                                </li>
-                              ))}
-                            </ul>
-                          )}
                         </div>
-                      )
-                    })}
-                  </section>
-                )
-              })}
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              ))}
 
               {available.length === 0 && (
-                <div className="rounded-3xl bg-white p-6 text-center text-sm text-stone-500">
-                  Everything in {translateCategory(cat, lang)} is 86&apos;d right now — the kitchen will fix it. Try another craving.
+                <div className="rounded-3xl bg-white p-6 text-center shadow-sm">
+                  <div className="text-2xl" aria-hidden="true">🍽</div>
+                  <p className="mt-2 text-sm font-semibold text-stone-700">
+                    {needle ? 'No dishes match your search.' : 'Nothing available in this category right now.'}
+                  </p>
+                  <p className="mt-1 text-xs text-stone-500">
+                    {needle ? 'Try another word or browse a category.' : 'The kitchen is restocking — try another craving.'}
+                  </p>
+                  {needle && (
+                    <button type="button" onClick={() => setQuery('')} className="mt-3 min-h-[40px] rounded-full bg-stone-100 px-4 text-xs font-bold text-stone-700">
+                      Clear search
+                    </button>
+                  )}
                 </div>
               )}
             </div>
 
-            <p className="mt-3 text-center text-[11px] text-stone-400">
-              Dishes the kitchen 86&apos;s disappear from this menu instantly.
+            <p className="mt-4 text-center text-[11px] text-stone-400">
+              Sold-out dishes disappear instantly.
             </p>
           </>
         )}
 
-        {tab === 'status' && (
-          <div className="mt-4 space-y-2.5">
-            <h2 className="text-sm font-bold uppercase tracking-widest text-stone-500">{gu.yourOrders || 'Your orders · live'}</h2>
-            {(!pickup || delivery) && (
+        {tab === 'orders' && (
+          <div className="mt-4 space-y-3" data-testid="guest-orders">
+            <div className="flex items-baseline justify-between">
+              <h2 className="text-sm font-bold uppercase tracking-widest text-stone-500">
+                {pickup ? 'Pickup order' : delivery ? 'Delivery order' : 'Your table'}
+              </h2>
+              {liveStatus && (
+                <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-800">
+                  {liveStatus}
+                </span>
+              )}
+            </div>
+
+            {(!order || !order.items?.length) && (
+              <div className="rounded-3xl bg-white p-6 text-center shadow-sm">
+                <div className="text-3xl" aria-hidden="true">🍽</div>
+                <p className="mt-2 text-sm font-semibold text-stone-700">Nothing sent yet</p>
+                <p className="mt-1 text-xs leading-relaxed text-stone-500">
+                  Add a dish and send it to the kitchen — it appears here live.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setTab('menu')}
+                  className="mt-3 min-h-[44px] rounded-full bg-stone-900 px-5 text-xs font-bold text-white"
+                >
+                  Browse the menu
+                </button>
+              </div>
+            )}
+
+            {order && (
               <div className="rounded-3xl bg-white p-4 shadow-sm">
                 <OrderStatusStepper order={order} isDelivery={delivery} />
               </div>
             )}
-            {myLines.length === 0 && (
-              <div className="rounded-3xl bg-white p-6 text-center text-sm text-stone-500 shadow-sm">
-                Nothing sent yet — <button type="button" onClick={() => setTab('menu')} className="font-bold text-amber-700 underline">browse the menu</button>.
-              </div>
-            )}
+
             {myLines.map((l) => (
               <div key={l.id} className="flex items-center justify-between gap-2 rounded-3xl bg-white p-4 shadow-sm">
-                <div>
+                <div className="min-w-0">
                   <div className="font-extrabold">
                     {l.qty}× {translateDishName(menuById[l.menuItemId] || { id: l.menuItemId, name: l.menuItemId }, lang)}
                     {lang !== 'en' && <span className="sr-only"> {menuById[l.menuItemId]?.name}</span>}
@@ -1239,89 +1214,111 @@ export default function GuestScreen({ tableId, allowPickup = false, onSelfSeat =
                 </span>
               </div>
             ))}
+
+            {order && bill && bill.lines.length > 0 && (
+              <>
+                <div className="rounded-3xl bg-white p-5 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-extrabold text-stone-900">
+                      {pickup || delivery ? 'Order summary' : 'Table check'}
+                    </h3>
+                    <span className="text-[11px] font-semibold text-stone-400">{bill.lines.length} lines</span>
+                  </div>
+                  <ul className="mt-3 space-y-1.5 text-sm">
+                    {bill.lines.map((l) => (
+                      <li key={l.id} className="flex justify-between gap-3 text-stone-700">
+                        <span className="min-w-0">
+                          {l.qty}× {translateDishName(menuById[l.menuItemId] || { id: l.menuItemId, name: l.name }, lang)}
+                          {l.by !== 'guest' && <span className="text-stone-400"> (server)</span>}
+                        </span>
+                        <span className="tnum shrink-0 font-bold">{money(l.lineTotal)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="mt-3 space-y-1 border-t border-stone-100 pt-3 text-sm">
+                    <div className="flex justify-between text-stone-500"><span>Subtotal</span><span className="tnum">{money(bill.subtotal)}</span></div>
+                    {bill.delivery > 0 && (
+                      <div className="flex justify-between text-stone-500"><span>Delivery fee</span><span className="tnum">{money(bill.delivery)}</span></div>
+                    )}
+                    <div className="flex justify-between text-stone-500"><span>Tax</span><span className="tnum">{money(bill.tax)}</span></div>
+                    <div className="flex justify-between border-t border-stone-100 pt-1.5 text-base font-extrabold"><span>Total</span><span className="tnum">{money(bill.total)}</span></div>
+                  </div>
+                </div>
+
+                {payable ? (
+                  <button
+                    type="button"
+                    onClick={() => setPayOpen(true)}
+                    className="tnum min-h-[52px] w-full rounded-2xl bg-stone-900 text-base font-extrabold text-white shadow-sm"
+                  >
+                    Pay {money(bill.total)}
+                  </button>
+                ) : (
+                  <div className="rounded-3xl bg-white p-4 text-center text-sm text-stone-500 shadow-sm">
+                    {order.status === 'open' || heldAny
+                      ? 'Your server is still adding items — payment unlocks when everything is in.'
+                      : 'The check is closing — one moment.'}
+                  </div>
+                )}
+              </>
+            )}
+
             {order && order.billRequested && (
               <div className="rounded-3xl bg-violet-600 p-4 text-center text-sm font-bold text-white shadow">
                 Your server is on the way with the card reader. 💳
               </div>
             )}
-          </div>
-        )}
 
-        {tab === 'bill' && (
-          <div className="mt-4 space-y-3">
-            <h2 className="text-sm font-bold uppercase tracking-widest text-stone-500">{pickup ? (gu.yourOrder || 'Your order') : (gu.tableCheck || 'Table check')}</h2>
-            {!order || bill.lines.length === 0 ? (
-              <div className="rounded-3xl bg-white p-6 text-center text-sm text-stone-500 shadow-sm">
-                Nothing on the check yet.
-              </div>
-            ) : (
-              <>
-                <div className="rounded-3xl bg-white p-5 shadow-sm">
-                  <ul className="space-y-1.5 text-sm">
-                    {bill.lines.map((l) => (
-                      <li key={l.id} className="flex justify-between text-stone-700">
-                        <span>{l.qty}× {translateDishName(menuById[l.menuItemId] || { id: l.menuItemId, name: l.name }, lang)}{l.by !== 'guest' && <span className="text-stone-400"> (server)</span>}</span>
-                        <span className="tnum font-bold">{money(l.lineTotal)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  <div className="mt-3 space-y-1 border-t border-stone-100 pt-3 text-sm">
-                    <div className="flex justify-between text-stone-500"><span>{gu.subtotal || 'Subtotal'}</span><span className="tnum">{money(bill.subtotal)}</span></div>
-                    <div className="flex justify-between text-stone-500"><span>{gu.tax || 'Tax'}</span><span className="tnum">{money(bill.tax)}</span></div>
-                    <div className="flex justify-between text-base font-extrabold"><span>{gu.total || 'Total due'}</span><span className="tnum">{money(bill.total)}</span></div>
-                  </div>
-                </div>
-                {payable ? (
-                  <>
-                    <button
-                      type="button" onClick={() => setPayOpen(true)}
-                      className="min-h-[52px] w-full rounded-2xl bg-stone-900 text-base font-extrabold text-white"
-                    >
-                      Pay {money(bill.total)} + tip
-                    </button>
-                    <button
-                      type="button" onClick={() => dispatch({ type: 'REQUEST_BILL', orderId: order.id })}
-                      disabled={!!order.billRequested}
-                      className="min-h-[44px] w-full rounded-2xl border border-stone-200 bg-white text-sm font-bold text-stone-600 disabled:opacity-50"
-                    >
-                      {order.billRequested ? 'Server notified ✓' : 'Ask server to take payment instead'}
-                    </button>
-                  </>
-                ) : (
-                  <div className="rounded-3xl bg-white p-4 text-center text-sm text-stone-500 shadow-sm">
-                    {order.status === 'open' || heldAny
-                      ? 'Your server is still adding items — the bill unlocks when everything is in.'
-                      : 'Check is closing — one moment.'}
-                  </div>
-                )}
-              </>
+            {order && !pickup && !delivery && (
+              <button
+                type="button"
+                onClick={() => dispatch({ type: 'REQUEST_BILL', orderId: order.id })}
+                disabled={!!order.billRequested}
+                className="min-h-[48px] w-full rounded-2xl border border-stone-200 bg-white text-sm font-bold text-stone-600 disabled:opacity-50"
+              >
+                {order.billRequested ? 'Server notified ✓' : 'Ask server to take payment instead'}
+              </button>
             )}
           </div>
         )}
+
+        {tab === 'book' && <BookingPanel defaultName={guestName || defaultGuestName} />}
 
         {/* Bottom nav + cart bar */}
         <nav className="fixed inset-x-0 bottom-0 z-20 mx-auto max-w-md bg-white/95 px-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-8px_30px_rgba(0,0,0,0.08)] backdrop-blur" aria-label="Guest navigation">
           {cartCount > 0 && (
             <button
-              type="button" onClick={() => setCartOpen(true)}
-              className="tnum mb-2 flex min-h-[52px] w-full items-center justify-between rounded-2xl bg-amber-500 px-5 text-base font-extrabold text-stone-950"
+              type="button"
+              onClick={() => setCartOpen(true)}
+              className="tnum mb-2 flex min-h-[54px] w-full items-center justify-between gap-3 rounded-2xl bg-[var(--guest-accent)] px-4 text-sm font-extrabold text-[var(--guest-ink)] shadow-sm"
             >
-              <span>{gu.viewOrder || 'View order'} · {cartCount} item{cartCount === 1 ? '' : 's'}</span>
-              <span>{money(cartTotal)} →</span>
+              <span className="flex items-center gap-2">
+                <Icon name="cart" size={18} />
+                {cartCount} {cartCount === 1 ? 'item' : 'items'}
+              </span>
+              <span className="flex items-center gap-1.5">
+                {money(cartTotal)}
+                <span className="font-bold opacity-60">· Review →</span>
+              </span>
             </button>
           )}
-          <div className="grid grid-cols-3 gap-1">
+          <div className="grid grid-cols-3 gap-1" aria-label="Guest sections">
             {[
-              ['menu', gu.menuTab || '🍽 Menu', '🍽 Menu'],
-              ['status', `${gu.statusTab || '🔥 Status'}${myLines.filter((l) => l.status === 'fired').length ? ` (${myLines.filter((l) => l.status === 'fired').length})` : ''}`, '🔥 Status'],
-              ['bill', gu.billTab || '🧾 Bill', '🧾 Bill'],
-            ].map(([id, label, enLabel]) => (
+              ['menu', 'Menu', 'menu'],
+              ['orders', firingCount ? `Orders · ${firingCount}` : 'Orders', 'orders'],
+              ['book', 'Book', 'calendar'],
+            ].map(([id, label, icon]) => (
               <button
-                key={id} type="button" onClick={() => setTab(id)}
-                className={`min-h-[44px] rounded-2xl text-sm font-extrabold ${tab === id ? 'bg-stone-900 text-white' : 'text-stone-500'}`}
+                key={id}
+                type="button"
+                onClick={() => setTab(id)}
+                aria-current={tab === id ? 'page' : undefined}
+                className={`flex min-h-[52px] flex-col items-center justify-center gap-0.5 rounded-2xl text-[11px] font-bold transition-colors ${
+                  tab === id ? 'bg-stone-900 text-white shadow-sm' : 'text-stone-500'
+                }`}
               >
+                <Icon name={icon} size={18} />
                 {label}
-                {lang !== 'en' && <span className="sr-only"> {enLabel}</span>}
               </button>
             ))}
           </div>
@@ -1332,47 +1329,162 @@ export default function GuestScreen({ tableId, allowPickup = false, onSelfSeat =
         )}
 
         {cartOpen && (
-          <Sheet onClose={() => setCartOpen(false)} label="Your order">
-            <h2 className="text-xl font-extrabold">Your order · {heading}</h2>
-            {guestName.trim() && <p className="text-sm text-stone-500">Sending as {guestName.trim()}</p>}
-            <ul className="mt-3 space-y-2">
-              {cart.map((c) => (
-                <li key={c.key} className="flex items-center justify-between gap-2 rounded-2xl bg-stone-50 p-3">
-                  <div className="text-sm">
-                    <div className="font-extrabold">{c.qty}× {menuById[c.menuItemId]?.name}</div>
-                    <div className="text-xs text-stone-500">
-                      {(c.modifiers || []).map((m) => m.value).join(' · ')}
-                      {c.notes ? ` · “${c.notes}”` : ''}
+          <Sheet onClose={() => setCartOpen(false)} label="Your order" tall>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-amber-700">
+                  {delivery ? 'Delivery' : pickup ? 'Pickup' : heading}
+                </p>
+                <h2 className="mt-0.5 text-xl font-extrabold text-stone-900">Review your order</h2>
+              </div>
+              <span className="shrink-0 rounded-full bg-stone-100 px-3 py-1 text-xs font-bold text-stone-600">
+                {cartCount} {cartCount === 1 ? 'item' : 'items'}
+              </span>
+            </div>
+
+            <ul className="mt-4 space-y-2.5">
+              {cart.map((c) => {
+                const dish = menuById[c.menuItemId]
+                return (
+                  <li key={c.key} className="rounded-2xl bg-stone-50 p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-sm font-extrabold text-stone-900">
+                          {dish ? translateDishName(dish, lang) : c.menuItemId}
+                          {lang !== 'en' && dish && <span className="sr-only"> {dish.name}</span>}
+                        </div>
+                        <div className="mt-0.5 text-[11px] leading-snug text-stone-500">
+                          {(c.modifiers || []).map((m) => translateModifier(m.value, lang)).join(' · ')}
+                          {c.notes ? `${(c.modifiers || []).length ? ' · ' : ''}“${c.notes}”` : ''}
+                        </div>
+                      </div>
+                      <span className="tnum shrink-0 text-sm font-extrabold text-stone-900">
+                        {money((dish?.price || 0) * c.qty)}
+                      </span>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="tnum text-sm font-extrabold">{money((menuById[c.menuItemId]?.price || 0) * c.qty)}</span>
-                    <button
-                      type="button" aria-label="Remove" onClick={() => setCart((list) => list.filter((x) => x.key !== c.key))}
-                      className="flex h-9 w-9 items-center justify-center rounded-full bg-stone-200 text-lg"
-                    >
-                      ×
-                    </button>
-                  </div>
-                </li>
-              ))}
+                    <div className="mt-2.5 flex items-center justify-between">
+                      <div className="inline-flex items-center rounded-full bg-white ring-1 ring-stone-200">
+                        <button
+                          type="button"
+                          aria-label={`Decrease ${dish?.name || 'item'}`}
+                          onClick={() => changeQty(c.key, -1)}
+                          className="flex h-10 w-10 items-center justify-center rounded-full text-lg font-bold text-stone-600 active:bg-stone-100"
+                        >
+                          −
+                        </button>
+                        <span className="tnum w-7 text-center text-sm font-extrabold">{c.qty}</span>
+                        <button
+                          type="button"
+                          aria-label={`Increase ${dish?.name || 'item'}`}
+                          onClick={() => changeQty(c.key, 1)}
+                          className="flex h-10 w-10 items-center justify-center rounded-full text-lg font-bold text-stone-600 active:bg-stone-100"
+                        >
+                          +
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => changeQty(c.key, -c.qty)}
+                        className="min-h-[40px] px-2 text-xs font-bold text-stone-400"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </li>
+                )
+              })}
             </ul>
+
+            <div className="mt-5 space-y-2.5">
+              <div className="flex items-baseline justify-between">
+                <h3 className="text-xs font-bold uppercase tracking-widest text-stone-400">Your details</h3>
+                <span className="text-[10px] font-semibold text-stone-400">
+                  {pickup || delivery ? 'Required' : 'Optional'}
+                </span>
+              </div>
+              <input
+                value={guestName}
+                onChange={(event) => { setGuestName(event.target.value); setNameError(false) }}
+                maxLength={24}
+                aria-label="Your name"
+                autoComplete="name"
+                placeholder={delivery
+                  ? 'Your name — required for delivery'
+                  : pickup
+                    ? 'Your name — we’ll call it when your order is ready'
+                    : 'Your name (optional — helps the kitchen)'}
+                className={`min-h-[46px] w-full rounded-2xl border bg-white px-4 text-sm shadow-sm outline-none focus:ring-2 focus:ring-amber-200 ${nameError ? 'border-red-400 ring-2 ring-red-200' : 'border-stone-200'}`}
+              />
+              {nameError && (
+                <p className="text-xs font-semibold text-red-600" role="alert">
+                  {delivery ? 'Your name is required for delivery.' : 'Add your name so we can call your order.'}
+                </p>
+              )}
+              {(pickup || delivery) && (
+                <input
+                  value={guestPhone}
+                  onChange={(event) => setGuestPhone(event.target.value)}
+                  maxLength={30}
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  aria-label="Phone number"
+                  placeholder="Phone number (optional — for order updates)"
+                  className="min-h-[46px] w-full rounded-2xl border border-stone-200 bg-white px-4 text-sm shadow-sm outline-none focus:ring-2 focus:ring-amber-200"
+                />
+              )}
+              {delivery && (
+                <>
+                  <input
+                    value={deliveryAddress}
+                    onChange={(event) => { setDeliveryAddress(event.target.value); setAddressError(false) }}
+                    maxLength={120}
+                    aria-label="Delivery address"
+                    autoComplete="street-address"
+                    placeholder="Delivery address — street, building, apt…"
+                    className={`min-h-[46px] w-full rounded-2xl border bg-white px-4 text-sm shadow-sm outline-none focus:ring-2 focus:ring-amber-200 ${addressError ? 'border-red-400 ring-2 ring-red-200' : 'border-stone-200'}`}
+                  />
+                  {addressError && (
+                    <p className="text-xs font-semibold text-red-600" role="alert">
+                      Please enter a delivery address.
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div className="mt-4 rounded-2xl bg-stone-50 p-4 text-sm">
+              <div className="flex justify-between font-bold text-stone-900">
+                <span>Subtotal</span>
+                <span className="tnum">{money(cartTotal)}</span>
+              </div>
+              <p className="mt-1 text-[11px] leading-relaxed text-stone-400">
+                {delivery
+                  ? 'Delivery fee and tax are confirmed when you place the order.'
+                  : 'Tax is added to the final bill.'}
+              </p>
+            </div>
+
             <button
-              type="button" onClick={sendCart} disabled={!cart.length}
-              className="tnum mt-4 min-h-[52px] w-full rounded-2xl bg-amber-500 text-base font-extrabold text-stone-950 disabled:opacity-40"
+              type="button"
+              onClick={sendCart}
+              disabled={!cart.length}
+              className="tnum mt-4 min-h-[52px] w-full rounded-2xl bg-[var(--guest-accent)] text-base font-extrabold text-[var(--guest-ink)] shadow-sm disabled:opacity-40"
             >
-              Send to kitchen · {money(cartTotal)}
+              {delivery ? 'Place delivery order' : pickup ? 'Place pickup order' : 'Send to kitchen'} · {money(cartTotal)}
             </button>
-            <p className="mt-2 text-center text-[11px] text-stone-400">
+            <p className="mt-2 text-center text-[11px] leading-relaxed text-stone-400">
               {delivery
-                ? 'Your order goes straight to the kitchen — rider is dispatched when ready.'
-                : 'Fires straight to the KDS — same as your server sending it.'}
+                ? 'Your order goes straight to the kitchen — a rider is dispatched when it is ready.'
+                : pickup
+                  ? 'We will call your name when your order is ready.'
+                  : 'Fires straight to the kitchen — the same as your server sending it.'}
             </p>
           </Sheet>
         )}
 
         {payOpen && order && (
-          <PaySheet order={order} onClose={() => setPayOpen(false)} onPaid={() => { setPayOpen(false); setTab('bill') }} />
+          <PaySheet order={order} onClose={() => setPayOpen(false)} onPaid={() => { setPayOpen(false); setTab('orders') }} />
         )}
 
         {moveModalOpen && (

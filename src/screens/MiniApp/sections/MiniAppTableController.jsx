@@ -15,7 +15,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { translateTableName, useI18n } from '../../../lib/i18n'
 import { isFreeTableStatus, isTableInServiceStatus } from '../../../lib/constants'
 import { findAvailableTablesForSlot, findNearestAvailableSlots } from '../../../lib/models'
-import { useStore } from '../../../lib/store'
+import { useNow, useStore } from '../../../lib/store'
 import { Button, Input, Sheet } from '../../../components/ui'
 import { useToast } from '../../../components/ui/toast-context'
 import { guestSessionToken } from '../shared.js'
@@ -28,6 +28,7 @@ function MiniAppTableController({ onTableReady, activeTable, waitMin = 15, onOpe
   const { lang, dict } = useI18n()
   const copy = dict.miniapp || {}
   const { notify } = useToast()
+  const now = useNow(15000)
 
   // Persistent guest session token (shared with the picker and the claim).
   const [sessionToken] = useState(guestSessionToken)
@@ -140,7 +141,10 @@ function MiniAppTableController({ onTableReady, activeTable, waitMin = 15, onOpe
     }
     dispatch({ type: 'CALL_SERVER', tableId: myTable.id, serviceType: kind })
     window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.('success')
-    notify(copy.serviceRequested ? copy.serviceRequested(label) : `${label} · Staff notified`, 'success')
+    const message = kind === 'waiter'
+      ? (copy.serverNotified || 'Server notified')
+      : (copy.serviceRequested ? copy.serviceRequested(label) : `${label} · Staff notified`)
+    notify(message, 'success')
   }
 
   function handleRequestTableMove(event) {
@@ -216,9 +220,11 @@ function MiniAppTableController({ onTableReady, activeTable, waitMin = 15, onOpe
       { kind: 'transfer', glyph: '🔄', label: copy.moveTable || 'Move Table', accent: true },
       { kind: 'water', glyph: '💧', label: copy.water || 'Water' },
       { kind: 'napkins', glyph: '🧻', label: copy.napkins || 'Napkins' },
-      { kind: 'waiter', glyph: '🙋', label: copy.callWaiter || 'Call Waiter' },
+      { kind: 'waiter', glyph: '🙋', label: copy.callWaiter || 'Call server' },
       { kind: 'bill', glyph: '💳', label: copy.bill || 'Bill' },
     ]
+    const calledAt = myTable.serverCalledAt ? new Date(myTable.serverCalledAt).getTime() : 0
+    const serverCalled = Boolean(calledAt && now - calledAt < 4 * 60 * 1000)
 
     return (
       <>
@@ -244,7 +250,12 @@ function MiniAppTableController({ onTableReady, activeTable, waitMin = 15, onOpe
                     ? (copy.billOnTheWayShort || 'Server notified · Bringing your check')
                     : hasUnpaid
                       ? (copy.activeOrders ? copy.activeOrders(unpaidTickets.length) : `${unpaidTickets.length} active order(s) at your table`)
-                      : (copy.stepThree || 'Step 3 · Tap the menu to order')}
+                      : (
+                        <>
+                          {copy.seatedHint || 'Seated · tap the menu to order'}
+                          {lang !== 'en' && <span className="sr-only"> Seated</span>}
+                        </>
+                      )}
                 </p>
               </div>
             </div>
@@ -272,24 +283,40 @@ function MiniAppTableController({ onTableReady, activeTable, waitMin = 15, onOpe
             role="toolbar"
             aria-label={copy.quickServices || 'Quick table services'}
           >
-            {serviceActions.map((action) => (
-              <button
-                key={action.kind}
-                type="button"
-                onClick={() => {
-                  if (action.kind === 'transfer') setShowTransferDrawer(true)
-                  else handleQuickService(action.kind, `${action.glyph} ${action.label}`)
-                }}
-                className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-xs font-semibold transition-colors ${FOCUS_DARK} ${
-                  action.accent
-                    ? 'border-sky-400/45 bg-sky-400/15 text-sky-200 hover:bg-sky-400/25'
-                    : 'border-white/15 bg-white/10 text-white hover:bg-white/20'
-                }`}
-              >
-                <span aria-hidden="true">{action.glyph}</span>
-                {action.label}
-              </button>
-            ))}
+            {serviceActions.map((action) => {
+              if (action.kind === 'waiter' && serverCalled) {
+                return (
+                  <span
+                    key={action.kind}
+                    role="status"
+                    className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border border-emerald-400/40 bg-emerald-400/15 px-3.5 text-xs font-semibold text-emerald-200"
+                  >
+                    <span aria-hidden="true">✓</span>
+                    {copy.serverNotified || 'Server notified'}
+                    {lang !== 'en' && <span className="sr-only"> Server notified</span>}
+                  </span>
+                )
+              }
+              return (
+                <button
+                  key={action.kind}
+                  type="button"
+                  onClick={() => {
+                    if (action.kind === 'transfer') setShowTransferDrawer(true)
+                    else handleQuickService(action.kind, `${action.glyph} ${action.label}`)
+                  }}
+                  className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-xs font-semibold transition-colors ${FOCUS_DARK} ${
+                    action.accent
+                      ? 'border-sky-400/45 bg-sky-400/15 text-sky-200 hover:bg-sky-400/25'
+                      : 'border-white/15 bg-white/10 text-white hover:bg-white/20'
+                  }`}
+                >
+                  <span aria-hidden="true">{action.glyph}</span>
+                  {action.label}
+                  {action.kind === 'waiter' && lang !== 'en' && <span className="sr-only"> Call server</span>}
+                </button>
+              )
+            })}
           </div>
         </div>
 
@@ -453,6 +480,13 @@ function MiniAppTableController({ onTableReady, activeTable, waitMin = 15, onOpe
                 </>
               )}
         </p>
+        {activeTable && !activeIsFree && !isTableInServiceStatus(activeTable.status) && (
+          <p className="mt-2 rounded-[var(--radius-md)] bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
+            {translateTableName(activeTable.name || `Table ${activeTable.id}`, lang)} isn&apos;t seated yet.
+            <span className="font-normal text-amber-800"> Sit now or ask the host to seat you.</span>
+            <span className="sr-only"> {activeTable.name} isn&apos;t seated yet.</span>
+          </p>
+        )}
 
         <div className="mt-3 space-y-2">
           {activeIsFree ? (
@@ -484,7 +518,8 @@ function MiniAppTableController({ onTableReady, activeTable, waitMin = 15, onOpe
               className={`flex min-h-12 items-center justify-center gap-2 rounded-[var(--radius-lg)] border border-stone-200 bg-white px-3 text-sm font-bold text-stone-700 transition-colors hover:bg-stone-50 ${FOCUS}`}
             >
               <span aria-hidden="true">🍽</span>
-              {copy.pickup || 'Pickup'}
+              {copy.orderForPickup || 'Order for pickup'}
+              {lang !== 'en' && <span className="sr-only"> Order for pickup</span>}
             </button>
             <button
               type="button"
@@ -492,7 +527,8 @@ function MiniAppTableController({ onTableReady, activeTable, waitMin = 15, onOpe
               className={`flex min-h-12 items-center justify-center gap-2 rounded-[var(--radius-lg)] border border-stone-200 bg-white px-3 text-sm font-bold text-stone-700 transition-colors hover:bg-stone-50 ${FOCUS}`}
             >
               <span aria-hidden="true">🛵</span>
-              {copy.delivery || 'Delivery'}
+              {copy.orderForDelivery || 'Order for delivery'}
+              {lang !== 'en' && <span className="sr-only"> Order for delivery</span>}
             </button>
           </div>
 

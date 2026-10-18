@@ -50,6 +50,12 @@ const $$ = (selector) => [...document.querySelectorAll(selector)]
 const byText = (selector, text) => $$(selector).find((el) => (el.textContent || '').includes(text))
 const click = (el) => act(() => { el.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true })) })
 const submit = (form) => act(() => { form.dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true })) })
+// React tracks the last value it rendered; go through the native setter.
+const type = (el, value) => act(() => {
+  const descriptor = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value')
+  descriptor.set.call(el, value)
+  el.dispatchEvent(new dom.window.Event('input', { bubbles: true }))
+})
 
 let root = null
 let container = null
@@ -103,8 +109,8 @@ test('the welcome card seats the party size the guest chose in one tap', async (
   const intro = welcome.textContent
   assert.match(intro, /Where are you eating\?/)
   assert.match(intro, /Sit now/)
-  assert.match(intro, /Pickup/)
-  assert.match(intro, /Delivery/)
+  assert.match(intro, /pickup/i)
+  assert.match(intro, /delivery/i)
   assert.match(intro, /Have a booking\? Reschedule/)
   assert.match(intro, /tables free/)
 
@@ -195,4 +201,44 @@ test('a guest with a booking can open the reschedule sheet before sitting', asyn
   click(close)
   await settle(30)
   assert.ok(!document.querySelector('[role="dialog"]'))
+})
+
+test('the Book tab turns a live slot into a real reservation', async () => {
+  await fresh('http://localhost:5173/?tg=1')
+
+  const book = byText('button', 'Book')
+  assert.ok(book, 'the guest nav has a Book tab')
+  click(book)
+  await settle(60)
+
+  const panel = document.querySelector('[data-testid="guest-booking"]')
+  assert.ok(panel, 'the booking panel renders')
+  assert.match(panel.textContent, /Book a table/)
+  assert.match(panel.textContent, /Availability is live/)
+
+  const slot = $$('[data-testid="guest-booking"] button').find(
+    (button) => !button.disabled && /Available/.test(button.textContent),
+  )
+  assert.ok(slot, 'at least one live slot is bookable')
+  click(slot)
+  await settle(30)
+  assert.equal(slot.getAttribute('aria-pressed'), 'true')
+
+  const inputs = $$('[data-testid="guest-booking"] input')
+  assert.equal(inputs.length, 3, 'name, phone, and optional notes')
+  type(inputs[0], 'Sokha Chan')
+  type(inputs[1], '012345678')
+  await settle(20)
+  submit(document.querySelector('[data-testid="guest-booking"] form'))
+  await settle(80)
+
+  const confirmed = document.querySelector('[data-testid="guest-booking-confirmed"]')
+  assert.ok(confirmed, 'the confirmation replaces the form')
+  assert.match(confirmed.textContent, /Your table is booked/)
+  assert.match(confirmed.textContent, /2 guests/)
+  assert.match(confirmed.textContent, /Reference/)
+
+  const saved = JSON.parse(dom.window.localStorage.getItem('restora_guest_booking_v1'))
+  assert.ok(saved?.id, 'the booking id is kept for later management')
+  assert.ok(saved?.token, 'scoped to this guest session')
 })

@@ -111,6 +111,9 @@ function MiniAppScreen({ tableId }) {
   // Delivery and pickup skip the table picker entirely.
   const offTable = orderMode === 'delivery' || orderMode === 'pickup'
   const showPicker = !offTable && (pickerOpen || (!table && state.tables.length > 0))
+  // A free/reserved table is not seated yet: the welcome card is the only
+  // gate, so the old duplicate GuestScreen gate never renders underneath it.
+  const canOrder = offTable || Boolean(table && isTableInServiceStatus(table.status))
 
   function seatHere(next) {
     // One action per tap: the claim already marks the table occupied, sets
@@ -175,6 +178,16 @@ function MiniAppScreen({ tableId }) {
               <span aria-hidden="true" className="text-white/60">▾</span>
             </button>
           )}
+          {offTable && (
+            <button
+              type="button"
+              onClick={() => setOrderMode('dine_in')}
+              className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-full border border-white/15 bg-white/10 px-3 text-[11px] font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+            >
+              <span aria-hidden="true">↩</span>
+              <span>{dict.miniapp?.change || 'Change'}</span>
+            </button>
+          )}
           {inTelegram ? (
             <span className="rounded-full bg-emerald-500/15 px-2 py-1 text-[10px] font-bold text-emerald-300">
               {dict.miniapp?.inTelegram || 'In Telegram'}
@@ -190,49 +203,21 @@ function MiniAppScreen({ tableId }) {
         </div>
       </header>
 
-      {/* Order type selector: Dine-in / Pickup / Delivery */}
-      <div className="mx-auto max-w-md px-4 pt-3">
-        <div
-          className="flex gap-1 rounded-[var(--radius-lg)] border border-black/5 bg-[var(--guest-surface)]/90 p-1 shadow-sm backdrop-blur"
-          role="tablist"
-          aria-label={dict.miniapp?.orderType || 'Order type'}
-        >
-          {[
-            ['dine_in', '🪑', dict.miniapp?.dineIn || 'Dine-in'],
-            ['pickup', '🍽', dict.miniapp?.pickup || 'Pickup'],
-            ['delivery', '🛵', dict.miniapp?.delivery || 'Delivery'],
-          ].map(([mode, icon, label]) => (
-            <button
-              key={mode}
-              type="button"
-              role="tab"
-              aria-selected={orderMode === mode}
-              onClick={() => { setOrderMode(mode); if (mode !== 'dine_in') setPickerOpen(false) }}
-              className={`flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-[var(--radius-md)] text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 ${
-                orderMode === mode
-                  ? 'bg-[var(--guest-accent)] text-[var(--guest-ink)] shadow-sm'
-                  : 'text-stone-600 hover:bg-stone-100'
-              }`}
-            >
-              <span aria-hidden="true">{icon}</span>
-              {label}
-            </button>
-          ))}
+      {/* Welcome journey + seated bar. Pickup/delivery is chosen from the
+          welcome card, so the permanent order-type strip is gone. */}
+      {!offTable && (
+        <div className="mx-auto max-w-md">
+          <MiniAppTableController
+            activeTable={table}
+            waitMin={waitMin}
+            onOpenPicker={() => setPickerOpen(true)}
+            onSeatActive={seatHere}
+            onTableReady={(t) => {
+              if (t && t.id !== picked) setPicked(t.id)
+            }}
+          />
         </div>
-      </div>
-
-      {/* MiniAppTableController: welcome journey, seated bar, 1-tap services */}
-      <div className="mx-auto max-w-md">
-        <MiniAppTableController
-          activeTable={table}
-          waitMin={waitMin}
-          onOpenPicker={() => setPickerOpen(true)}
-          onSeatActive={seatHere}
-          onTableReady={(t) => {
-            if (t && t.id !== picked) setPicked(t.id)
-          }}
-        />
-      </div>
+      )}
 
       {!inTelegram && (
         <p className="mx-auto max-w-md px-4 pt-3 text-[11px] leading-relaxed text-stone-500">
@@ -253,15 +238,17 @@ function MiniAppScreen({ tableId }) {
             onChoose={chooseTable}
             onClose={table ? () => setPickerOpen(false) : null}
           />
-        ) : (
+        ) : canOrder ? (
           <GuestScreen
             key={offTable ? orderMode : 'dine_in'}
             tableId={offTable ? '' : (picked || '')}
             allowPickup={true}
             initialOrderMode={offTable ? orderMode : null}
+            embedded
+            defaultGuestName={guestName}
             onSelfSeat={table && isFreeTableStatus(table.status) ? () => seatHere(table) : null}
           />
-        )}
+        ) : null}
       </main>
     </div>
   )

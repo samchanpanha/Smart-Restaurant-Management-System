@@ -1657,7 +1657,12 @@ function enrichLangDict(langCode, raw) {
     moveTable: isKm ? 'ប្តូរតុ' : isZh ? '换桌' : 'Move Table',
     water: isKm ? 'ទឹកផឹក' : isZh ? '加水' : 'Water',
     napkins: isKm ? 'ក្រដាសជូតមាត់' : isZh ? '纸巾' : 'Napkins',
-    callWaiter: isKm ? 'ហៅបុគ្គលិក' : isZh ? '呼叫服务员' : 'Call Waiter',
+    callWaiter: isKm ? 'ហៅបុគ្គលិក' : isZh ? '呼叫服务员' : 'Call server',
+    serverNotified: isKm ? 'បានជូនដំណឹងបុគ្គលិក' : isZh ? '已通知服务员' : 'Server notified',
+    seatedHint: isKm ? 'បានអង្គុយ · ចុចមុខម្ហូបដើម្បីកម្មង់' : isZh ? '已入座 · 点选菜品下单' : 'Seated · tap the menu to order',
+    orderForPickup: isKm ? 'កម្មង់មកយក' : isZh ? '自取下单' : 'Order for pickup',
+    orderForDelivery: isKm ? 'កម្មង់ដឹកជញ្ជូន' : isZh ? '配送下单' : 'Order for delivery',
+    change: isKm ? 'ប្តូរ' : isZh ? '更改' : 'Change',
     bill: isKm ? 'គិតលុយ' : isZh ? '结账' : 'Bill',
     check: isKm ? 'គិតលុយ' : isZh ? '结账' : 'Check',
     // Journey copy. Static labels also live in the phrase table; the
