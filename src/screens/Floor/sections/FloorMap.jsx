@@ -80,6 +80,7 @@ function FloorMap({
   filter = 'all',
   onFilterChange,
   onAddTable,
+  nextFree = null,
 }) {
   const { dispatch } = useRestora()
   const { lang, dict } = useI18n()
@@ -705,6 +706,15 @@ function FloorMap({
             <span className="h-2 w-2 rounded-full bg-[var(--success)]" />
             {lang === 'km' ? 'ទិដ្ឋភាពផ្ទាល់' : lang === 'zh' ? '实时视图' : 'Live view'}
           </span>
+          {!arrange && nextFree?.table && (
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full bg-[var(--info-soft)] px-3 py-1.5 text-[var(--fs-caption)] font-semibold text-[var(--info)]"
+              title={`${translateTableName(nextFree.table.name, lang)} · ${nextFree.table.partySize || nextFree.table.seats} guests · ${nextFree.mins}m to go`}
+            >
+              <Icon name="clock" size={12} />
+              Next free: {translateTableName(nextFree.table.name, lang)} · ~{nextFree.mins}m
+            </span>
+          )}
           <div className="flex items-center rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] p-0.5 shadow-[var(--shadow-sm)]" role="group" aria-label="Zoom">
             <button type="button" onClick={() => zoomBy(1 / 1.2)} aria-label="Zoom out" className="flex h-9 w-9 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] hover:bg-[var(--surface-hover)]">−</button>
             <button type="button" onClick={resetView} aria-label="Reset view" className="tnum min-w-[44px] rounded-[var(--radius-md)] px-1 text-[var(--fs-label)] font-semibold text-[var(--text-muted)] hover:bg-[var(--surface-hover)]">{Math.round(zoom * 100)}%</button>

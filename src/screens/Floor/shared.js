@@ -1,4 +1,6 @@
 import { TABLE_STATUS_META } from '../../lib/constants'
+import { minutesBetween } from '../../lib/models'
+import { quoteWait } from '../../lib/reducer'
 
 function slotLabel(iso) {
   const d = new Date(iso)
@@ -37,6 +39,22 @@ const badgeToneFor = (status) => BADGE_TONES[TABLE_STATUS_META[status]?.tone] ||
 const clampPct = (value) => Math.max(0, Math.min(100, value))
 const snapPct = (value) => Math.round(clampPct(value) / SNAP) * SNAP
 
+// The table that will free up soonest — the earliest (today's average turn for
+// its party − minutes already seated) across the occupied room. Shared by the
+// waitlist quote and the map header so both quote the same number.
+function nextFreeTable(state) {
+  const occupied = (state?.tables || []).filter(
+    (table) => (table.status === 'seated' || table.status === 'ordered') && table.seatedAt,
+  )
+  let best = null
+  for (const table of occupied) {
+    const avg = quoteWait(state, table.partySize || table.seats)
+    const mins = Math.max(0, avg - minutesBetween(table.seatedAt))
+    if (!best || mins < best.mins) best = { mins, table, avg }
+  }
+  return best
+}
+
 function zoneBands(tables) {
   const bands = new Map()
   for (const table of tables) {
@@ -52,4 +70,4 @@ function zoneBands(tables) {
 }
 
 
-export { slotLabel, localInputDefault, SNAP, MIN_SCALE, MAX_SCALE, TONE_STYLES, toneClass, badgeToneFor, clampPct, snapPct, zoneBands }
+export { slotLabel, localInputDefault, SNAP, MIN_SCALE, MAX_SCALE, TONE_STYLES, toneClass, badgeToneFor, clampPct, snapPct, zoneBands, nextFreeTable }

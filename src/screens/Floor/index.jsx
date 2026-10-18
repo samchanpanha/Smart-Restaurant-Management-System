@@ -6,12 +6,12 @@ import { useToast } from '../../components/ui/toast-context'
 import { TABLE_STATUS_META } from '../../lib/constants'
 import { translateTableStatus, translateZone, useI18n } from '../../lib/i18n'
 import { useRestora } from '../../lib/store'
+import { nextFreeTable } from './shared.js'
 import { SeatDialog } from './sections/SeatDialog.jsx'
 import { TableCard } from './sections/TableCard.jsx'
 import { TableDetail } from './sections/TableDetail.jsx'
 import { TableQuickSheet } from './sections/TableQuickSheet.jsx'
-import { ReservationsPanel } from './sections/ReservationsPanel.jsx'
-import { WaitlistPanel } from './sections/WaitlistPanel.jsx'
+import { HostDesk } from './sections/HostDesk.jsx'
 import { TableEditorModal } from './sections/TableEditorModal.jsx'
 import { ZoneEditorModal } from './sections/ZoneEditorModal.jsx'
 import { FloorMap } from './sections/FloorMap.jsx'
@@ -29,7 +29,7 @@ function FloorScreen() {
   const f = dict.floor || {}
   const [detailTableId, setDetailTableId] = useState(tabCtx.floorTable || null)
   const [quickTableId, setQuickTableId] = useState(null) // tap-a-table action sheet
-  const [seatCtx, setSeatCtx] = useState(null) // { tableId, party, name, reservationId, waitlistId }
+  const [seatCtx, setSeatCtx] = useState(null) // { tableId, party, reservationId, waitlistId }
   const [view, setView] = useState('map')
   const [managing, setManaging] = useState(false)
   const [editor, setEditor] = useState(null) // { table } to edit, {} to add
@@ -66,6 +66,8 @@ function FloorScreen() {
   const pendingTransfers = state.tables.filter((t) => t.pendingTransfer && t.pendingTransfer.status === 'pending')
 
   const floorPct = state.tables.length ? Math.round((occupied / state.tables.length) * 100) : 0
+  // "Next free" is the same quote the waitlist shows — one number, two places.
+  const nextFree = useMemo(() => nextFreeTable(state), [state])
   // Each KPI card doubles as a map filter — tap "Needs cleaning" and the plan
   // dims everything else (it never hides a table, the geography stays put).
   const stats = useMemo(() => ([
@@ -307,6 +309,7 @@ function FloorScreen() {
               filter={mapFilter}
               onFilterChange={setMapFilter}
               onAddTable={() => { setView('list'); setManaging(true); setEditor({}) }}
+              nextFree={nextFree}
             />
           ) : (
             <div className="space-y-4">
@@ -414,12 +417,9 @@ function FloorScreen() {
         </div>
 
         <aside className="space-y-4 xl:col-span-4">
-          <ReservationsPanel
-            onSeatRes={(reservation) => setSeatCtx({ tableId: reservation.tableId, party: reservation.partySize, name: reservation.name, reservationId: reservation.id })}
-            onError={flash}
-          />
-          <WaitlistPanel
-            onSeatWl={(waitlist) => setSeatCtx({ tableId: null, party: waitlist.partySize, name: waitlist.name, waitlistId: waitlist.id })}
+          <HostDesk
+            onSeatRes={(reservation) => setSeatCtx({ tableId: reservation.tableId, party: reservation.partySize, reservationId: reservation.id })}
+            onSeatWl={(waitlist) => setSeatCtx({ tableId: null, party: waitlist.partySize, waitlistId: waitlist.id })}
             onError={flash}
           />
         </aside>
@@ -438,7 +438,7 @@ function FloorScreen() {
         <TableDetail
           table={detailTable}
           onClose={() => { setDetailTableId(null); setSelectedTableId(null); setTabCtx({ floorTable: null }) }}
-          onSeat={(id) => setSeatCtx({ tableId: id, party: 2, name: '' })}
+          onSeat={(id) => setSeatCtx({ tableId: id, party: 2 })}
           onError={flash}
           onFlash={flash}
         />
@@ -447,7 +447,6 @@ function FloorScreen() {
         <SeatDialog
           tableId={seatCtx.tableId}
           initialParty={seatCtx.party}
-          initialName={seatCtx.name}
           reservationId={seatCtx.reservationId}
           waitlistId={seatCtx.waitlistId}
           onClose={() => setSeatCtx(null)}
