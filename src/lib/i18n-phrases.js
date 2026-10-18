@@ -1168,6 +1168,7 @@ export const PHRASES_KM = {
   'Recommended alternative times:': 'ម៉ោងជំនួសដែលណែនាំ៖',
   'Confirm reschedule': 'បញ្ជាក់ការកែពេល',
   'Date': 'កាលបរិច្ឆេទ',
+  'This page is the mini app a guest opens from the bot. Opened outside Telegram it behaves exactly like the table QR page — the platform calls (ready, expand, theme, haptics) simply do nothing.': 'ទំព័រនេះគឺជាកម្មវិធីតូចដែលភ្ញៀវបើកពីរូបយន្តសន្ទនា។ នៅខាងក្រៅកម្មវិធី វាដំណើរការដូចទំព័រស្កេនកូដរបស់តុ — ការហៅវេទិកាមិនធ្វើអ្វីទេ។',
 }
 
 export const PHRASES_ZH = {
@@ -2150,6 +2151,7 @@ export const PHRASES_ZH = {
   'Recommended alternative times:': '推荐替代时间：',
   'Confirm reschedule': '确认改期',
   'Date': '日期',
+  'This page is the mini app a guest opens from the bot. Opened outside Telegram it behaves exactly like the table QR page — the platform calls (ready, expand, theme, haptics) simply do nothing.': '此页面是客人从对话机器人打开的小程序。在应用之外打开时，它的表现与餐桌扫码页面完全相同 — 平台调用不会有任何效果。',
 }
 
 // ─── Extended coverage: every remaining label, fragment, hint & dynamic text ───

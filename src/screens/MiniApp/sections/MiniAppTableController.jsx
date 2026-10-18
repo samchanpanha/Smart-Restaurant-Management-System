@@ -20,6 +20,9 @@ import { Button, Input, Sheet } from '../../../components/ui'
 import { useToast } from '../../../components/ui/toast-context'
 import { guestSessionToken } from '../shared.js'
 
+const FOCUS = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2'
+const FOCUS_DARK = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80'
+
 function MiniAppTableController({ onTableReady, activeTable, waitMin = 15, onOpenPicker, onSeatActive }) {
   const { state, dispatch } = useStore()
   const { lang, dict } = useI18n()
@@ -227,7 +230,7 @@ function MiniAppTableController({ onTableReady, activeTable, waitMin = 15, onOpe
             <div className="flex min-w-0 items-center gap-2.5">
               <span
                 aria-hidden="true"
-                className={`h-2.5 w-2.5 shrink-0 rounded-full ${isBilling ? 'bg-amber-400' : 'animate-pulse bg-emerald-400'}`}
+                className={`h-2.5 w-2.5 shrink-0 rounded-full ${isBilling ? 'bg-amber-400' : 'animate-pulse bg-emerald-400 motion-reduce:animate-none'}`}
               />
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
@@ -249,7 +252,7 @@ function MiniAppTableController({ onTableReady, activeTable, waitMin = 15, onOpe
             <button
               type="button"
               onClick={() => setShowReleaseModal(true)}
-              className={`min-h-11 shrink-0 rounded-xl px-3 text-xs font-bold transition-colors ${
+              className={`min-h-11 shrink-0 rounded-xl px-3 text-xs font-bold transition-colors ${FOCUS_DARK} ${
                 hasUnpaid
                   ? 'bg-[var(--guest-accent)] text-[var(--guest-ink)] hover:brightness-105'
                   : 'border border-red-400/40 bg-red-500/15 text-red-200 hover:bg-red-500/25'
@@ -267,7 +270,7 @@ function MiniAppTableController({ onTableReady, activeTable, waitMin = 15, onOpe
           <div
             className="mx-auto flex max-w-md gap-2 overflow-x-auto px-4 pb-2.5"
             role="toolbar"
-            aria-label="Quick table services"
+            aria-label={copy.quickServices || 'Quick table services'}
           >
             {serviceActions.map((action) => (
               <button
@@ -277,7 +280,7 @@ function MiniAppTableController({ onTableReady, activeTable, waitMin = 15, onOpe
                   if (action.kind === 'transfer') setShowTransferDrawer(true)
                   else handleQuickService(action.kind, `${action.glyph} ${action.label}`)
                 }}
-                className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-xs font-semibold transition-colors ${
+                className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-xs font-semibold transition-colors ${FOCUS_DARK} ${
                   action.accent
                     ? 'border-sky-400/45 bg-sky-400/15 text-sky-200 hover:bg-sky-400/25'
                     : 'border-white/15 bg-white/10 text-white hover:bg-white/20'
@@ -300,7 +303,7 @@ function MiniAppTableController({ onTableReady, activeTable, waitMin = 15, onOpe
             <button
               type="button"
               onClick={() => dispatch({ type: 'REJECT_TABLE_TRANSFER', payload: { currentTableId: myTable.id, reason: 'Guest cancelled' } })}
-              className="min-h-9 shrink-0 font-bold text-amber-200 underline"
+              className={`min-h-11 shrink-0 font-bold text-amber-200 underline ${FOCUS_DARK}`}
             >
               Cancel
             </button>
@@ -332,7 +335,7 @@ function MiniAppTableController({ onTableReady, activeTable, waitMin = 15, onOpe
                           type="button"
                           disabled={!free}
                           onClick={() => setTransferTarget(table)}
-                          className={`flex min-h-[64px] flex-col items-start justify-center rounded-[var(--radius-lg)] border px-3 py-2 text-left transition-colors ${
+                          className={`flex min-h-[64px] flex-col items-start justify-center rounded-[var(--radius-lg)] border px-3 py-2 text-left transition-colors ${FOCUS} ${
                             free
                               ? 'border-emerald-200 bg-emerald-50 text-emerald-900 hover:bg-emerald-100'
                               : 'border-stone-100 bg-stone-50 text-stone-400'
@@ -456,7 +459,7 @@ function MiniAppTableController({ onTableReady, activeTable, waitMin = 15, onOpe
             <button
               type="button"
               onClick={() => onSeatActive?.(activeTable)}
-              className="flex min-h-12 w-full items-center justify-center gap-2 rounded-[var(--radius-lg)] bg-[var(--guest-accent)] px-4 text-sm font-extrabold text-[var(--guest-ink)] shadow-sm transition-[filter] hover:brightness-105"
+              className={`flex min-h-12 w-full items-center justify-center gap-2 rounded-[var(--radius-lg)] bg-[var(--guest-accent)] px-4 text-sm font-extrabold text-[var(--guest-ink)] shadow-sm transition-[filter] hover:brightness-105 ${FOCUS}`}
             >
               <span aria-hidden="true">🪑</span>
               {copy.sitAt
@@ -467,7 +470,7 @@ function MiniAppTableController({ onTableReady, activeTable, waitMin = 15, onOpe
             <button
               type="button"
               onClick={onOpenPicker}
-              className="flex min-h-12 w-full items-center justify-center gap-2 rounded-[var(--radius-lg)] bg-[var(--guest-accent)] px-4 text-sm font-extrabold text-[var(--guest-ink)] shadow-sm transition-[filter] hover:brightness-105"
+              className={`flex min-h-12 w-full items-center justify-center gap-2 rounded-[var(--radius-lg)] bg-[var(--guest-accent)] px-4 text-sm font-extrabold text-[var(--guest-ink)] shadow-sm transition-[filter] hover:brightness-105 ${FOCUS}`}
             >
               <span aria-hidden="true">🪑</span>
               {copy.sitNow || 'Sit now'}
@@ -478,7 +481,7 @@ function MiniAppTableController({ onTableReady, activeTable, waitMin = 15, onOpe
             <button
               type="button"
               onClick={() => pickMode('pickup')}
-              className="flex min-h-12 items-center justify-center gap-2 rounded-[var(--radius-lg)] border border-stone-200 bg-white px-3 text-sm font-bold text-stone-700 transition-colors hover:bg-stone-50"
+              className={`flex min-h-12 items-center justify-center gap-2 rounded-[var(--radius-lg)] border border-stone-200 bg-white px-3 text-sm font-bold text-stone-700 transition-colors hover:bg-stone-50 ${FOCUS}`}
             >
               <span aria-hidden="true">🍽</span>
               {copy.pickup || 'Pickup'}
@@ -486,7 +489,7 @@ function MiniAppTableController({ onTableReady, activeTable, waitMin = 15, onOpe
             <button
               type="button"
               onClick={() => pickMode('delivery')}
-              className="flex min-h-12 items-center justify-center gap-2 rounded-[var(--radius-lg)] border border-stone-200 bg-white px-3 text-sm font-bold text-stone-700 transition-colors hover:bg-stone-50"
+              className={`flex min-h-12 items-center justify-center gap-2 rounded-[var(--radius-lg)] border border-stone-200 bg-white px-3 text-sm font-bold text-stone-700 transition-colors hover:bg-stone-50 ${FOCUS}`}
             >
               <span aria-hidden="true">🛵</span>
               {copy.delivery || 'Delivery'}
@@ -496,7 +499,7 @@ function MiniAppTableController({ onTableReady, activeTable, waitMin = 15, onOpe
           <button
             type="button"
             onClick={openReschedule}
-            className="min-h-11 w-full rounded-[var(--radius-lg)] px-3 text-xs font-semibold text-stone-500 underline-offset-2 transition-colors hover:bg-stone-50 hover:underline"
+            className={`min-h-11 w-full rounded-[var(--radius-lg)] px-3 text-xs font-semibold text-stone-500 underline-offset-2 transition-colors hover:bg-stone-50 hover:underline ${FOCUS}`}
           >
             📅 {copy.haveBooking || 'Have a booking? Reschedule'}
           </button>

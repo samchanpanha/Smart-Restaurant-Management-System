@@ -316,11 +316,20 @@ like any terminal action, and broadcasts over SSE. Nothing is a shadow copy.
    paste the token into **Settings → Telegram bot & mini app** (stored per
    restaurant, never shown again; the saved token wins over the env var and
    applies to the next message with no restart).
-2. Point Telegram at this server:
+2. Save the **Base URL** in the same place when the environment does not
+   already describe the deployment (see below).
+3. Open **Telegram & Mini App** in the sidebar. The setup checklist tracks the
+   whole wiring live — token · webhook · say `/start` — and each step turns
+   green as it is satisfied. **Register webhook** calls `setWebhook` with the
+   saved token and Base URL (and the `secret_token` when
+   `TELEGRAM_WEBHOOK_SECRET` is set); **Send test message** pings every chat
+   the bot currently notifies. The same card reads `getWebhookInfo` back, so a
+   wrong URL, a pending update, or Telegram's last error is visible on screen
+   instead of in a curl response. The equivalent call, for a script:
    ```bash
    curl "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook?url=$RESTORA_PUBLIC_URL/api/telegram/webhook&secret_token=$TELEGRAM_WEBHOOK_SECRET"
    ```
-3. Map chats to roles with `TELEGRAM_CHAT_ROLES=12345:manager,67890:staff`.
+4. Map chats to roles with `TELEGRAM_CHAT_ROLES=12345:manager,67890:staff`.
    Anything unmapped gets staff access: look-ups only.
 
 **Base URL.** `/qr <table>` and the mini-app links are built from one address,
@@ -356,6 +365,30 @@ the same QR ordering surface with the platform chrome — header colour from
 lands. Open it from a bot reply (`/qr 12`), a menu button, or the link/QR on the
 screen; outside Telegram it degrades to the plain web menu.
 
+The guest path is one journey, not a pile of dialogs:
+
+- **Step 1 — where are you eating?** An unseated guest gets a warm welcome
+  card: *Sit now*, *Pickup*, *Delivery*, the live free-table count, an honest
+  wait quote when the floor is tight, and a *Have a booking? Reschedule* link.
+  A full or empty floor simply drops *Sit now* and keeps the two off-table
+  paths.
+- **Step 2 — pick a table.** *Sit now* and the header switcher open the same
+  picker (`sections/TablePicker.jsx`): party size first, then zone chips and a
+  two-column grid. A free table is claimed in one tap — `MINIAPP_CLAIM_TABLE`
+  is the seat, no confirmation sheet — and the claim carries the chosen party
+  size plus the name Telegram already knows. A table already in service is
+  shown as *Join* and just becomes the active menu.
+- **Step 3 — order and call service.** The slim dark bar names the table and
+  party, reports active orders or "check on the way", and carries 1-tap chips:
+  Move Table, Water, Napkins, Call Waiter, Bill, plus Check & Leave / Release.
+  Move, release, and reschedule use the kit bottom sheet; every action goes
+  through the shared reducer, so the floor, KDS, and other terminals see it
+  live.
+
+Copy is translated (km/en/zh) with phrase-table entries for the static lines
+and `dict.miniapp` functions for the interpolated ones (table counts, waits,
+guests, service confirmations).
+
 Three things keep the mini app fast on a phone, because a guest menu that takes
 seconds to appear is a lost table:
 
@@ -378,7 +411,11 @@ the device's guest session token with the table picker, so a guest who sits
 themselves down in Telegram orders onto the same ticket a server would print.
 
 Bot API surface: `POST /api/telegram/webhook` (always answers 200 so Telegram
-does not retry a command that already ran), `POST /api/telegram/simulate`
+does not retry a command that already ran), `POST /api/telegram/webhook/register`
+(owner/super-admin: registers this deployment's URL with the saved token),
+`GET /api/telegram/webhook/info` (owner/super-admin: the live `getWebhookInfo`,
+including the expected URL and whether it matches), `POST /api/telegram/test`
+(owner/super-admin: sends a real message to the notifier chats), `POST /api/telegram/simulate`
 (`dryRun` by default), `POST /api/telegram/digest` (`dryRun` previews),
 `GET /api/telegram/{status,commands,stats}`.
 

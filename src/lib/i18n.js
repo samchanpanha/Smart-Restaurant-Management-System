@@ -1727,6 +1727,9 @@ function enrichLangDict(langCode, raw) {
         ? `已申请换至 ${name} · 等待确认`
         : `Move requested to ${name} · Awaiting staff approval`),
     rescheduled: isKm ? 'បានកែពេលកក់ដោយជោគជ័យ!' : isZh ? '预订已成功改期！' : 'Reservation rescheduled successfully!',
+    changeTable: isKm ? 'ប្តូរតុ' : isZh ? '更换餐桌' : 'Change table',
+    quickServices: isKm ? 'សេវាកម្មរហ័សនៅតុ' : isZh ? '快捷餐桌服务' : 'Quick table services',
+    orderType: isKm ? 'ប្រភេទការកម្មង់' : isZh ? '订单类型' : 'Order type',
   }
   raw.tickets = {
     ...raw.tickets,

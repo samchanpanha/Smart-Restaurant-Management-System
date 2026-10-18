@@ -164,8 +164,8 @@ function MiniAppScreen({ tableId }) {
             <button
               type="button"
               onClick={() => setPickerOpen((open) => !open)}
-              aria-label="Change table"
-              className="inline-flex min-h-9 max-w-[8.5rem] shrink-0 items-center gap-1 rounded-full border border-white/15 bg-white/10 px-3 text-[11px] font-semibold text-white transition-colors hover:bg-white/20"
+              aria-label={dict.miniapp?.changeTable || 'Change table'}
+              className="inline-flex min-h-11 max-w-[8.5rem] shrink-0 items-center gap-1 rounded-full border border-white/15 bg-white/10 px-3 text-[11px] font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
             >
               <span aria-hidden="true">🪑</span>
               <span className="truncate">
@@ -195,7 +195,7 @@ function MiniAppScreen({ tableId }) {
         <div
           className="flex gap-1 rounded-[var(--radius-lg)] border border-black/5 bg-[var(--guest-surface)]/90 p-1 shadow-sm backdrop-blur"
           role="tablist"
-          aria-label="Order type"
+          aria-label={dict.miniapp?.orderType || 'Order type'}
         >
           {[
             ['dine_in', '🪑', dict.miniapp?.dineIn || 'Dine-in'],
@@ -208,7 +208,7 @@ function MiniAppScreen({ tableId }) {
               role="tab"
               aria-selected={orderMode === mode}
               onClick={() => { setOrderMode(mode); if (mode !== 'dine_in') setPickerOpen(false) }}
-              className={`flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-[var(--radius-md)] text-xs font-bold transition-colors ${
+              className={`flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-[var(--radius-md)] text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 ${
                 orderMode === mode
                   ? 'bg-[var(--guest-accent)] text-[var(--guest-ink)] shadow-sm'
                   : 'text-stone-600 hover:bg-stone-100'

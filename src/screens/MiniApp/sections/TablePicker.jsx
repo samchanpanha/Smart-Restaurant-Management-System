@@ -11,6 +11,8 @@ import { isFreeTableStatus, isTableInServiceStatus } from '../../../lib/constant
 import { TABLE_TAG } from '../shared.js'
 
 const PARTY_SIZES = [1, 2, 3, 4, 6, 8]
+// One focus recipe for every control the guest can tap.
+const FOCUS = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2'
 
 function TablePicker({ tables, pickedId, waitMin, lang, partySize, onPartySize, onChoose, onClose }) {
   const { dict } = useI18n()
@@ -35,7 +37,7 @@ function TablePicker({ tables, pickedId, waitMin, lang, partySize, onPartySize, 
             <button
               type="button"
               onClick={onClose}
-              className="min-h-11 rounded-full px-3 text-sm font-semibold text-stone-500 transition-colors hover:bg-stone-100"
+              className={`min-h-11 rounded-full px-3 text-sm font-semibold text-stone-500 transition-colors hover:bg-stone-100 ${FOCUS}`}
             >
               Close
             </button>
@@ -72,7 +74,7 @@ function TablePicker({ tables, pickedId, waitMin, lang, partySize, onPartySize, 
                 type="button"
                 onClick={() => onPartySize?.(size)}
                 aria-pressed={partySize === size}
-                className={`min-h-11 min-w-11 shrink-0 rounded-full border px-2 text-xs font-bold transition-colors ${
+                className={`min-h-11 min-w-11 shrink-0 rounded-full border px-2 text-xs font-bold transition-colors ${FOCUS} ${
                   partySize === size
                     ? 'border-[var(--guest-accent)] bg-[var(--guest-accent)] text-[var(--guest-ink)]'
                     : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50'
@@ -92,7 +94,7 @@ function TablePicker({ tables, pickedId, waitMin, lang, partySize, onPartySize, 
                 type="button"
                 onClick={() => setZone(name)}
                 aria-pressed={zone === name}
-                className={`min-h-9 shrink-0 rounded-full border px-3 text-[11px] font-semibold transition-colors ${
+                className={`min-h-11 shrink-0 rounded-full border px-3 text-[11px] font-semibold transition-colors ${FOCUS} ${
                   zone === name
                     ? 'border-stone-900 bg-stone-900 text-white'
                     : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50'
@@ -118,7 +120,7 @@ function TablePicker({ tables, pickedId, waitMin, lang, partySize, onPartySize, 
                 onClick={() => onChoose(table)}
                 aria-label={open ? `Sit at ${table.name}` : inService ? `Join ${table.name}` : `${table.name} ${table.status}`}
                 aria-pressed={active}
-                className={`flex min-h-[64px] flex-col items-start justify-center rounded-[var(--radius-lg)] border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--guest-accent)] ${
+                className={`flex min-h-[64px] flex-col items-start justify-center rounded-[var(--radius-lg)] border px-3 py-2 text-left transition-colors ${FOCUS} ${
                   open
                     ? 'border-emerald-200 bg-emerald-50 text-emerald-900 hover:bg-emerald-100'
                     : inService
