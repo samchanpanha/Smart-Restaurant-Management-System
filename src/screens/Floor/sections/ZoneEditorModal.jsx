@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Field, Modal, inputCls } from '../../../components/ui'
+import { Button, Field, Input, Modal } from '../../../components/ui'
 import { useConfirm } from '../../../components/ui/confirm-context'
 import { useI18n } from '../../../lib/i18n'
 import { useRestora } from '../../../lib/store'
@@ -56,41 +56,30 @@ function ZoneEditorModal({ zone = null, zoneCount = 0, onClose }) {
     >
       <div className="mt-3 space-y-4">
         <Field label={lang === 'km' ? 'ឈ្មោះ' : lang === 'zh' ? '名称' : 'Name'}>
-          <input
+          <Input
             value={name}
             onChange={(e) => { setName(e.target.value); setError('') }}
             placeholder="Terrace"
-            className={inputCls}
             maxLength={32}
             aria-label="Zone name"
             autoFocus
           />
         </Field>
         {error && (
-          <div className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-300 ring-1 ring-inset ring-red-500/30" role="alert">
+          <div className="rounded-[var(--radius-lg)] bg-[var(--danger-soft)] px-3 py-2 text-[var(--fs-body)] text-[var(--danger)] ring-1 ring-inset ring-[var(--danger)]/30" role="alert">
             {error}
           </div>
         )}
-        <button
-          type="button"
-          onClick={save}
-          aria-label="Save zone"
-          className="min-h-[44px] w-full rounded-lg bg-amber-500 py-2.5 text-sm font-bold text-black hover:bg-amber-400"
-        >
+        <Button block size="lg" onClick={save} aria-label="Save zone">
           {editing ? (lang === 'km' ? 'រក្សាទុកតំបន់' : lang === 'zh' ? '保存区域' : 'Save zone') : (lang === 'km' ? 'បន្ថែមតំបន់' : lang === 'zh' ? '添加区域' : 'Add zone')}
           {lang !== 'en' && <span className="sr-only"> {editing ? 'Save zone' : 'Add zone'}</span>}
-        </button>
+        </Button>
 
         {editing && (
-          <button
-            type="button"
-            onClick={remove}
-            aria-label="Delete zone"
-            className="flex min-h-[40px] w-full items-center justify-center rounded-lg border border-red-500/40 py-2 text-xs font-bold text-red-400 hover:bg-red-500/10"
-          >
+          <Button block variant="dangerGhost" onClick={remove} aria-label="Delete zone">
             {lang === 'km' ? 'លុបតំបន់' : lang === 'zh' ? '删除区域' : 'Delete zone'}
             {lang !== 'en' && <span className="sr-only"> Delete zone</span>}
-          </button>
+          </Button>
         )}
       </div>
     </Modal>

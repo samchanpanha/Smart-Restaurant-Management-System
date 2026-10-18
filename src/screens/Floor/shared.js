@@ -17,15 +17,22 @@ const SNAP = 5
 const MIN_SCALE = 0.6
 const MAX_SCALE = 2.5
 
+// Map-tile status fills, on the semantic status tokens so the plan reads the
+// same in the light workspace and any dark surface. Text goes white on the
+// saturated fills; the muted tone keeps token text.
 const TONE_STYLES = {
-  ok: 'bg-emerald-500 text-white ring-emerald-200 shadow-emerald-900/20',
-  info: 'bg-sky-500 text-white ring-sky-200 shadow-sky-900/20',
-  warn: 'bg-amber-400 text-amber-950 ring-amber-200 shadow-amber-900/10',
-  bad: 'bg-rose-500 text-white ring-rose-200 shadow-rose-900/20',
-  muted: 'bg-zinc-300 text-zinc-700 ring-zinc-200 shadow-zinc-900/5',
+  ok: 'bg-[var(--success)] text-white ring-[var(--success)]/25 shadow-black/10',
+  info: 'bg-[var(--info)] text-white ring-[var(--info)]/25 shadow-black/10',
+  warn: 'bg-[var(--warning)] text-white ring-[var(--warning)]/25 shadow-black/10',
+  bad: 'bg-[var(--danger)] text-white ring-[var(--danger)]/25 shadow-black/10',
+  muted: 'bg-[var(--border-strong)] text-[var(--text)] ring-[var(--border)] shadow-black/5',
 }
 
 const toneClass = (status) => TONE_STYLES[TABLE_STATUS_META[status]?.tone] || TONE_STYLES.muted
+
+// Table status → `Badge` tone (the token-based replacement for StatusPill).
+const BADGE_TONES = { ok: 'success', warn: 'warning', bad: 'danger', info: 'info', muted: 'neutral' }
+const badgeToneFor = (status) => BADGE_TONES[TABLE_STATUS_META[status]?.tone] || 'neutral'
 
 const clampPct = (value) => Math.max(0, Math.min(100, value))
 const snapPct = (value) => Math.round(clampPct(value) / SNAP) * SNAP
@@ -45,4 +52,4 @@ function zoneBands(tables) {
 }
 
 
-export { slotLabel, localInputDefault, SNAP, MIN_SCALE, MAX_SCALE, TONE_STYLES, toneClass, clampPct, snapPct, zoneBands }
+export { slotLabel, localInputDefault, SNAP, MIN_SCALE, MAX_SCALE, TONE_STYLES, toneClass, badgeToneFor, clampPct, snapPct, zoneBands }

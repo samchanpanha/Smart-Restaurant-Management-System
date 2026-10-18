@@ -897,66 +897,6 @@ body {
   cursor: pointer;
 }
 
-/* Floor Screen Self-Seated & Table Release Badges */
-.floor-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 0.68rem;
-  padding: 2px 7px;
-  border-radius: 999px;
-  font-weight: 600;
-}
-
-.floor-badge--self {
-  background: rgba(56, 189, 248, 0.18);
-  color: #38bdf8;
-  border: 1px solid rgba(56, 189, 248, 0.4);
-}
-
-.floor-alert-banner {
-  margin-top: 6px;
-  padding: 6px 10px;
-  border-radius: 8px;
-  background: rgba(245, 158, 11, 0.16);
-  border: 1px solid rgba(245, 158, 11, 0.35);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: 0.75rem;
-  color: #fde68a;
-}
-
-.floor-alert-banner button {
-  background: #f59e0b;
-  color: #111827;
-  border: none;
-  border-radius: 6px;
-  padding: 4px 8px;
-  font-size: 0.72rem;
-  font-weight: 700;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.floor-btn-clean {
-  width: 100%;
-  padding: 6px 10px;
-  border-radius: 8px;
-  background: rgba(34, 197, 94, 0.18);
-  color: #86efac;
-  border: 1px solid rgba(34, 197, 94, 0.4);
-  font-size: 0.75rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.floor-btn-clean:hover {
-  background: rgba(34, 197, 94, 0.28);
-}
-
 /* 1-Tap Service Request Bar */
 .miniapp-service-bar {
   display: flex;

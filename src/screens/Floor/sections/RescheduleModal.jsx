@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Field, Modal, Stepper, inputCls } from '../../../components/ui'
+import { Button, Field, Input, Modal, Select, Stepper } from '../../../components/ui'
 import { translateTableName, useI18n } from '../../../lib/i18n'
 import { findAvailableTablesForSlot } from '../../../lib/models'
 import { useRestora } from '../../../lib/store'
@@ -63,20 +63,19 @@ function RescheduleModal({ reservation, onClose, onSaved }) {
             <Stepper value={party} onChange={setParty} />
           </Field>
           <Field label={f.time || 'Time'}>
-            <input
+            <Input
               type="datetime-local"
               value={time}
               onChange={(e) => setTime(e.target.value)}
-              className={inputCls}
             />
           </Field>
         </div>
 
         <Field label="Assign table (optional)">
-          <select
+          <Select
             value={tableId}
             onChange={(e) => setTableId(e.target.value)}
-            className={inputCls}
+            aria-label="Assign table"
           >
             <option value="">Auto-assign or Unassigned</option>
             {availableTables.map((t) => (
@@ -84,22 +83,18 @@ function RescheduleModal({ reservation, onClose, onSaved }) {
                 {translateTableName(t.name, lang)} · {t.seats} {f.seats || 'seats'}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
 
         {error && (
-          <div className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-300 ring-1 ring-inset ring-red-500/30" role="alert">
+          <div className="rounded-[var(--radius-lg)] bg-[var(--danger-soft)] px-3 py-2 text-[var(--fs-body)] text-[var(--danger)] ring-1 ring-inset ring-[var(--danger)]/30" role="alert">
             {error}
           </div>
         )}
 
-        <button
-          type="button"
-          onClick={handleSave}
-          className="min-h-[44px] w-full rounded-lg bg-amber-500 py-2.5 text-sm font-bold text-black hover:bg-amber-400"
-        >
+        <Button block size="lg" onClick={handleSave}>
           Save Changes
-        </button>
+        </Button>
       </div>
     </Modal>
   )

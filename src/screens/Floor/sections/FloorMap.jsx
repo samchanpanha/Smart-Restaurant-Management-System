@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Button } from '../../../components/ui'
 import { TABLE_STATUS_META } from '../../../lib/constants'
 import { translateTableName, translateTableStatus, translateZone, useI18n } from '../../../lib/i18n'
 import { useRestora } from '../../../lib/store'
@@ -382,57 +383,57 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
   const resetView = () => { setZoom(1); setPan({ x: 0, y: 0 }) }
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 px-5 py-4">
+    <section className="overflow-hidden rounded-[var(--radius-2xl)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-sm)]">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border-subtle)] px-5 py-4">
         <div>
-          <h2 className="text-base font-bold text-zinc-900">
+          <h2 className="text-[var(--fs-h3)] font-bold text-[var(--text-strong)]">
             {lang === 'km' ? 'ប្លង់តុភោជនីយដ្ឋាន' : lang === 'zh' ? '餐厅餐桌平面图' : 'Restaurant floor'}
           </h2>
-          <p className="mt-0.5 text-xs text-zinc-500">
+          <p className="mt-0.5 text-[var(--fs-caption)] text-[var(--text-muted)]">
             {arrange
               ? (lang === 'km' ? 'អូសតុ/តំបន់ដើម្បីរៀបចំ · ប្រើសង្កត់ក្រោមដើម្បីធ្វើឱ្យធំជាង · អូសផ្ទៃខាងក្រោយដើម្បីផ្លាស់ទី' : lang === 'zh' ? '拖动餐桌/区域调整布局 · 用角柄缩放 · 拖动空白区域平移' : 'Drag tables & zones to arrange · corner grips resize · drag the room to pan')
               : (lang === 'km' ? 'ស្ថានភាពតុផ្ទាល់ · ចុចលើតុសម្រាប់សកម្មភាព' : lang === 'zh' ? '实时桌台状态 · 点击餐桌进行操作' : 'Live table status · tap a table for actions')}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {arrange && (
-            <div className="flex items-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-2 py-0.5 shadow-sm">
-              <button type="button" onClick={() => bumpRoom('w', -ROOM_STEP)} aria-label="Room width smaller" className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-50">−</button>
-              <span className="tnum min-w-[64px] text-center text-[11px] font-semibold text-zinc-600" title="Room width">
+            <div className="flex items-center gap-1.5 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5 shadow-[var(--shadow-sm)]">
+              <button type="button" onClick={() => bumpRoom('w', -ROOM_STEP)} aria-label="Room width smaller" className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] hover:bg-[var(--surface-hover)]">−</button>
+              <span className="tnum min-w-[64px] text-center text-[var(--fs-caption)] font-semibold text-[var(--text)]" title="Room width">
                 W {roomDrag ? roomDrag.w : roomW || (lang === 'km' ? 'ស្វ័យប្រវត្តិ' : lang === 'zh' ? '自适应' : 'auto')}
               </span>
-              <button type="button" onClick={() => bumpRoom('w', ROOM_STEP)} aria-label="Room width larger" className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-50">+</button>
-              <span className="mx-1 h-4 w-px bg-zinc-200" />
-              <button type="button" onClick={() => bumpRoom('h', -ROOM_STEP)} aria-label="Room height smaller" className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-50">−</button>
-              <span className="tnum min-w-[64px] text-center text-[11px] font-semibold text-zinc-600" title="Room height">
+              <button type="button" onClick={() => bumpRoom('w', ROOM_STEP)} aria-label="Room width larger" className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] hover:bg-[var(--surface-hover)]">+</button>
+              <span className="mx-1 h-4 w-px bg-[var(--border)]" />
+              <button type="button" onClick={() => bumpRoom('h', -ROOM_STEP)} aria-label="Room height smaller" className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] hover:bg-[var(--surface-hover)]">−</button>
+              <span className="tnum min-w-[64px] text-center text-[var(--fs-caption)] font-semibold text-[var(--text)]" title="Room height">
                 H {roomDrag ? roomDrag.h : roomH || (lang === 'km' ? 'ស្វ័យប្រវត្តិ' : lang === 'zh' ? '自适应' : 'auto')}
               </span>
-              <button type="button" onClick={() => bumpRoom('h', ROOM_STEP)} aria-label="Room height larger" className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-50">+</button>
-              <span className="mx-1 h-4 w-px bg-zinc-200" />
-              <button type="button" onClick={fitRoom} className="rounded-lg px-2 text-[11px] font-bold text-orange-600 hover:bg-orange-50">
+              <button type="button" onClick={() => bumpRoom('h', ROOM_STEP)} aria-label="Room height larger" className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] hover:bg-[var(--surface-hover)]">+</button>
+              <span className="mx-1 h-4 w-px bg-[var(--border)]" />
+              <button type="button" onClick={fitRoom} className="rounded-[var(--radius-md)] px-2 text-[var(--fs-caption)] font-bold text-[var(--accent)] hover:bg-[var(--accent-soft)]">
                 {lang === 'km' ? 'ធ្វើឱ្យសម' : lang === 'zh' ? '适合窗口' : 'Fit'}
               </button>
             </div>
           )}
-          <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">
-            <span className="h-2 w-2 rounded-full bg-emerald-500" />
+          <span className="inline-flex items-center gap-2 rounded-full bg-[var(--success-soft)] px-3 py-1.5 text-[var(--fs-caption)] font-semibold text-[var(--success)]">
+            <span className="h-2 w-2 rounded-full bg-[var(--success)]" />
             {lang === 'km' ? 'ទិដ្ឋភាពផ្ទាល់' : lang === 'zh' ? '实时视图' : 'Live view'}
           </span>
-          <div className="flex items-center rounded-xl border border-zinc-200 bg-white p-0.5 shadow-sm" role="group" aria-label="Zoom">
-            <button type="button" onClick={() => zoomBy(1 / 1.2)} aria-label="Zoom out" className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-50">−</button>
-            <button type="button" onClick={resetView} aria-label="Reset view" className="tnum min-w-[44px] rounded-lg px-1 text-xs font-semibold text-zinc-500 hover:bg-zinc-50">{Math.round(zoom * 100)}%</button>
-            <button type="button" onClick={() => zoomBy(1.2)} aria-label="Zoom in" className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-50">+</button>
+          <div className="flex items-center rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] p-0.5 shadow-[var(--shadow-sm)]" role="group" aria-label="Zoom">
+            <button type="button" onClick={() => zoomBy(1 / 1.2)} aria-label="Zoom out" className="flex h-9 w-9 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] hover:bg-[var(--surface-hover)]">−</button>
+            <button type="button" onClick={resetView} aria-label="Reset view" className="tnum min-w-[44px] rounded-[var(--radius-md)] px-1 text-[var(--fs-label)] font-semibold text-[var(--text-muted)] hover:bg-[var(--surface-hover)]">{Math.round(zoom * 100)}%</button>
+            <button type="button" onClick={() => zoomBy(1.2)} aria-label="Zoom in" className="flex h-9 w-9 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] hover:bg-[var(--surface-hover)]">+</button>
           </div>
-          <button
-            type="button"
+          <Button
+            size="sm"
+            variant={arrange ? 'primary' : 'secondary'}
             onClick={() => setArrange((value) => !value)}
             aria-pressed={arrange}
-            className={`min-h-9 rounded-xl border px-3 text-xs font-semibold shadow-sm transition-colors ${arrange ? 'border-orange-500 bg-orange-500 text-white hover:bg-orange-600' : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50'}`}
           >
             {arrange
               ? (lang === 'km' ? 'រួចរាល់' : lang === 'zh' ? '完成' : 'Done arranging')
               : (lang === 'km' ? 'រៀបចំប្លង់' : lang === 'zh' ? '排列布局' : 'Arrange layout')}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -442,7 +443,7 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
         onPointerMove={movePan}
         onPointerUp={endPan}
         onPointerLeave={endPan}
-        className="relative min-h-[420px] cursor-grab touch-none overflow-hidden bg-[#fffdf9] active:cursor-grabbing"
+        className="relative min-h-[420px] cursor-grab touch-none overflow-hidden bg-[var(--surface-sunken)] active:cursor-grabbing"
       >
         <div
           ref={contentRef}
@@ -454,14 +455,14 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
             transformOrigin: 'center center',
           }}
         >
-          <div className={`pointer-events-none absolute inset-4 rounded-[28px] border-2 sm:inset-6 ${roomW || roomH ? 'border-orange-300' : 'border-[#e8e2d8]'}`} />
+          <div className={`pointer-events-none absolute inset-4 rounded-[28px] border-2 sm:inset-6 ${roomW || roomH ? 'border-[var(--accent)]/50' : 'border-[var(--border-strong)]'}`} />
 
           {bands.map((band) => {
             const left = clampPct(band.min - 10)
             const right = clampPct(band.max + 10)
             return (
-              <div key={`band_${band.zone}`} className="pointer-events-none absolute inset-y-6 rounded-2xl border border-dashed border-zinc-300/70 bg-white/40" style={{ left: `${left}%`, width: `${Math.max(6, right - left)}%` }}>
-                <span className="absolute left-1/2 top-2 -translate-x-1/2 whitespace-nowrap rounded-full bg-white/90 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500 shadow-sm">
+              <div key={`band_${band.zone}`} className="pointer-events-none absolute inset-y-6 rounded-[var(--radius-xl)] border border-dashed border-[var(--border-strong)] bg-[var(--surface)]/40" style={{ left: `${left}%`, width: `${Math.max(6, right - left)}%` }}>
+                <span className="absolute left-1/2 top-2 -translate-x-1/2 whitespace-nowrap rounded-full bg-[var(--surface)]/90 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] shadow-[var(--shadow-sm)]">
                   {translateZone(band.zone, lang)} · {band.count}
                 </span>
               </div>
@@ -479,7 +480,7 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
                 onPointerMove={moveZoneDrag}
                 onPointerUp={endZoneDrag}
                 onPointerCancel={endZoneDrag}
-                className={`absolute rounded-2xl border-2 border-dashed ${zoneDrag?.id === zone.id || zoneResize?.id === zone.id ? 'border-orange-400 bg-orange-50/50' : 'border-zinc-400/70 bg-white/40'} ${arrange ? 'cursor-move' : 'pointer-events-none border-zinc-300/70'}`}
+                className={`absolute rounded-[var(--radius-xl)] border-2 border-dashed ${zoneDrag?.id === zone.id || zoneResize?.id === zone.id ? 'border-[var(--accent)] bg-[var(--accent-soft)]' : 'border-[var(--border-strong)]/70 bg-[var(--surface)]/40'} ${arrange ? 'cursor-move' : 'pointer-events-none border-[var(--border-subtle)]'}`}
                 style={{
                   left: `${rect.x}%`,
                   width: `${rect.w}%`,
@@ -493,7 +494,7 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
                     type="button"
                     onPointerDown={(event) => event.stopPropagation()}
                     onClick={() => { if (arrange) setZoneEditor(zone) }}
-                    className={`rounded-full bg-white/90 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500 shadow-sm ${arrange ? 'pointer-events-auto cursor-pointer ring-1 ring-orange-300 hover:text-orange-600' : ''}`}
+                    className={`rounded-full bg-[var(--surface)]/90 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] shadow-[var(--shadow-sm)] ${arrange ? 'pointer-events-auto cursor-pointer ring-1 ring-[var(--accent)]/40 hover:text-[var(--accent)]' : ''}`}
                   >
                     {translateZone(zone.name, lang)} · {count}{arrange ? ' ✎' : ''}
                   </button>
@@ -506,7 +507,7 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
                     onPointerMove={moveZoneResize}
                     onPointerUp={endZoneResize}
                     onPointerCancel={endZoneResize}
-                    className="absolute bottom-1.5 right-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-white text-[10px] font-black text-zinc-500 shadow-md ring-1 ring-zinc-300/80 hover:bg-orange-500 hover:text-white"
+                    className="absolute bottom-1.5 right-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-[var(--surface)] text-[10px] font-black text-[var(--text-muted)] shadow-[var(--shadow-md)] ring-1 ring-[var(--border-strong)] hover:bg-[var(--accent)] hover:text-[var(--text-on-accent)]"
                   >
                     ⤢
                   </button>
@@ -515,10 +516,10 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
             )
           })}
 
-          <div className="pointer-events-none absolute left-5 top-4 rounded-xl border border-zinc-200 bg-white/90 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500 shadow-sm">
+          <div className="pointer-events-none absolute left-5 top-4 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)]/90 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] shadow-[var(--shadow-sm)]">
             {dict.nav?.kitchen || 'Kitchen'}
           </div>
-          <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 bg-[#fffdf9] px-3 text-[10px] font-semibold text-zinc-500">
+          <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 bg-[var(--surface-sunken)] px-3 text-[10px] font-semibold text-[var(--text-muted)]">
             {lang === 'km' ? 'ច្រកចូល' : lang === 'zh' ? '入口' : 'Entrance'}
           </div>
 
@@ -550,7 +551,7 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
                   aria-grabbed={arrange ? dragging : undefined}
                   title={`${translateTableName(table.name, lang)} · ${translateTableStatus(table.status, lang)}`}
                   style={usesInlineTransform ? { transform: `scale(${scale})` } : undefined}
-                  className={`group relative flex h-12 w-16 flex-col items-center justify-center ${shape} text-sm font-bold shadow-md ring-4 ring-white/80 ${toneClass(table.status)} ${dragging ? 'ring-orange-400' : ''} ${!arrange && !usesInlineTransform ? 'hover:-translate-y-0.5 hover:scale-105' : ''} ${arrange ? 'cursor-grab' : ''}`}
+                  className={`group relative flex h-12 w-16 flex-col items-center justify-center ${shape} text-sm font-bold shadow-[var(--shadow-md)] ring-4 ring-[var(--surface)]/80 ${toneClass(table.status)} ${dragging ? 'ring-[var(--accent)]' : ''} ${!arrange && !usesInlineTransform ? 'hover:-translate-y-0.5 hover:scale-105' : ''} ${arrange ? 'cursor-grab' : ''}`}
                 >
                   <span className="absolute -top-2 left-1/2 h-2 w-5 -translate-x-1/2 rounded-t-full bg-current opacity-30" />
                   <span className="absolute -bottom-2 left-1/2 h-2 w-5 -translate-x-1/2 rounded-b-full bg-current opacity-30" />
@@ -558,9 +559,9 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
 
                   {(showBill || showSelf || count > 0) && (
                     <span className="absolute -right-1.5 -top-1.5 flex items-center gap-0.5">
-                      {showSelf && <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-violet-600 px-1 text-[8px] font-bold text-white ring-2 ring-white" title="Self-seated">S</span>}
-                      {showBill && <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-600 px-1 text-[8px] font-bold text-white ring-2 ring-white" title="Bill requested">$</span>}
-                      {count > 0 && <span className="tnum flex h-4 min-w-4 items-center justify-center rounded-full bg-zinc-900/80 px-1 text-[8px] font-bold text-white ring-2 ring-white" title={`${count} items on the check`}>{count}</span>}
+                      {showSelf && <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--info)] px-1 text-[8px] font-bold text-white ring-2 ring-[var(--surface)]" title="Self-seated">S</span>}
+                      {showBill && <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--warning)] px-1 text-[8px] font-bold text-white ring-2 ring-[var(--surface)]" title="Bill requested">$</span>}
+                      {count > 0 && <span className="tnum flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--text-strong)]/85 px-1 text-[8px] font-bold text-[var(--surface)] ring-2 ring-[var(--surface)]" title={`${count} items on the check`}>{count}</span>}
                     </span>
                   )}
                 </button>
@@ -572,7 +573,7 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
                     onPointerMove={moveTileResize}
                     onPointerUp={endTileResize}
                     onPointerCancel={endTileResize}
-                    className="absolute z-20 flex h-5 w-5 items-center justify-center rounded-full bg-white text-[10px] font-black text-zinc-500 shadow-md ring-1 ring-zinc-300/80 hover:bg-orange-500 hover:text-white"
+                    className="absolute z-20 flex h-6 w-6 items-center justify-center rounded-full bg-[var(--surface)] text-[10px] font-black text-[var(--text-muted)] shadow-[var(--shadow-md)] ring-1 ring-[var(--border-strong)] hover:bg-[var(--accent)] hover:text-[var(--text-on-accent)]"
                     style={{
                       left: `${(TILE_W * (scale + 1)) / 2 - 10}px`,
                       top: `${(TILE_H * (scale + 1)) / 2 - 10}px`,
@@ -583,7 +584,7 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
                   </button>
                 )}
                 <span className="pointer-events-none mt-1 flex items-center justify-center gap-1">
-                  <span className="rounded-full bg-white/90 px-1.5 py-0.5 text-[9px] font-semibold text-zinc-500 shadow-sm">{table.seats} {f.seats || 'seats'}</span>
+                  <span className="rounded-full bg-[var(--surface)]/90 px-1.5 py-0.5 text-[9px] font-semibold text-[var(--text-muted)] shadow-[var(--shadow-sm)]">{table.seats} {f.seats || 'seats'}</span>
                 </span>
               </div>
             )
@@ -598,7 +599,7 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
               onPointerMove={moveRoomResize}
               onPointerUp={endRoomResize}
               onPointerCancel={endRoomResize}
-              className="absolute bottom-2 right-2 z-30 flex h-7 w-7 items-center justify-center rounded-full bg-orange-500 text-xs font-black text-white shadow-lg ring-2 ring-white hover:bg-orange-600"
+              className="absolute bottom-2 right-2 z-30 flex h-8 w-8 items-center justify-center rounded-full bg-[var(--accent)] text-xs font-black text-[var(--text-on-accent)] shadow-[var(--shadow-lg)] ring-2 ring-[var(--surface)] hover:bg-[var(--accent-hover)]"
             >
               ⤡
             </button>
@@ -606,7 +607,7 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-x-5 gap-y-2 border-t border-zinc-100 px-5 py-3 text-[11px] text-zinc-600">
+      <div className="flex flex-wrap gap-x-5 gap-y-2 border-t border-[var(--border-subtle)] px-5 py-3 text-[var(--fs-caption)] text-[var(--text-muted)]">
         {Object.entries(TABLE_STATUS_META)
           .filter(([status]) => ['free', 'reserved', 'seated', 'ordered', 'billed', 'dirty'].includes(status))
           .map(([status, meta]) => (

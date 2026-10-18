@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Field, Modal, Stepper, inputCls } from '../../../components/ui'
+import { Button, Field, Modal, Stepper, inputCls } from '../../../components/ui'
+import { Icon } from '../../../components/Icon'
 import { TABLE_STATUS_META } from '../../../lib/constants'
 import { isSeatBlocked, needsOverSeatConfirm } from '../../../lib/models'
 import { useRestora } from '../../../lib/store'
@@ -21,7 +22,7 @@ function SeatDialog({ tableId, initialParty = 2, initialName = '', reservationId
   function seat() {
     if (!table) return
     if (isSeatBlocked(table)) {
-      onError(`${table.name} can't be seated while ${TABLE_STATUS_META[table.status].label.toLowerCase()}.`)
+      onError(`${table.name} can't be seated while ${TABLE_STATUS_META[table.status].label.toLowerCase()}.`, 'warning')
       return
     }
     if (overSeat && !overConfirm) return
@@ -33,17 +34,13 @@ function SeatDialog({ tableId, initialParty = 2, initialName = '', reservationId
   if (!seatable.length) {
     return (
       <Modal title="Seat party" sub="No tables are seatable right now." onClose={onClose}>
-        <p className="text-sm text-zinc-400">
+        <p className="text-[var(--fs-body)] text-[var(--text-muted)]">
           Every table is occupied, billed, or dirty. Bus a dirty table or add the party to the
           waitlist with an honest quoted wait.
         </p>
-        <button
-          type="button"
-          onClick={onClose}
-          className="mt-4 w-full rounded-lg border border-[var(--color-ink-600)] py-2.5 text-sm text-zinc-200 hover:bg-white/5 min-h-[44px]"
-        >
+        <Button block variant="secondary" className="mt-4" onClick={onClose}>
           Back to floor
-        </button>
+        </Button>
       </Modal>
     )
   }
@@ -64,7 +61,7 @@ function SeatDialog({ tableId, initialParty = 2, initialName = '', reservationId
             ))}
           </select>
         </Field>
-        <div className="flex items-end justify-between gap-4">
+        <div className="flex flex-wrap items-end justify-between gap-4">
           <Field label="Party size">
             <Stepper value={party} onChange={(v) => { setParty(v); setOverConfirm(false) }} />
           </Field>
@@ -87,33 +84,34 @@ function SeatDialog({ tableId, initialParty = 2, initialName = '', reservationId
         </Field>
 
         {overSeat && (
-          <div className="rounded-xl bg-amber-500/10 p-3.5 text-sm ring-1 ring-inset ring-amber-500/40">
-            <div className="font-semibold text-amber-200">
+          <div className="rounded-[var(--radius-xl)] bg-[var(--warning-soft)] p-3.5 text-[var(--fs-body)] ring-1 ring-inset ring-[var(--warning)]/40">
+            <div className="flex items-center gap-1.5 font-semibold text-[var(--warning)]">
+              <Icon name="warning" size={15} />
               Over capacity: party of {party} on a {table.seats}-top.
             </div>
-            <p className="mt-0.5 text-xs text-amber-200/70">
+            <p className="mt-0.5 text-[var(--fs-label)] text-[var(--text-muted)]">
               Host confirm required. The squeeze is on you, Alex.
             </p>
-            <label className="mt-2 flex min-h-[44px] cursor-pointer items-center gap-2.5 text-sm text-amber-100">
+            <label className="mt-2 flex min-h-11 cursor-pointer items-center gap-2.5 text-[var(--fs-body)] text-[var(--text)]">
               <input
                 type="checkbox"
                 checked={overConfirm}
                 onChange={(e) => setOverConfirm(e.target.checked)}
-                className="h-5 w-5 accent-amber-500"
+                className="h-5 w-5 accent-[var(--accent)]"
               />
               Seat anyway — I take responsibility
             </label>
           </div>
         )}
 
-        <button
-          type="button"
+        <Button
+          block
+          size="lg"
           onClick={seat}
           disabled={!table || (overSeat && !overConfirm)}
-          className="w-full rounded-lg bg-amber-500 py-3 text-sm font-bold text-black transition-colors hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-40 min-h-[44px]"
         >
           Seat party{table ? ` · ${table.name}` : ''}
-        </button>
+        </Button>
       </div>
     </Modal>
   )

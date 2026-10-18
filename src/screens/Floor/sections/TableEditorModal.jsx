@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Field, Modal, Stepper, inputCls } from '../../../components/ui'
+import { Button, Field, Input, Modal, Select, Stepper } from '../../../components/ui'
 import QrPrintModal from '../../../components/QrPrintModal'
 import { useI18n } from '../../../lib/i18n'
 import { useRestora } from '../../../lib/store'
@@ -48,11 +48,10 @@ function TableEditorModal({ table = null, zones, onClose }) {
     >
       <div className="mt-3 space-y-4">
         <Field label={lang === 'km' ? 'ឈ្មោះ' : lang === 'zh' ? '名称' : 'Name'}>
-          <input
+          <Input
             value={name}
             onChange={(e) => { setName(e.target.value); setError('') }}
             placeholder="Table 17"
-            className={inputCls}
             maxLength={40}
             aria-label="Table name"
             autoFocus
@@ -65,11 +64,10 @@ function TableEditorModal({ table = null, zones, onClose }) {
           <Field label={lang === 'km' ? 'តំបន់' : lang === 'zh' ? '区域' : 'Zone'}>
             {newZone ? (
               <div>
-                <input
+                <Input
                   value={newZoneName}
                   onChange={(e) => setNewZoneName(e.target.value)}
                   placeholder="Poolside"
-                  className={inputCls}
                   maxLength={32}
                   aria-label="New zone name"
                   autoFocus
@@ -77,49 +75,39 @@ function TableEditorModal({ table = null, zones, onClose }) {
                 <button
                   type="button"
                   onClick={() => setNewZone(false)}
-                  className="mt-1 text-[11px] font-semibold text-amber-600 hover:underline"
+                  className="mt-1 text-[var(--fs-caption)] font-semibold text-[var(--accent)] hover:underline"
                 >
                   {lang === 'km' ? 'ប្រើតំបន់ដែលមានស្រាប់' : lang === 'zh' ? '使用现有区域' : 'Use an existing zone'}
                 </button>
               </div>
             ) : (
-              <select
+              <Select
                 value={zone}
                 onChange={(e) => { if (e.target.value === '__new') setNewZone(true); else setZone(e.target.value) }}
-                className={inputCls}
                 aria-label="Zone"
               >
                 {zones.map((entry) => (
                   <option key={entry} value={entry}>{entry}</option>
                 ))}
                 <option value="__new">➕ {lang === 'km' ? 'តំបន់ថ្មី…' : lang === 'zh' ? '新建区域…' : 'New zone…'}</option>
-              </select>
+              </Select>
             )}
           </Field>
         </div>
         {error && (
-          <div className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-300 ring-1 ring-inset ring-red-500/30" role="alert">
+          <div className="rounded-[var(--radius-lg)] bg-[var(--danger-soft)] px-3 py-2 text-[var(--fs-body)] text-[var(--danger)] ring-1 ring-inset ring-[var(--danger)]/30" role="alert">
             {error}
           </div>
         )}
-        <button
-          type="button"
-          onClick={save}
-          aria-label="Save table"
-          className="min-h-[44px] w-full rounded-lg bg-amber-500 py-2.5 text-sm font-bold text-black hover:bg-amber-400"
-        >
+        <Button block size="lg" onClick={save} aria-label="Save table">
           {editing ? (lang === 'km' ? 'រក្សាទុកតុ' : lang === 'zh' ? '保存餐桌' : 'Save table') : (lang === 'km' ? 'បន្ថែមតុ' : lang === 'zh' ? '添加餐桌' : 'Add table')}
           {lang !== 'en' && <span className="sr-only"> {editing ? 'Save table' : 'Add table'}</span>}
-        </button>
+        </Button>
 
         {editing && (
-          <button
-            type="button"
-            onClick={() => setShowQr(true)}
-            className="flex min-h-[40px] w-full items-center justify-center gap-1.5 rounded-lg border border-[var(--color-ink-600)] bg-[var(--color-ink-800)] py-2 text-xs font-bold text-zinc-200 hover:bg-white/5"
-          >
-            <span>📱 Print Table QR Tent (Self-order)</span>
-          </button>
+          <Button block variant="secondary" onClick={() => setShowQr(true)}>
+            📱 Print Table QR Tent (Self-order)
+          </Button>
         )}
       </div>
 
