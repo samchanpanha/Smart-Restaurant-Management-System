@@ -34,7 +34,7 @@ export function ChatPanel({ messages, pending, onAsk, copy, configured }) {
                     isError
                       ? 'max-w-[90%] rounded-[var(--radius-lg)] bg-[var(--danger-soft)] px-4 py-2.5 text-[var(--fs-body)] text-[var(--danger)]'
                       : message.role === 'user'
-                        ? 'max-w-[85%] rounded-[var(--radius-lg)] bg-[var(--accent-soft)] px-4 py-2.5 text-[var(--fs-body)] text-[var(--accent)]'
+                        ? 'max-w-[85%] rounded-[var(--radius-lg)] bg-[var(--accent-soft)] px-4 py-2.5 text-[var(--fs-body)] text-[var(--accent-text)]'
                         : 'max-w-[90%] rounded-[var(--radius-lg)] bg-[var(--surface-hover)] px-4 py-2.5 text-[var(--fs-body)] text-[var(--text)]'
                   }
                   data-testid={isError ? 'assistant-error' : undefined}

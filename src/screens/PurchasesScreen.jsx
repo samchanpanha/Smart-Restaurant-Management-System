@@ -689,7 +689,7 @@ export default function PurchasesScreen() {
                           )}
                           {['draft', 'ordered'].includes(purchase.status) && (
                             <>
-                              <button type="button" className="rounded-lg bg-teal-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-teal-700" onClick={() => setReceiving(purchase)}>Receive</button>
+                              <button type="button" className="rounded-lg bg-teal-700 px-2.5 py-1 text-xs font-semibold text-white hover:bg-teal-800" onClick={() => setReceiving(purchase)}>Receive</button>
                               <button type="button" className="rounded-lg border border-zinc-200 px-2.5 py-1 text-xs font-semibold text-zinc-600 hover:bg-zinc-50" onClick={() => { setFlash(''); setEditing({ purchase }) }}>Edit</button>
                               <button type="button" className="rounded-lg border border-zinc-200 px-2.5 py-1 text-xs font-semibold text-zinc-600 hover:bg-zinc-50" onClick={() => setStatus(purchase, 'cancelled')}>Cancel</button>
                             </>

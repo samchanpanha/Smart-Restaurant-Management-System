@@ -374,7 +374,7 @@ const TicketCard = memo(function TicketCard({ order, tableName, server, lines, l
               <button
                 type="button"
                 onClick={() => dispatch({ type: 'BUMP_ITEM', orderId: order.id, itemId: l.id })}
-                className="mt-2 min-h-[48px] w-full rounded-lg bg-emerald-500/90 text-base font-bold text-black transition-colors hover:bg-emerald-400 active:scale-[0.99]"
+                className="mt-2 min-h-[48px] w-full rounded-lg bg-emerald-500 text-base font-bold text-white transition-colors hover:bg-emerald-600 active:scale-[0.99]"
               >
                 {dict.bumpItem(localName)}
               </button>
@@ -449,7 +449,7 @@ function EightySixBoard({ lang, dict, showImages, onInspectDish }) {
                   <button
                     type="button"
                     onClick={() => dispatch({ type: 'SET_86', menuItemId: m.id, available: true })}
-                    className="min-h-[44px] shrink-0 rounded-lg bg-emerald-500/90 px-4 text-sm font-bold text-black hover:bg-emerald-400"
+                    className="min-h-[44px] shrink-0 rounded-lg bg-emerald-500 px-4 text-sm font-bold text-white hover:bg-emerald-600"
                   >
                     {dict.backOn}
                   </button>
@@ -873,7 +873,7 @@ export default function KitchenScreen() {
             onClick={() => setLateOnly((v) => !v)}
             aria-pressed={lateOnly}
             className={`min-h-[44px] rounded-lg px-3.5 text-sm font-bold ring-1 ring-inset transition-colors ${
-              lateOnly ? 'bg-red-500 text-black ring-red-500' : 'text-zinc-300 ring-[var(--color-ink-600)] hover:bg-white/5'
+              lateOnly ? 'bg-red-500 text-white ring-red-500' : 'text-zinc-300 ring-[var(--color-ink-600)] hover:bg-white/5'
             }`}
           >
             {lateOnly ? dict.showingLateOnly : dict.lateOnly}

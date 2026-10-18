@@ -72,7 +72,7 @@ export function ToastProvider({ children }) {
           return (
             <div
               key={toast.id}
-              className="pointer-events-auto flex w-full max-w-sm items-start gap-3 overflow-hidden rounded-xl bg-zinc-900 py-3 pr-3 pl-4 text-sm text-zinc-100 shadow-xl shadow-black/20"
+              className="surface-dark pointer-events-auto flex w-full max-w-sm items-start gap-3 overflow-hidden rounded-xl bg-zinc-900 py-3 pr-3 pl-4 text-sm text-zinc-100 shadow-xl shadow-black/20"
             >
               <span className={`mt-0.5 h-8 w-1 shrink-0 rounded-full ${tone.bar}`} aria-hidden="true" />
               <Icon name={tone.icon} size={16} className="mt-0.5 shrink-0 text-zinc-400" />

@@ -112,9 +112,9 @@ function AssistantScreen() {
   return (
     <div className="space-y-4">
       <header>
-        <div className="mb-1 text-xs font-semibold text-[var(--accent)]">{copy.eyebrow}</div>
+        <div className="mb-1 text-xs font-semibold text-[var(--accent-text)]">{copy.eyebrow}</div>
         <h1 className="flex items-center gap-2 text-3xl font-bold tracking-tight text-[var(--text-strong)]">
-          <Icon name="sparkles" size={26} className="text-[var(--accent)]" />
+          <Icon name="sparkles" size={26} className="text-[var(--accent-text)]" />
           {copy.title}
           {lang !== 'en' && <span className="sr-only"> Ops Copilot</span>}
         </h1>

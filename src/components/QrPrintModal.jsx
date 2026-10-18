@@ -55,12 +55,12 @@ export default function QrPrintModal({ table, onClose }) {
         </div>
 
         {/* Action buttons */}
-        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-white/10">
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-[var(--border)]">
           <a
             href={url}
             target="_blank"
             rel="noreferrer"
-            className="flex min-h-[40px] items-center gap-1.5 rounded-xl border border-zinc-700 bg-zinc-800 px-3 py-2 text-xs font-bold text-zinc-200 hover:bg-zinc-700"
+            className="flex min-h-[40px] items-center gap-1.5 rounded-xl border border-[var(--border-strong)] bg-[var(--surface-raised)] px-3 py-2 text-xs font-bold text-[var(--text)] hover:bg-[var(--surface-hover)]"
           >
             <span>Open preview</span>
             <Icon name="swap" className="h-3.5 w-3.5" />

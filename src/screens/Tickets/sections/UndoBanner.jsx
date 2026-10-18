@@ -18,7 +18,7 @@ function UndoBanner({ orderId }) {
       <button
         type="button"
         onClick={() => dispatch({ type: 'UNDO_SEND', orderId })}
-        className="min-h-[44px] shrink-0 rounded-lg bg-sky-500 px-4 text-sm font-bold text-black hover:bg-sky-400"
+        className="min-h-[44px] shrink-0 rounded-lg bg-sky-500 px-4 text-sm font-bold text-white hover:bg-sky-600"
       >
         Undo send
       </button>

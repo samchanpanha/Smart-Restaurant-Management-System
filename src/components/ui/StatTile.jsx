@@ -8,7 +8,7 @@ import { Sparkline } from './Sparkline'
 // optional progress or sparkline embellishments. Renders as a `<button>` when
 // `onClick` is given, so tiles can deep-link into the owning screen.
 const toneIcon = {
-  accent: 'bg-[var(--accent-soft)] text-[var(--accent)]',
+  accent: 'bg-[var(--accent-soft)] text-[var(--accent-text)]',
   success: 'bg-[var(--success-soft)] text-[var(--success)]',
   warning: 'bg-[var(--warning-soft)] text-[var(--warning)]',
   danger: 'bg-[var(--danger-soft)] text-[var(--danger)]',
@@ -62,7 +62,7 @@ export function StatTile({
       </div>
 
       {spark && spark.length > 1 && (
-        <div className="mt-2 flex justify-end text-[var(--accent)]">
+        <div className="mt-2 flex justify-end text-[var(--accent-text)]">
           <Sparkline values={spark} tone={progressTone[tone]} width={120} height={28} />
         </div>
       )}

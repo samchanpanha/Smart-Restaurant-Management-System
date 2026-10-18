@@ -195,7 +195,7 @@ function TicketWorkspace({ orderId, onError }) {
         {!closed && (
           <div className="mt-3 flex flex-wrap gap-2">
             {order.status === 'ready' && (
-              <button type="button" onClick={() => dispatch({ type: 'SERVE_ORDER', orderId: order.id })} title="Shortcut: S" className="min-h-[44px] flex-1 rounded-lg bg-emerald-500 px-3 text-sm font-bold text-black hover:bg-emerald-400">
+              <button type="button" onClick={() => dispatch({ type: 'SERVE_ORDER', orderId: order.id })} title="Shortcut: S" className="min-h-[44px] flex-1 rounded-lg bg-emerald-500 px-3 text-sm font-bold text-white hover:bg-emerald-400">
                 Mark served
               </button>
             )}
@@ -225,7 +225,7 @@ function TicketWorkspace({ orderId, onError }) {
             <button
               type="button"
               onClick={() => printDocument('receipt', { file: true })}
-              className="min-h-[36px] shrink-0 rounded-lg bg-emerald-500 px-3 text-xs font-bold text-black hover:bg-emerald-400"
+              className="min-h-[36px] shrink-0 rounded-lg bg-emerald-500 px-3 text-xs font-bold text-white hover:bg-emerald-400"
             >
               Print &amp; file receipt
               {lang !== 'en' && <span className="sr-only"> Print &amp; file receipt</span>}
@@ -301,7 +301,7 @@ function TicketWorkspace({ orderId, onError }) {
                 <button
                   type="button"
                   onClick={() => dispatch({ type: 'SET_DELIVERY_STATUS', orderId: order.id, status: 'delivered' })}
-                  className="mt-3 min-h-[44px] w-full rounded-lg bg-emerald-500 px-4 text-sm font-bold text-black hover:bg-emerald-400"
+                  className="mt-3 min-h-[44px] w-full rounded-lg bg-emerald-500 px-4 text-sm font-bold text-white hover:bg-emerald-400"
                   aria-label="Mark delivery delivered"
                 >
                   Mark delivered
@@ -400,7 +400,7 @@ function TicketWorkspace({ orderId, onError }) {
       )}
 
       {selectedItemIds.length > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex flex-wrap items-center gap-2 rounded-2xl bg-zinc-950/95 px-4 py-2.5 text-white shadow-2xl ring-1 ring-white/10 backdrop-blur">
+        <div className="surface-dark fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex flex-wrap items-center gap-2 rounded-2xl bg-zinc-950/95 px-4 py-2.5 text-white shadow-2xl ring-1 ring-white/10 backdrop-blur">
           <span className="text-xs font-bold text-amber-400">
             {selectedItemIds.length} {selectedItemIds.length === 1 ? 'item' : 'items'} selected
           </span>
@@ -416,7 +416,7 @@ function TicketWorkspace({ orderId, onError }) {
               setSelectedItemIds([])
             }}
             defaultValue=""
-            className="h-8 rounded-lg border border-white/20 bg-zinc-900 px-2 text-xs text-zinc-200"
+            className="surface-dark h-8 rounded-lg border border-white/20 bg-zinc-900 px-2 text-xs text-zinc-200"
             aria-label="Move selected items to course"
           >
             <option value="" disabled>Course…</option>
@@ -433,7 +433,7 @@ function TicketWorkspace({ orderId, onError }) {
               flash(`Voided ${selectedItemIds.length} item(s)`)
               setSelectedItemIds([])
             }}
-            className="rounded-lg bg-red-600/80 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-red-500"
+            className="rounded-lg bg-[var(--danger)] px-2.5 py-1.5 text-xs font-bold text-white hover:bg-red-500"
           >
             Void
           </button>
@@ -446,7 +446,7 @@ function TicketWorkspace({ orderId, onError }) {
               flash(`Comped ${selectedItemIds.length} item(s)`)
               setSelectedItemIds([])
             }}
-            className="rounded-lg bg-amber-600/80 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-amber-500"
+            className="rounded-lg bg-[var(--warning)] px-2.5 py-1.5 text-xs font-bold text-white hover:bg-amber-500"
           >
             Comp
           </button>

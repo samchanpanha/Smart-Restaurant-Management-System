@@ -225,7 +225,7 @@ function Coster({ dishId, onDone }) {
           className={`min-h-[44px] rounded-lg px-4 text-sm font-bold transition-colors ${
             dish.available
               ? 'border border-red-500/50 text-red-300 hover:bg-red-500/10'
-              : 'bg-emerald-500 text-black hover:bg-emerald-400'
+              : 'bg-emerald-500 text-white hover:bg-emerald-600'
           }`}
         >
           {dish.available ? (mn.mark86 || '86 this dish') : (mn.backOnMenu || 'Back on menu')}

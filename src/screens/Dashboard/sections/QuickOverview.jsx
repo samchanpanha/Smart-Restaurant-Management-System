@@ -14,14 +14,14 @@ export default function QuickOverview({ copy, items, onOpen }) {
             onClick={() => onOpen(item.id)}
             className="flex items-center gap-3 rounded-[var(--radius-lg)] border border-[var(--border)] p-3 text-left transition-colors hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]"
           >
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-lg)] bg-[var(--accent-soft)] text-[var(--accent)]">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-lg)] bg-[var(--accent-soft)] text-[var(--accent-text)]">
               <Icon name={item.icon} size={18} />
             </span>
             <span className="min-w-0 flex-1">
               <span className="block text-[var(--fs-body)] font-bold text-[var(--text)]">{item.label}</span>
               <span className="mt-0.5 block truncate text-[var(--fs-caption)] text-[var(--text-subtle)]">{item.detail}</span>
             </span>
-            <span aria-hidden="true" className="text-[var(--accent)]">›</span>
+            <span aria-hidden="true" className="text-[var(--accent-text)]">›</span>
           </button>
         ))}
       </div>

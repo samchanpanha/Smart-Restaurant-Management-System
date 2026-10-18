@@ -293,7 +293,7 @@ export default function TelegramScreen() {
     <div className="space-y-4">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <div className="mb-1 flex items-center gap-1.5 text-[var(--fs-label)] font-semibold text-[var(--accent)]">
+          <div className="mb-1 flex items-center gap-1.5 text-[var(--fs-label)] font-semibold text-[var(--accent-text)]">
             <Icon name="message" size={14} />
             {tg.eyebrow || 'Channels · step 9'}
             {lang !== 'en' && <span className="sr-only"> Channels · step 9</span>}
@@ -323,7 +323,7 @@ export default function TelegramScreen() {
       <Card as="section" aria-labelledby="tg-setup-title">
         <SectionHeader
           id="tg-setup-title"
-          icon={<Icon name="sparkles" size={16} className="text-[var(--accent)]" />}
+          icon={<Icon name="sparkles" size={16} className="text-[var(--accent-text)]" />}
           title={tg.setupTitle || 'Get the bot live'}
           sub={tg.setupSub || 'Three steps, no code: the server does the rest.'}
         />
@@ -337,7 +337,7 @@ export default function TelegramScreen() {
         <ol className="grid gap-3 lg:grid-cols-3">
           <li className="flex flex-col rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--surface)] p-4">
             <div className="flex items-center justify-between gap-2">
-              <span aria-hidden="true" className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--accent-soft)] text-xs font-bold text-[var(--accent)]">1</span>
+              <span aria-hidden="true" className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--accent-soft)] text-xs font-bold text-[var(--accent-text)]">1</span>
               <StatusPill tone={tokenTone} size="sm">{tokenLabel}</StatusPill>
             </div>
             <h3 className="mt-2.5 text-[var(--fs-body)] font-bold text-[var(--text-strong)]">Save the bot token</h3>
@@ -355,7 +355,7 @@ export default function TelegramScreen() {
 
           <li className="flex flex-col rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--surface)] p-4">
             <div className="flex items-center justify-between gap-2">
-              <span aria-hidden="true" className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--accent-soft)] text-xs font-bold text-[var(--accent)]">2</span>
+              <span aria-hidden="true" className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--accent-soft)] text-xs font-bold text-[var(--accent-text)]">2</span>
               <StatusPill tone={webhookTone} size="sm">{webhookLabel}</StatusPill>
             </div>
             <h3 className="mt-2.5 text-[var(--fs-body)] font-bold text-[var(--text-strong)]">Point Telegram at this server</h3>
@@ -391,7 +391,7 @@ export default function TelegramScreen() {
 
           <li className="flex flex-col rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--surface)] p-4">
             <div className="flex items-center justify-between gap-2">
-              <span aria-hidden="true" className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--accent-soft)] text-xs font-bold text-[var(--accent)]">3</span>
+              <span aria-hidden="true" className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--accent-soft)] text-xs font-bold text-[var(--accent-text)]">3</span>
               <StatusPill tone={chatTone} size="sm">
                 {pushChats.length ? (
                   <>
@@ -527,7 +527,7 @@ export default function TelegramScreen() {
                 key={shortcut}
                 type="button"
                 onClick={() => run(shortcut)}
-                className="rounded-full border border-[var(--border)] px-2.5 py-1 text-[11px] font-semibold text-[var(--text-muted)] transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)]"
+                className="rounded-full border border-[var(--border)] px-2.5 py-1 text-[11px] font-semibold text-[var(--text-muted)] transition-colors hover:border-[var(--accent)] hover:text-[var(--accent-text)]"
               >
                 {shortcut}
               </button>
@@ -578,7 +578,7 @@ export default function TelegramScreen() {
                 <button
                   type="button"
                   onClick={() => run(entry.command + (entry.args ? ' ' : ''))}
-                  className="shrink-0 rounded-[var(--radius-md)] border border-[var(--border)] px-2 py-1 text-[11px] font-semibold text-[var(--text-muted)] transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)]"
+                  className="shrink-0 rounded-[var(--radius-md)] border border-[var(--border)] px-2 py-1 text-[11px] font-semibold text-[var(--text-muted)] transition-colors hover:border-[var(--accent)] hover:text-[var(--accent-text)]"
                 >
                   Try
                 </button>
@@ -743,7 +743,7 @@ export default function TelegramScreen() {
                   Live preview
                   <code className="font-mono font-normal text-[var(--text-subtle)]"> · {miniAppUrl.replace(origin, '')}</code>
                 </span>
-                <a href={miniAppUrl} target="_blank" rel="noreferrer" className="text-[var(--accent)] hover:underline">reload ↗</a>
+                <a href={miniAppUrl} target="_blank" rel="noreferrer" className="text-[var(--accent-text)] hover:underline">reload ↗</a>
               </div>
               <iframe
                 title="Telegram mini app preview"

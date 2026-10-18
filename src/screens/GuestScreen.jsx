@@ -754,7 +754,7 @@ export default function GuestScreen({
   const guestPhotos = state.settings?.food?.imagesOnGuestMenu !== false
 
   const shell = (inner) => (
-    <div className="min-h-screen bg-[var(--guest-bg)] text-stone-900">
+    <div className="restora-guest min-h-screen bg-[var(--guest-bg)] text-stone-900">
       <div className="mx-auto max-w-md px-4 pb-[calc(8rem+env(safe-area-inset-bottom))] pt-6">{inner}</div>
     </div>
   )
@@ -891,7 +891,7 @@ export default function GuestScreen({
   })()
 
   return (
-    <div className="min-h-screen bg-[var(--guest-bg)] text-stone-900">
+    <div className="restora-guest min-h-screen bg-[var(--guest-bg)] text-stone-900">
       <div className="mx-auto max-w-md px-4 pb-[calc(9rem+env(safe-area-inset-bottom))] pt-5">
         {!online && (
           <div className="mb-3 rounded-2xl bg-stone-800 px-4 py-2.5 text-xs font-semibold text-white shadow-sm" role="status" data-testid="guest-offline">

@@ -37,21 +37,33 @@
   --surface-sunken: #f6f7f9;
   --surface-hover: rgb(40 48 58 / 4%);
 
-  /* Borders */
+  /* Borders. `--border-strong` is the one a control is identified by (input
+     and select outlines, the floor-plan tile edge), so it holds the WCAG 1.4.11
+     3:1 non-text minimum against the card it sits on; the two lighter steps
+     are hairline dividers, which are allowed to be quieter. */
   --border-subtle: #eceef2;
   --border: #dfe3e8;
-  --border-strong: #d4d7dc;
+  --border-strong: #868d95;
 
-  /* Text */
+  /* Text. Every step here is measured against --surface (#fff) at 14px:
+       strong 16.4:1 · body 12.5:1 · muted 5.5:1 · subtle 4.9:1  (AA ≥ 4.5) */
   --text-strong: #1d2024;
   --text: #30343a;
   --text-muted: #626a74;
-  --text-subtle: #77808b;
-  --text-on-accent: #ffffff;
+  --text-subtle: #666e78;
+  /* Near-black, not white: white on the brand orange measures 3.05:1 (below
+     AA), the same ink on the same orange measures 6.2:1 — and the guest
+     accent buttons have always done it this way. The orange stays the brand. */
+  --text-on-accent: #14100c;
 
-  /* Accent */
+  /* Accent. `--accent` is the fill (vivid, on-brand); `--accent-text` is the
+     same hue darkened to 4.6:1 so accent-coloured *words* and icons on a
+     light wash stay readable; `--accent-bright` is decorative only (tab
+     underline, chart line, dots) where 3:1 is the bar. */
   --accent: #f36a21;
   --accent-hover: #df5817;
+  --accent-text: #a63a0c;
+  --accent-bright: #f36a21;
   --accent-soft: rgb(243 106 33 / 10%);
 
   /* Guest + Telegram mini-app surfaces (warm, consumer-facing — the
@@ -67,15 +79,17 @@
      seated table bar can stick right underneath it instead of on top. */
   --miniapp-top-offset: 3.75rem;
 
-  /* Semantic status */
-  --success: #17835d;
-  --success-soft: rgb(23 131 93 / 10%);
-  --warning: #b45309;
-  --warning-soft: rgb(245 158 11 / 14%);
-  --danger: #bd3737;
-  --danger-soft: rgb(189 55 55 / 10%);
-  --info: #1675b8;
-  --info-soft: rgb(22 117 184 / 10%);
+  /* Semantic status. Each hue is dark enough to read as a word on its own
+     soft wash (the pill pattern) *and* to carry a white label as a fill:
+       success 5.8:1 · warning 5.6:1 · danger 4.8:1 · info 5.3:1 on the wash */
+  --success: #146b4f;
+  --success-soft: rgb(20 107 79 / 10%);
+  --warning: #a44a08;
+  --warning-soft: rgb(245 158 11 / 16%);
+  --danger: #b32d2d;
+  --danger-soft: rgb(179 45 45 / 10%);
+  --info: #14689f;
+  --info-soft: rgb(20 104 159 / 10%);
 
   /* Radius */
   --radius-sm: 8px;
@@ -132,6 +146,25 @@
   --text-muted: #b6b9be;
   --text-subtle: #92969c;
   --accent-hover: #ff8736;
+  --accent-text: #ff9a62;
+  /* Status colours play the opposite role on a dark island: the *-soft wash is
+     the dark tint and the plain token is the *ink* on it, so both go light.
+     Against #17181a: success 8.1:1, warning 8.9:1, danger 8.4:1, info 10.0:1. */
+  --success: #4ecb96;
+  --warning: #ffb27a;
+  --danger: #ff9d9d;
+  --info: #7dd3fc;
+  /* Palette ramp for a dark island: the light theme remaps these steps to
+     dark inks, which would disappear on a toast or a dark rail. */
+  --color-zinc-100: #f7f7f7;
+  --color-zinc-200: #e9eaec;
+  --color-zinc-300: #d4d6d9;
+  --color-zinc-400: #c3c6ca;
+  --color-zinc-500: #a8acb2;
+  --color-zinc-600: #8b9096;
+  --color-zinc-700: #3b3e42;
+  --color-zinc-800: #24262a;
+  --color-zinc-900: #17181a;
   color-scheme: dark;
 }
 
@@ -172,7 +205,7 @@ body {
 
 /* Focus visibility for keyboard (office reports) */
 :focus-visible {
-  outline: 2px solid var(--color-brand-400);
+  outline: 2px solid var(--accent, #f36a21);
   outline-offset: 2px;
 }
 
@@ -227,6 +260,145 @@ body {
   animation: kds-slide-out var(--motion-standard) var(--ease-standard);
 }
 
+/* ─── Accessible palette ramp for every light surface ──────────────────
+   Tailwind's default 300–600 steps are drawn for dark UIs. On this app's
+   white cards they fail WCAG AA: `text-white` on `bg-orange-500` measures
+   2.8:1, `text-orange-600` on `bg-orange-50` 3.35:1, `text-rose-300` on a
+   rose wash 1.66:1.
+
+   Two separate problems, so two separate mechanisms:
+
+     1. FILLS — the `--color-*` variables below. 50/100/200 stay pale washes,
+        500/600 are the strong fills that carry a label. Each strong fill is
+        dark enough for a white label at 4.5:1 (emerald-500 4.79, sky-500
+        4.97, red-500 6.02, violet-500 5.9) or light enough for the dark ink
+        label the theme paints on it (orange/amber-500 6.91 with #14100c).
+     2. INK — the `.text-*` class remaps after this block. The pale steps are
+        used as *labels* all over the app (`text-orange-600`, `text-amber-200`,
+        `text-emerald-300`), where they are unreadable on white. Remapping the
+        variables would darken the matching `bg-*` chips too, so ink is
+        remapped by class and fills by variable.
+
+   Shared by the three light roots the app has:
+     .restora-theme  staff workspace, sign-in screen, boot screen
+     .restora-light  portaled dialogs (they render outside .restora-theme)
+     .restora-guest  QR menu + Telegram mini app (their own warm palette)
+   Dark islands (.app-sidebar, .surface-dark) re-declare both below.
+   `node scripts/contrast-audit.mjs` re-measures all of it. */
+.restora-theme,
+.restora-light,
+.restora-guest {
+  /* Orange/amber: 500 is the brand fill, 600 its hover, 400 the lighter hover
+     used under a dark label. The pale steps stay pale. */
+  --color-orange-50: #fff4ed;
+  --color-orange-100: #ffe4d3;
+  --color-orange-200: #ffc4a3;
+  --color-orange-300: #ffb27a;
+  --color-orange-400: #f9914a;
+  --color-orange-500: #f36a21;
+  --color-orange-600: #df5817;
+  --color-orange-700: #a63a0c;
+
+  --color-amber-50: #fff7ed;
+  --color-amber-100: #ffe9d2;
+  --color-amber-200: #ffd0a8;
+  --color-amber-300: #ffb27a;
+  --color-amber-400: #f9914a;
+  --color-amber-500: #f36a21;
+  --color-amber-600: #df5817;
+  --color-amber-700: #a63a0c;
+
+  --color-red-50: #fdf0f0;
+  --color-red-100: #f7dede;
+  --color-red-200: #f0c2c2;
+  --color-red-300: #e2908f;
+  --color-red-400: #cf5f5f;
+  --color-red-500: #bd3737;
+  --color-red-600: #b32d2d;
+  --color-red-700: #96262a;
+
+  --color-rose-100: #fce7ec;
+  --color-rose-200: #f6c6cf;
+  --color-rose-300: #ef97a8;
+  --color-rose-400: #dd5f7c;
+  --color-rose-500: #c02449;
+  --color-rose-600: #a51034;
+  --color-rose-700: #8c0f2c;
+
+  --color-emerald-50: #eef7f3;
+  --color-emerald-100: #e0f0e8;
+  --color-emerald-200: #c6e3d5;
+  --color-emerald-300: #8fcaaf;
+  --color-emerald-400: #4fa882;
+  --color-emerald-500: #17835d;
+  --color-emerald-600: #146b4f;
+  --color-emerald-700: #0f5741;
+
+  --color-sky-50: #eef6fc;
+  --color-sky-100: #dceaf6;
+  --color-sky-200: #bcd8ec;
+  --color-sky-300: #8bbddc;
+  --color-sky-400: #4d94c4;
+  --color-sky-500: #1675b8;
+  --color-sky-600: #14689f;
+  --color-sky-700: #10547f;
+
+  --color-violet-50: #f4f2fb;
+  --color-violet-100: #e8e4f6;
+  --color-violet-200: #d3cbec;
+  --color-violet-300: #b0a2dd;
+  --color-violet-400: #8b78cb;
+  --color-violet-500: #6f56b8;
+  --color-violet-600: #6549a6;
+  --color-violet-700: #513a8a;
+
+  /* Stone is the guest palette's neutral; 200 is a fill, 400–600 are ink
+     (remapped by class below). */
+  --color-stone-200: #e7e5e4;
+  --color-stone-300: #d6d3d1;
+  --color-stone-400: #a8a29e;
+  --color-stone-500: #78716c;
+  --color-stone-600: #57534e;
+}
+
+/* ─── Accent-family ink ────────────────────────────────────────────────
+   The pale steps of every hue are used as labels, not just as chips. Each
+   family gets one ink value that clears 4.5:1 on white *and* on its own
+   50/100 wash: orange/amber #a63a0c (6.5 / 5.35), red #b32d2d (5.6 / 5.0),
+   rose #9f1239 (7.0), emerald #146b4f (5.8 / 5.0), sky #10547f (6.9),
+   violet #513a8a (8.0), stone #57534e (7.0). The 500–700 steps of the cool
+   families are already dark enough as variables, so only their pale steps
+   need remapping here. */
+:is(.restora-theme, .restora-light, .restora-guest) :is(
+  .text-orange-100, .text-orange-200, .text-orange-300, .text-orange-400,
+  .text-orange-500, .text-orange-600, .text-orange-700,
+  .text-amber-100, .text-amber-200, .text-amber-300, .text-amber-400,
+  .text-amber-500, .text-amber-600, .text-amber-700, .text-amber-800
+) { color: var(--accent-text, #a63a0c); }
+
+:is(.restora-theme, .restora-light, .restora-guest) :is(
+  .text-red-100, .text-red-200, .text-red-300, .text-red-400,
+  .text-rose-100, .text-rose-200, .text-rose-300, .text-rose-400
+) { color: #b32d2d; }
+
+:is(.restora-theme, .restora-light, .restora-guest) :is(.text-rose-100, .text-rose-200, .text-rose-300, .text-rose-400) { color: #9f1239; }
+
+:is(.restora-theme, .restora-light, .restora-guest) :is(
+  .text-emerald-100, .text-emerald-200, .text-emerald-300, .text-emerald-400
+) { color: #146b4f; }
+
+:is(.restora-theme, .restora-light, .restora-guest) :is(
+  .text-sky-100, .text-sky-200, .text-sky-300, .text-sky-400
+) { color: #10547f; }
+
+:is(.restora-theme, .restora-light, .restora-guest) :is(
+  .text-violet-100, .text-violet-200, .text-violet-300, .text-violet-400
+) { color: #513a8a; }
+
+:is(.restora-theme, .restora-light, .restora-guest) :is(
+  .text-stone-300, .text-stone-400, .text-stone-500, .text-stone-600
+) { color: #57534e; }
+
 /* ─── Restora web-ops light theme ─────────────────────────────────── */
 /* Semantic ink tokens are scoped to the staff workspace so the guest QR
    experience can keep its own surface treatment. */
@@ -241,23 +413,6 @@ body {
   --color-paper-50: #f8f9fb;
   --color-paper-100: #eef0f3;
   --color-paper-200: #e1e4e8;
-
-  /* Pull the existing utility palette into the warm orange / clean white
-     reference design without changing the stateful screens' behavior. */
-  --color-amber-100: #b84a12;
-  --color-amber-200: #b84a12;
-  --color-amber-300: #d45b17;
-  --color-amber-400: #fb8438;
-  --color-amber-500: #f36a21;
-  --color-amber-600: #df5817;
-  --color-emerald-200: #146b4f;
-  --color-emerald-300: #17835d;
-  --color-sky-200: #155d91;
-  --color-sky-300: #1675b8;
-  --color-red-200: #9c3030;
-  --color-red-300: #bd3737;
-  --color-violet-200: #6549a6;
-  --color-violet-300: #795cc0;
 
   color: #25282c;
   background: var(--color-ink-950);
@@ -284,14 +439,99 @@ body {
   min-height: 100dvh;
 }
 
-.restora-theme :is(.app-topbar, .app-tabs, .app-workspace) .text-zinc-100 { color: #1d2024; }
-.restora-theme :is(.app-topbar, .app-tabs, .app-workspace) .text-zinc-200 { color: #2d3137; }
-.restora-theme :is(.app-topbar, .app-tabs, .app-workspace) .text-zinc-300 { color: #454b53; }
-.restora-theme :is(.app-topbar, .app-tabs, .app-workspace) .text-zinc-400 { color: #626a74; }
-.restora-theme :is(.app-topbar, .app-tabs, .app-workspace) .text-zinc-500 { color: #77808b; }
-.restora-theme :is(.app-topbar, .app-tabs, .app-workspace) .text-zinc-600 { color: #626a74; }
-.restora-theme :is(.app-topbar, .app-tabs, .app-workspace) .text-zinc-700 { color: #4b5159; }
-.restora-theme :is(.app-topbar, .app-tabs, .app-workspace) .text-zinc-800 { color: #30343a; }
+/* ─── Ink ramp for light surfaces ──────────────────────────────────────
+   Tailwind's zinc scale is used two ways in this app: as *text* (which has
+   to go dark on a white card) and as *fill* (`bg-zinc-100` chips, which have
+   to stay pale). Remapping the `--color-zinc-*` variables would flip both,
+   so the text side is remapped by class instead — and now for the whole
+   light subtree, not just the topbar/tabs/workspace.
+
+   That scope used to leave three surfaces painting Tailwind's pale grays on
+   a near-white background: the sign-in screen (`text-zinc-100` = #f4f4f5 on
+   #f5f6f8 — effectively invisible), the boot screen, and every portaled
+   dialog, which renders outside `.restora-theme` entirely. Ratios below are
+   against #fff: 100 → 16.4:1 · 200 → 12.9:1 · 300 → 8.6:1 · 400 → 5.2:1 ·
+   500 → 4.7:1 · 600 → 5.2:1 · 700 → 7.7:1 · 800 → 12.5:1. */
+:is(.restora-theme, .restora-light, .restora-guest) .text-zinc-100 { color: #1d2024; }
+:is(.restora-theme, .restora-light, .restora-guest) .text-zinc-200 { color: #2d3137; }
+:is(.restora-theme, .restora-light, .restora-guest) .text-zinc-300 { color: #454b53; }
+:is(.restora-theme, .restora-light, .restora-guest) .text-zinc-400 { color: #565e68; }
+:is(.restora-theme, .restora-light, .restora-guest) .text-zinc-500 { color: #5f6771; }
+:is(.restora-theme, .restora-light, .restora-guest) .text-zinc-600 { color: #5f6771; }
+:is(.restora-theme, .restora-light, .restora-guest) .text-zinc-700 { color: #454b53; }
+:is(.restora-theme, .restora-light, .restora-guest) .text-zinc-800 { color: #30343a; }
+:is(.restora-theme, .restora-light, .restora-guest) .placeholder-zinc-500::placeholder { color: #666e78; }
+
+/* Dark islands inside a light root — the sidebar, toasts, anything marked
+   `.surface-dark` — ask for Tailwind's light zinc back. Without this the
+   ramp above would paint near-black text on a near-black toast.
+   Ratios against #17181a: 100 → 17.4:1 · 200 → 15.1:1 · 300 → 12.2:1 ·
+   400 → 9.1:1 · 500 → 6.9:1 · 600 → 5.0:1. */
+:is(.restora-theme, .restora-light, .restora-guest) :is(.app-sidebar, .surface-dark) .text-zinc-100,
+:is(.app-sidebar, .surface-dark) .text-zinc-100 { color: #f7f7f7; }
+:is(.restora-theme, .restora-light, .restora-guest) :is(.app-sidebar, .surface-dark) .text-zinc-200,
+:is(.app-sidebar, .surface-dark) .text-zinc-200 { color: #e9eaec; }
+:is(.restora-theme, .restora-light, .restora-guest) :is(.app-sidebar, .surface-dark) .text-zinc-300,
+:is(.app-sidebar, .surface-dark) .text-zinc-300 { color: #d4d6d9; }
+:is(.restora-theme, .restora-light, .restora-guest) :is(.app-sidebar, .surface-dark) .text-zinc-400,
+:is(.app-sidebar, .surface-dark) .text-zinc-400 { color: #c3c6ca; }
+:is(.restora-theme, .restora-light, .restora-guest) :is(.app-sidebar, .surface-dark) .text-zinc-500,
+:is(.app-sidebar, .surface-dark) .text-zinc-500 { color: #a8acb2; }
+:is(.restora-theme, .restora-light, .restora-guest) :is(.app-sidebar, .surface-dark) .text-zinc-600,
+:is(.app-sidebar, .surface-dark) .text-zinc-600 { color: #8b9096; }
+:is(.restora-theme, .restora-light, .restora-guest) :is(.app-sidebar, .surface-dark) .text-zinc-700,
+:is(.app-sidebar, .surface-dark) .text-zinc-700 { color: #8b9096; }
+:is(.restora-theme, .restora-light, .restora-guest) :is(.app-sidebar, .surface-dark) .text-zinc-800,
+:is(.app-sidebar, .surface-dark) .text-zinc-800 { color: #a8acb2; }
+
+/* Same islands, same problem in reverse: inside a dark panel the rust ink
+   above would be unreadable, so the pale Tailwind steps come back as light
+   values. Ratios against #17181a: amber/orange 8.1:1, red 8.4:1, rose 8.6:1,
+   emerald 10.4:1, sky 10.0:1, violet 8.2:1, stone 10.6:1. */
+:is(.app-sidebar, .surface-dark) :is(
+  .text-orange-100, .text-orange-200, .text-orange-300, .text-orange-400,
+  .text-orange-500, .text-orange-600, .text-orange-700,
+  .text-amber-100, .text-amber-200, .text-amber-300, .text-amber-400,
+  .text-amber-500, .text-amber-600, .text-amber-700, .text-amber-800
+) { color: #ff9a62; }
+
+:is(.app-sidebar, .surface-dark) :is(
+  .text-red-100, .text-red-200, .text-red-300, .text-red-400,
+  .text-red-500, .text-red-600
+) { color: #ff9d9d; }
+
+:is(.app-sidebar, .surface-dark) :is(
+  .text-rose-100, .text-rose-200, .text-rose-300, .text-rose-400
+) { color: #fda4af; }
+
+:is(.app-sidebar, .surface-dark) :is(
+  .text-emerald-100, .text-emerald-200, .text-emerald-300, .text-emerald-400,
+  .text-emerald-500, .text-emerald-600
+) { color: #6ee7b7; }
+
+:is(.app-sidebar, .surface-dark) :is(
+  .text-sky-100, .text-sky-200, .text-sky-300, .text-sky-400,
+  .text-sky-500, .text-sky-600
+) { color: #7dd3fc; }
+
+:is(.app-sidebar, .surface-dark) :is(
+  .text-violet-100, .text-violet-200, .text-violet-300, .text-violet-400
+) { color: #c4b5fd; }
+
+:is(.app-sidebar, .surface-dark) :is(
+  .text-stone-300, .text-stone-400, .text-stone-500, .text-stone-600
+) { color: #d6d3d1; }
+
+/* White on the brand orange is 2.8:1 — under AA, and it is the most-clicked
+   pixel in the app (32 hardcoded `bg-orange-500 text-white` buttons). The
+   orange stays exactly the brand colour; the label goes to the same near-black
+   the guest accent buttons have always used, which measures 6.2:1. Descendants
+   are covered too, so a `<span class="text-white">` inside an orange button
+   does not stay white. */
+:is(.restora-theme, .restora-light, .restora-guest) :is(.bg-orange-500, .bg-orange-600, .bg-amber-400, .bg-amber-500).text-white,
+:is(.restora-theme, .restora-light, .restora-guest) :is(.bg-orange-500, .bg-orange-600, .bg-amber-400, .bg-amber-500) .text-white {
+  color: var(--text-on-accent, #14100c);
+}
 
 .restora-theme .app-sidebar {
   --color-ink-950: #131416;
@@ -451,8 +691,13 @@ body {
 }
 
 .restora-theme input::placeholder,
-.restora-theme textarea::placeholder {
-  color: #9aa1aa;
+.restora-theme textarea::placeholder,
+.restora-light input::placeholder,
+.restora-light textarea::placeholder,
+.restora-guest input::placeholder,
+.restora-guest textarea::placeholder {
+  /* Placeholder text is text: 4.9:1 on the white field, not 2.6:1. */
+  color: #666e78;
 }
 
 .restora-theme .rounded-2xl.border,
@@ -515,9 +760,11 @@ body {
 .restora-theme .bg-violet-500\/10 { background-color: rgb(121 92 192 / 9%); }
 .restora-theme .bg-violet-500\/20 { background-color: rgb(121 92 192 / 12%); }
 
+/* The active nav pill is the brand orange on a dark rail: white on it measures
+   3.05:1, the near-black accent ink measures 6.2:1. */
 .restora-theme .app-sidebar .rounded-lg.bg-amber-500,
 .restora-theme .app-sidebar .bg-amber-500 {
-  color: #fff;
+  color: var(--text-on-accent, #14100c);
 }
 
 .restora-theme .app-sidebar select {
