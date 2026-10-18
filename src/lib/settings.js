@@ -423,6 +423,19 @@ export function defaultSettings(locationLabel = 'Downtown') {
       printerKitchen: '',
     },
 
+    // Guest payment methods. Only QR and cash are offered to guests; staff
+    // can still take card in the dashboard. The QR is a static merchant
+    // image the owner uploads (no bank integration), so the guest sees the
+    // exact amount and confirms the transfer.
+    payments: {
+      qrEnabled: true,
+      cashEnabled: true,
+      qrImageUrl: '',
+      qrLabel: '',
+      qrNote: 'Scan with your banking app, enter the exact amount, then tap “I have paid”.',
+      requireQrConfirmation: true,
+    },
+
     // Booking & table modification rules
     booking: {
       allowGuestTableChange: true,
@@ -670,6 +683,11 @@ export function sanitizeSettings(raw, locationLabel = 'Downtown') {
     .filter((value) => value > 0 && value <= 0.5)
     .slice(0, 6)
 
+  const paymentSource = source.payments && typeof source.payments === 'object' ? source.payments : {}
+  const qrImageUrl = sanitizeImageRef(paymentSource.qrImageUrl)
+  const qrEnabled = paymentSource.qrEnabled !== false
+  const cashEnabled = paymentSource.cashEnabled !== false
+
   const storageSpaces = sanitizeStrings(
     source.stock?.storageLocations,
     STORAGE_LOCATIONS.map((entry) => entry.id),
@@ -800,6 +818,18 @@ export function sanitizeSettings(raw, locationLabel = 'Downtown') {
       printTicketCopies: Math.trunc(clampNumber(source.pos?.printTicketCopies, 1, 4, 1)),
       printerReceipt: clampText(source.pos?.printerReceipt, 60),
       printerKitchen: clampText(source.pos?.printerKitchen, 60),
+    },
+
+    payments: {
+      qrEnabled,
+      // At least one method must remain available to the guest. If the owner
+      // turns both off (or a stale snapshot carries both as false), cash is
+      // restored rather than presenting an unpayable checkout.
+      cashEnabled: cashEnabled || !qrEnabled,
+      qrImageUrl,
+      qrLabel: clampText(paymentSource.qrLabel, 60),
+      qrNote: clampText(paymentSource.qrNote, 180) || base.payments.qrNote,
+      requireQrConfirmation: paymentSource.requireQrConfirmation !== false,
     },
 
     booking: {
@@ -1119,6 +1149,13 @@ export function configurationAudit(shop) {
       ok: DOC_KINDS.every((kind) => settings.templates?.[kind]?.paper && settings.templates?.[kind]?.title),
       fix: 'Choose a paper size and title for each document template.',
       section: 'documents',
+    },
+    {
+      id: 'payments',
+      label: 'A guest payment method is ready',
+      ok: Boolean(settings.payments?.cashEnabled || (settings.payments?.qrEnabled && settings.payments?.qrImageUrl)),
+      fix: 'Upload a merchant QR in Settings → Payments, or keep cash on for pickup and delivery.',
+      section: 'payments',
     },
     {
       id: 'suppliers',

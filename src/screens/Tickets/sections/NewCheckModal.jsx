@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { LocationPicker } from '../../../components/LocationPicker'
 import { Field, Modal, btnPrimary, inputCls } from '../../../components/ui'
 import { uid } from '../../../lib/models'
 import { useRestora } from '../../../lib/store'
@@ -13,7 +14,7 @@ function NewCheckModal({ onClose, onCreated }) {
   const [tableId, setTableId] = useState(candidates[0]?.id || '')
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
-  const [address, setAddress] = useState('')
+  const [location, setLocation] = useState({ address: '', unit: '', landmark: '', lat: null, lng: null, accuracy: null })
   const [fee, setFee] = useState('2.00')
   const [eta, setEta] = useState('')
   const [error, setError] = useState('')
@@ -34,7 +35,14 @@ function NewCheckModal({ onClose, onCreated }) {
     setCustomerId(record.id)
     setName(record.name || '')
     setPhone(record.phone || '')
-    if (record.note) setAddress(record.note)
+    setLocation({
+      address: record.address || record.note || '',
+      unit: record.unit || '',
+      landmark: record.landmark || '',
+      lat: record.lat ?? null,
+      lng: record.lng ?? null,
+      accuracy: record.accuracy ?? null,
+    })
     setError('')
   }
 
@@ -60,6 +68,12 @@ function NewCheckModal({ onClose, onCreated }) {
             id: linkId,
             name: name.trim(),
             phone: phone.trim(),
+            address: orderType === 'delivery' ? location.address : '',
+            unit: orderType === 'delivery' ? location.unit : '',
+            landmark: orderType === 'delivery' ? location.landmark : '',
+            lat: orderType === 'delivery' ? location.lat : null,
+            lng: orderType === 'delivery' ? location.lng : null,
+            accuracy: orderType === 'delivery' ? location.accuracy : null,
             createdAt: new Date().toISOString(),
           },
         })
@@ -71,9 +85,15 @@ function NewCheckModal({ onClose, onCreated }) {
         customer: {
           name,
           phone,
-          address: orderType === 'delivery' ? address : '',
+          address: orderType === 'delivery' ? location.address : '',
+          unit: orderType === 'delivery' ? location.unit : '',
+          landmark: orderType === 'delivery' ? location.landmark : '',
+          lat: orderType === 'delivery' ? location.lat : null,
+          lng: orderType === 'delivery' ? location.lng : null,
+          accuracy: orderType === 'delivery' ? location.accuracy : null,
           ...(linkId ? { customerId: linkId } : {}),
         },
+        deliveryAddress: orderType === 'delivery' ? location.address : undefined,
         deliveryFee: orderType === 'delivery' ? Number(fee) || 0 : 0,
         eta: eta ? new Date(eta).toISOString() : null,
       })
@@ -159,9 +179,13 @@ function NewCheckModal({ onClose, onCreated }) {
             </label>
             {orderType === 'delivery' && (
               <>
-                <Field label="Delivery address">
-                  <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="12 Riverside Rd" className={inputCls} maxLength={160} />
-                </Field>
+                <LocationPicker
+                  value={location}
+                  onChange={setLocation}
+                  tone="dark"
+                  addressLabel="Delivery address"
+                  addressPlaceholder="12 Riverside Rd"
+                />
                 <Field label="Delivery fee">
                   <input type="number" min="0" step="0.01" value={fee} onChange={(e) => setFee(e.target.value)} className={inputCls} />
                 </Field>

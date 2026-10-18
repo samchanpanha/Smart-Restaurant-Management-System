@@ -6,7 +6,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Icon } from '../components/Icon'
 import LanguageSwitcher from '../components/LanguageSwitcher'
+import { LocationPicker } from '../components/LocationPicker'
 import { BookingPanel } from './Guest/sections/BookingPanel.jsx'
+import { GuestOrderDetails } from './Guest/sections/GuestOrderDetails.jsx'
+import { GuestPaymentSheet } from './Guest/sections/GuestPaymentSheet.jsx'
+import { QrPaymentPanel } from './Guest/sections/QrPaymentPanel.jsx'
 import MenuConcierge from '../components/MenuConcierge'
 import DishShowcase from '../components/three/DishShowcase'
 import { Sheet } from '../components/ui'
@@ -21,7 +25,7 @@ import {
 } from '../lib/i18n'
 import { isFreeTableStatus, isTableInServiceStatus } from '../lib/constants'
 import { guestSessionToken, saveGuestOrder } from '../lib/guest-session'
-import { money, orderCharges, orderTotals, uid } from '../lib/models'
+import { money, orderCharges, orderTotals, paymentReference, uid } from '../lib/models'
 import { categoryTree } from '../lib/settings'
 import { useMenuCatalog } from '../lib/useMenuCatalog'
 import { useNow, useRestora } from '../lib/store'
@@ -293,155 +297,6 @@ function DishModal({ item, onAdd, onClose, showImages = true }) {
   )
 }
 
-// ─── Pay sheet ────────────────────────────────────────────────────
-
-function PaySheet({ order, onClose, onPaid }) {
-  const { state, dispatch } = useRestora()
-  const menuById = useMemo(() => Object.fromEntries(state.menu.map((m) => [m.id, m])), [state.menu])
-  const t = orderTotals(order, menuById, state.settings)
-  const [tipPct, setTipPct] = useState(18)
-  const [customTip, setCustomTip] = useState('')
-  const [method, setMethod] = useState('apple_pay')
-  const [processing, setProcessing] = useState(false)
-  const tip = customTip !== '' ? Math.max(0, Number(customTip) || 0) : (t.subtotal * tipPct) / 100
-  const finalTotal = Math.round((t.total + tip) * 100) / 100
-
-  function handlePay() {
-    if (processing) return
-    setProcessing(true)
-    setTimeout(() => {
-      const tipRounded = Math.round(tip * 100) / 100
-      dispatch({
-        type: 'PAY_ORDER',
-        orderId: order.id,
-        method: method === 'apple_pay' ? 'card' : method,
-        tip: tipRounded,
-        split: { kind: 'full', by: 'guest' },
-        freeTable: false,
-        tenderDetails: {
-          method,
-          subtotal: t.subtotal,
-          tax: t.tax,
-          tip: tipRounded,
-          total: finalTotal,
-        },
-      })
-      setProcessing(false)
-      onPaid()
-    }, 350)
-  }
-
-  return (
-    <Sheet onClose={onClose} label="Pay check">
-      <h2 className="text-xl font-extrabold text-stone-900">Your check</h2>
-      <ul className="mt-3 max-h-40 space-y-1 overflow-y-auto text-sm">
-        {t.lines.map((l) => (
-          <li key={l.id} className="flex justify-between text-stone-700">
-            <span>{l.qty}× {l.name}</span>
-            <span className="tnum font-bold">{money(l.lineTotal)}</span>
-          </li>
-        ))}
-      </ul>
-      <div className="mt-3 space-y-1 border-t border-stone-100 pt-3 text-sm">
-        <div className="flex justify-between text-stone-500"><span>Subtotal</span><span className="tnum">{money(t.subtotal)}</span></div>
-        <div className="flex justify-between text-stone-500"><span>Tax</span><span className="tnum">{money(t.tax)}</span></div>
-        {tip > 0 && (
-          <div className="flex justify-between font-semibold text-amber-700">
-            <span>Tip ({customTip ? 'Custom' : `${tipPct}%`})</span>
-            <span className="tnum">+{money(tip)}</span>
-          </div>
-        )}
-        <div className="flex justify-between border-t border-stone-200 pt-1.5 text-base font-black text-stone-900">
-          <span>Total due</span>
-          <span className="tnum text-amber-600">{money(finalTotal)}</span>
-        </div>
-      </div>
-
-      <div className="mt-4 text-xs font-bold uppercase tracking-widest text-stone-500">Tip the team</div>
-      <div className="mt-1.5 grid grid-cols-5 gap-1.5">
-        {[
-          [0, 'No tip'],
-          [10, '10%'],
-          [15, '15%'],
-          [18, '18%'],
-          [20, '20%'],
-        ].map(([p, label]) => {
-          const active = customTip === '' && tipPct === p
-          const amt = p > 0 ? (t.subtotal * p) / 100 : 0
-          return (
-            <button
-              key={p}
-              type="button"
-              onClick={() => { setTipPct(p); setCustomTip('') }}
-              className={`flex flex-col items-center justify-center rounded-xl py-2 text-xs font-extrabold transition ${
-                active ? 'bg-stone-900 text-white shadow-sm' : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
-              }`}
-            >
-              <span>{label}</span>
-              {p > 0 && <span className="tnum text-[10px] opacity-75">{money(amt)}</span>}
-            </button>
-          )
-        })}
-      </div>
-      <input
-        value={customTip}
-        onChange={(e) => setCustomTip(e.target.value)}
-        type="number"
-        min="0"
-        step="any"
-        placeholder="Custom tip $"
-        className="tnum mt-2 min-h-[40px] w-full rounded-xl border border-stone-200 bg-stone-50 px-3 text-xs"
-      />
-
-      <div className="mt-4 text-xs font-bold uppercase tracking-widest text-stone-500">Payment method</div>
-      <div className="mt-1.5 grid grid-cols-3 gap-2">
-        {[
-          ['apple_pay', '🍎 Apple Pay'],
-          ['card', '💳 Card'],
-          ['qr', '📱 QR Pay'],
-        ].map(([m, label]) => (
-          <button
-            key={m}
-            type="button"
-            onClick={() => setMethod(m)}
-            className={`min-h-[42px] rounded-xl border text-xs font-extrabold transition ${
-              method === m
-                ? 'border-stone-900 bg-stone-900 text-white shadow-sm'
-                : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {method === 'qr' && (
-        <div className="mt-3 flex items-center gap-3 rounded-2xl bg-amber-50/80 p-3 ring-1 ring-amber-200">
-          <QRCodeSVG value={`restora:guest-pay?order=${order.id}&amount=${finalTotal}`} size={64} />
-          <div className="text-xs text-stone-600">
-            <div className="font-bold text-stone-900">Scan with your Banking App</div>
-            <div>Supports KHQR, Bakong & PromptPay. Instant settlement.</div>
-          </div>
-        </div>
-      )}
-
-      <button
-        type="button"
-        disabled={processing}
-        onClick={handlePay}
-        className="tnum mt-4 min-h-[52px] w-full rounded-2xl bg-amber-500 text-base font-extrabold text-stone-950 shadow-sm hover:bg-amber-400 disabled:opacity-60"
-      >
-        {processing ? 'Authorizing payment...' : `Pay ${money(finalTotal)}`}
-      </button>
-      <p className="mt-2 text-center text-[11px] text-stone-400">
-        {state.settings?.operatingMode === 'production'
-          ? '🔒 Secure checkout · Order verified'
-          : 'Demo checkout · Simulated payment authorization'}
-      </p>
-    </Sheet>
-  )
-}
-
 function PaidCheckSummary({ table, paid, menuById, settings, onResetTable }) {
   const t = paid ? orderTotals(paid, menuById, settings) : null
   const [rating, setRating] = useState(5)
@@ -598,7 +453,7 @@ export default function GuestScreen({
   const [detail, setDetail] = useState(null)
   const [cartOpen, setCartOpen] = useState(false)
   const [checkoutStep, setCheckoutStep] = useState(0)
-  const [paymentChoice, setPaymentChoice] = useState('now')
+  const [paymentChoice, setPaymentChoice] = useState('qr')
   const [lastPlaced, setLastPlaced] = useState(null)
   const [payOpen, setPayOpen] = useState(false)
   const [justSent, setJustSent] = useState(false)
@@ -609,8 +464,12 @@ export default function GuestScreen({
   const [deliveryOrderId, setDeliveryOrderId] = useState(null)
   const [guestToken] = useState(() => guestSessionToken())
   const [deliveryAddress, setDeliveryAddress] = useState('')
+  const [deliveryUnit, setDeliveryUnit] = useState('')
+  const [deliveryLandmark, setDeliveryLandmark] = useState('')
+  const [deliveryPin, setDeliveryPin] = useState({ lat: null, lng: null, accuracy: null })
   const [addressError, setAddressError] = useState(false)
   const [nameError, setNameError] = useState(false)
+  const [phoneError, setPhoneError] = useState(false)
   const [moveModalOpen, setMoveModalOpen] = useState(false)
   const [moveTargetId, setMoveTargetId] = useState('')
   const [moveReason, setMoveReason] = useState('')
@@ -705,6 +564,29 @@ export default function GuestScreen({
   const deliveryShortfall = Math.max(0, minDeliveryOrder - checkoutCharges.subtotal)
   const payAtPickup = serviceSettings.payAtPickup !== false
   const payAtDoor = serviceSettings.payAtDoor !== false
+  // Guest money: QR and cash only. The old card/Apple Pay path is gone from
+  // this surface; staff still take card in the dashboard.
+  const paymentSettings = state.settings?.payments || {}
+  const qrReady = paymentSettings.qrEnabled !== false && Boolean(paymentSettings.qrImageUrl)
+  const cashReady = paymentSettings.cashEnabled !== false
+  const effectivePaymentChoice = paymentChoice === 'qr' && qrReady ? 'qr' : 'cash'
+  const deliveryLocation = {
+    address: deliveryAddress,
+    unit: deliveryUnit,
+    landmark: deliveryLandmark,
+    ...deliveryPin,
+  }
+  function updateDeliveryLocation(next) {
+    setDeliveryAddress(next.address || '')
+    setDeliveryUnit(next.unit || '')
+    setDeliveryLandmark(next.landmark || '')
+    setDeliveryPin({
+      lat: next.lat ?? null,
+      lng: next.lng ?? null,
+      accuracy: next.accuracy ?? null,
+    })
+    if (next.address) setAddressError(false)
+  }
   const confirmedPaid = placedOrder ? placedOrder.status === 'paid' : Boolean(lastPlaced?.paid)
   const confirmedId = placedOrder?.id || lastPlaced?.id || ''
   const confirmedEta = placedOrder?.eta || lastPlaced?.eta || etaQuote
@@ -712,6 +594,17 @@ export default function GuestScreen({
     ? orderTotals(placedOrder, menuById, state.settings).total
     : (lastPlaced?.total || checkoutCharges.total)
   const confirmedAdded = !placedOrder?.items?.length && lastPlaced?.added
+  const confirmedClaim = Boolean(placedOrder?.paymentClaim) && !confirmedPaid
+  const confirmedPreference = placedOrder?.paymentPreference || lastPlaced?.paymentPreference || effectivePaymentChoice
+  const confirmedPaymentLabel = confirmedPaid
+    ? (placedOrder?.payMethod === 'qr' ? 'Paid by QR' : placedOrder?.payMethod === 'cash' ? 'Paid in cash' : 'Paid')
+    : confirmedClaim
+      ? 'QR sent · waiting for staff'
+      : confirmedPreference === 'qr'
+        ? 'QR transfer'
+        : delivery
+          ? 'Pay at the door'
+          : 'Pay at pickup'
 
   function addToCart(menuItem, extra) {
     setCart((c) => [...c, {
@@ -739,49 +632,66 @@ export default function GuestScreen({
   }
 
   function validateDetails() {
+    let ok = true
     if ((pickup || delivery) && !guestName.trim()) {
       setNameError(true)
-      return false
+      ok = false
+    } else {
+      setNameError(false)
+    }
+    if ((pickup || delivery) && guestPhone.replace(/\D/g, '').length < 6) {
+      setPhoneError(true)
+      ok = false
+    } else {
+      setPhoneError(false)
     }
     if (delivery && !deliveryAddress.trim()) {
       setAddressError(true)
-      return false
+      ok = false
+    } else {
+      setAddressError(false)
     }
-    setNameError(false)
-    setAddressError(false)
-    return true
+    return ok
   }
 
   function sendCart() {
     if (!cart.length) return
+    if (!validateDetails()) return
     const name = guestName.trim()
     const phone = guestPhone.trim()
-    if (delivery || pickup) {
-      if (!name) { setNameError(true); return }
-      setNameError(false)
+    const customer = {
+      name,
+      phone,
+      address: delivery ? deliveryAddress.trim() : '',
+      unit: delivery ? deliveryUnit.trim() : '',
+      landmark: delivery ? deliveryLandmark.trim() : '',
+      ...(delivery ? deliveryPin : {}),
     }
     if (delivery) {
-      const addr = deliveryAddress.trim()
-      if (!addr) { setAddressError(true); return }
-      setAddressError(false)
-      // Single atomic action — creates the delivery order + fires lines.
-      // The client id travels with the action so tracking can find the
-      // order the reducer actually created.
       const orderId = uid('o')
       setDeliveryOrderId(orderId)
-      setLastPlaced({ id: orderId, total: checkoutCharges.total, eta: etaQuote, paid: paymentChoice === 'now', added: false })
+      setLastPlaced({
+        id: orderId,
+        total: checkoutCharges.total,
+        eta: etaQuote,
+        paid: false,
+        paymentPreference: effectivePaymentChoice,
+        added: false,
+      })
       saveGuestOrder({ orderId, type: 'delivery', guestToken, at: Date.now() })
       dispatch({
         type: 'GUEST_SEND',
         orderType: 'delivery',
         orderId,
         guestToken,
-        customer: { name, phone },
+        customer,
         deliveryAddress: deliveryAddress.trim(),
         deliveryFee,
         eta: etaQuote,
-        payNow: paymentChoice === 'now',
-        paymentMethod: 'card',
+        // The order is placed unpaid. QR shows the merchant code next;
+        // cash settles on collection/delivery.
+        payNow: false,
+        paymentPreference: effectivePaymentChoice,
         items: cart.map((c) => ({ ...c, guest: name })),
       })
     } else if (pickup) {
@@ -789,21 +699,29 @@ export default function GuestScreen({
       const orderId = pickupOrderId || uid('o')
       if (!pickupOrderId) {
         setPickupOrderId(orderId)
-        setLastPlaced({ id: orderId, total: checkoutCharges.total, eta: etaQuote, paid: paymentChoice === 'now', added: false })
+        setLastPlaced({
+          id: orderId,
+          total: checkoutCharges.total,
+          eta: etaQuote,
+          paid: false,
+          paymentPreference: effectivePaymentChoice,
+          added: false,
+        })
         saveGuestOrder({ orderId, type: 'takeout', guestToken, at: Date.now() })
         dispatch({
           type: 'GUEST_SEND',
           orderType: 'takeout',
           orderId,
           guestToken,
-          customer: { name, phone },
+          customer,
           eta: etaQuote,
-          payNow: paymentChoice === 'now',
-          paymentMethod: 'card',
+          payNow: false,
+          paymentPreference: effectivePaymentChoice,
           items: cart.map((c) => ({ ...c, guest: name })),
         })
       } else {
-        setLastPlaced({ id: orderId, total: 0, eta: etaQuote, paid: false, added: true })
+        setLastPlaced({ id: orderId, total: 0, eta: etaQuote, paid: false, paymentPreference: effectivePaymentChoice, added: true })
+        dispatch({ type: 'SET_PAYMENT_PREFERENCE', orderId, preference: effectivePaymentChoice, guestToken })
         for (const c of cart) {
           dispatch({ type: 'ADD_ITEM', orderId, menuItemId: c.menuItemId, qty: c.qty, modifiers: c.modifiers, course: c.course, notes: c.notes, by: 'guest', guest: name })
         }
@@ -948,7 +866,7 @@ export default function GuestScreen({
   }
 
   const heldAny = order ? order.items.some((i) => i.status === 'held' && !i.voided) : false
-  const payable = order && ['sent', 'in_prep', 'ready', 'served'].includes(order.status) && !heldAny
+  const payable = order && ['sent', 'in_prep', 'ready', 'served'].includes(order.status) && !heldAny && !order.paymentClaim
   const bill = order ? orderTotals(order, menuById, state.settings) : null
   const heading = delivery
     ? (gu.deliveryOrder || '🛵 Delivery order')
@@ -957,8 +875,15 @@ export default function GuestScreen({
       : translateTableName(table?.name, lang)
   // Live, guest-facing status chip.
   const liveStatus = (() => {
-    if (delivery) return deliveryOrder ? (DELIVERY_TICKET_LABELS[deliveryOrder.status] || 'Order placed') : null
-    if (pickup) return pickupPaid ? 'Paid' : pickupOrder ? (TICKET_LABELS[pickupOrder.status] || 'Order placed') : null
+    if (delivery) {
+      if (deliveryOrder?.paymentClaim) return 'Payment sent · checking'
+      return deliveryOrder ? (DELIVERY_TICKET_LABELS[deliveryOrder.status] || 'Order placed') : null
+    }
+    if (pickup) {
+      if (pickupOrder?.paymentClaim) return 'Payment sent · checking'
+      return pickupPaid ? 'Paid' : pickupOrder ? (TICKET_LABELS[pickupOrder.status] || 'Order placed') : null
+    }
+    if (order?.paymentClaim) return 'Payment sent · checking'
     if (order) return TICKET_LABELS[order.status] || 'Seated'
     if (paid) return 'Paid'
     if (table && isTableInServiceStatus(table.status)) return TICKET_LABELS[table.status] || 'Seated'
@@ -1211,26 +1136,32 @@ export default function GuestScreen({
             )}
 
             {order && (pickup || delivery) && (
-              <div className="rounded-3xl bg-white p-4 shadow-sm">
-                <div className="flex items-start justify-between gap-3">
+              <>
+                <GuestOrderDetails order={order} guestToken={order.guestToken || guestToken} />
+                <div className="flex items-center justify-between gap-3 rounded-3xl bg-white p-4 shadow-sm" data-testid="guest-payment-status">
                   <div className="min-w-0">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400">
-                      {delivery ? 'Delivering to' : 'Collect at the counter'}
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Payment</p>
+                    <p className="mt-0.5 text-sm font-extrabold text-stone-900">
+                      {order.status === 'paid'
+                        ? (order.payMethod === 'qr' ? 'Paid by QR' : order.payMethod === 'cash' ? 'Paid in cash' : 'Paid')
+                        : order.paymentClaim
+                          ? 'QR sent · waiting for staff'
+                          : order.paymentPreference === 'qr'
+                            ? 'QR transfer'
+                            : delivery ? 'Cash at the door' : 'Cash at pickup'}
                     </p>
-                    <p className="mt-0.5 truncate text-sm font-extrabold text-stone-900">
-                      {delivery ? (order.deliveryAddress || 'Address saved') : 'Restora · Downtown'}
-                    </p>
-                    {order.eta && (
-                      <p className="mt-1 text-[11px] font-semibold text-stone-500">Estimated {order.eta}</p>
-                    )}
                   </div>
                   <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${
-                    order.status === 'paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                    order.status === 'paid'
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : order.paymentClaim
+                        ? 'bg-amber-100 text-amber-800'
+                        : 'bg-stone-100 text-stone-600'
                   }`}>
-                    {order.status === 'paid' ? 'Paid' : delivery ? 'Pay at door' : 'Pay at pickup'}
+                    {order.status === 'paid' ? 'Settled' : order.paymentClaim ? 'Pending' : 'Due'}
                   </span>
                 </div>
-              </div>
+              </>
             )}
 
             {order && (
@@ -1289,7 +1220,29 @@ export default function GuestScreen({
                   </div>
                 </div>
 
-                {payable ? (
+                {order.paymentClaim ? (
+                  <div className="rounded-3xl bg-amber-50 p-4 shadow-sm ring-1 ring-inset ring-amber-200" data-testid="guest-qr-claim">
+                    <div className="flex items-start gap-2.5">
+                      <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+                        <Icon name="clock" size={16} />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-extrabold text-amber-950">Payment sent · waiting for staff</p>
+                        <p className="mt-1 text-xs leading-relaxed text-amber-800">
+                          The counter will check the transfer and close your order. Reference{' '}
+                          <strong className="font-mono">{order.paymentClaim.reference || paymentReference(order.id)}</strong>.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => dispatch({ type: 'CLEAR_PAYMENT_CLAIM', orderId: order.id, guestToken: order.guestToken || guestToken })}
+                          className="mt-2 min-h-[36px] rounded-xl px-2 text-xs font-bold text-amber-800 underline underline-offset-2"
+                        >
+                          I did not send it — cancel claim
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : payable ? (
                   <button
                     type="button"
                     onClick={() => setPayOpen(true)}
@@ -1304,7 +1257,9 @@ export default function GuestScreen({
                 ) : (
                   <div className="rounded-3xl bg-white p-4 text-center text-sm text-stone-500 shadow-sm">
                     {pickup || delivery
-                      ? (delivery ? 'Pay the rider when your food arrives.' : 'Pay at the counter when you collect.')
+                      ? order.paymentPreference === 'qr'
+                        ? 'Open the QR payment when you are ready — your order is already in the kitchen.'
+                        : (delivery ? 'Pay the rider when your food arrives.' : 'Pay at the counter when you collect.')
                       : order.status === 'open' || heldAny
                         ? 'Your server is still adding items — payment unlocks when everything is in.'
                         : 'The check is closing — one moment.'}
@@ -1315,7 +1270,7 @@ export default function GuestScreen({
 
             {order && order.billRequested && (
               <div className="rounded-3xl bg-violet-600 p-4 text-center text-sm font-bold text-white shadow">
-                Your server is on the way with the card reader. 💳
+                Your server is on the way with the bill. 💵
               </div>
             )}
 
@@ -1353,7 +1308,7 @@ export default function GuestScreen({
           {cartCount > 0 && (
             <button
               type="button"
-              onClick={() => { setCheckoutStep(0); setPaymentChoice('now'); setCartOpen(true) }}
+              onClick={() => { setCheckoutStep(0); setPaymentChoice(qrReady ? 'qr' : 'cash'); setCartOpen(true) }}
               className="tnum mb-2 flex min-h-[54px] w-full items-center justify-between gap-3 rounded-2xl bg-[var(--guest-accent)] px-4 text-sm font-extrabold text-[var(--guest-ink)] shadow-sm"
             >
               <span className="flex items-center gap-2">
@@ -1412,9 +1367,11 @@ export default function GuestScreen({
                       ? 'Your order is already in the kitchen.'
                       : confirmedAdded
                         ? 'The kitchen has your extra dishes. Settle the bill from Orders when you are ready.'
-                        : delivery
-                          ? 'Pay the rider when your food arrives.'
-                          : 'Pay at the counter when you collect.'}
+                        : confirmedPreference === 'qr'
+                          ? 'Your order is in the kitchen. Scan the QR below, transfer the exact amount, then confirm.'
+                          : delivery
+                            ? 'Pay the rider in cash when your food arrives.'
+                            : 'Pay in cash at the counter when you collect.'}
                   </p>
 
                   <div className="mt-5 space-y-2 rounded-2xl bg-stone-50 p-4 text-left text-sm">
@@ -1438,13 +1395,23 @@ export default function GuestScreen({
                         </div>
                         <div className="flex items-center justify-between gap-3">
                           <span className="text-stone-500">Payment</span>
-                          <strong className="text-stone-900">
-                            {confirmedPaid ? 'Paid by card' : delivery ? 'Pay at the door' : 'Pay at pickup'}
+                          <strong className="text-stone-900" data-testid="guest-confirmation-payment">
+                            {confirmedPaymentLabel}
                           </strong>
                         </div>
                       </>
                     )}
                   </div>
+
+                  {!confirmedPaid && !confirmedAdded && placedOrder && confirmedPreference === 'qr' && (
+                    <div className="mt-3 text-left">
+                      <QrPaymentPanel
+                        order={placedOrder}
+                        amount={confirmedTotal}
+                        guestToken={placedOrder.guestToken || guestToken}
+                      />
+                    </div>
+                  )}
 
                   <button
                     type="button"
@@ -1460,13 +1427,13 @@ export default function GuestScreen({
                   >
                     Add more dishes
                   </button>
-                  {!confirmedPaid && (
+                  {!confirmedPaid && !confirmedClaim && !confirmedAdded && placedOrder && (
                     <button
                       type="button"
                       onClick={() => { setCartOpen(false); setCheckoutStep(0); setTab('orders'); setPayOpen(true) }}
                       className="mt-1 min-h-[40px] text-xs font-bold text-amber-700 underline underline-offset-2"
                     >
-                      Pay now instead
+                      Change payment method
                     </button>
                   )}
                 </div>
@@ -1600,47 +1567,42 @@ export default function GuestScreen({
                             maxLength={24}
                             aria-label="Your name"
                             autoComplete="name"
-                            placeholder={delivery ? 'Name for the delivery' : 'Name we will call'}
+                            placeholder={delivery ? (lang === 'km' ? 'ឈ្មោះសម្រាប់ការដឹកជញ្ជូន' : lang === 'zh' ? '收货人姓名' : 'Name for the delivery') : (lang === 'km' ? 'ឈ្មោះដែលយើងហៅអ្នក' : lang === 'zh' ? '称呼您的名字' : 'Name we will call')}
                             className={`min-h-[46px] w-full rounded-2xl border bg-white px-4 text-sm shadow-sm outline-none focus:ring-2 focus:ring-amber-200 ${nameError ? 'border-red-400 ring-2 ring-red-200' : 'border-stone-200'}`}
                           />
                           {nameError && (
                             <p className="mt-1 text-xs font-semibold text-red-600" role="alert">
-                              Add your name so we can hand over the order.
+                              {lang === 'km' ? 'បន្ថែមឈ្មោះរបស់អ្នកដើម្បីយើងអាចប្រគល់កម្មង់បាន។' : lang === 'zh' ? '请填写姓名以便交付订单。' : 'Add your name so we can hand over the order.'}
                             </p>
                           )}
                         </label>
                         <label className="block">
-                          <span className="mb-1 block text-xs font-bold uppercase tracking-widest text-stone-400">Phone <span className="font-semibold normal-case tracking-normal text-stone-400">(optional)</span></span>
+                          <span className="mb-1 block text-xs font-bold uppercase tracking-widest text-stone-400">Phone</span>
                           <input
                             value={guestPhone}
-                            onChange={(event) => setGuestPhone(event.target.value)}
+                            onChange={(event) => { setGuestPhone(event.target.value); setPhoneError(false) }}
                             maxLength={30}
                             type="tel"
                             inputMode="tel"
                             autoComplete="tel"
                             aria-label="Phone number"
-                            placeholder="For order updates"
-                            className="min-h-[46px] w-full rounded-2xl border border-stone-200 bg-white px-4 text-sm shadow-sm outline-none focus:ring-2 focus:ring-amber-200"
+                            placeholder={lang === 'km' ? 'សម្រាប់ការអាប់ដេត និងអ្នកដឹក' : lang === 'zh' ? '用于订单更新和骑手联系' : 'For order updates and the rider'}
+                            className={`min-h-[46px] w-full rounded-2xl border bg-white px-4 text-sm shadow-sm outline-none focus:ring-2 focus:ring-amber-200 ${phoneError ? 'border-red-400 ring-2 ring-red-200' : 'border-stone-200'}`}
                           />
+                          {phoneError && (
+                            <p className="mt-1 text-xs font-semibold text-red-600" role="alert">
+                              {lang === 'km' ? 'បន្ថែមលេខទូរស័ព្ទដើម្បីផ្ទះបាយ ឬអ្នកដឹកអាចទាក់ទងអ្នកបាន។' : lang === 'zh' ? '请填写手机号，以便后厨或骑手联系您。' : 'Add a phone number so the kitchen or rider can reach you.'}
+                            </p>
+                          )}
                         </label>
                         {delivery && (
-                          <label className="block">
-                            <span className="mb-1 block text-xs font-bold uppercase tracking-widest text-stone-400">Delivery address</span>
-                            <input
-                              value={deliveryAddress}
-                              onChange={(event) => { setDeliveryAddress(event.target.value); setAddressError(false) }}
-                              maxLength={120}
-                              aria-label="Delivery address"
-                              autoComplete="street-address"
-                              placeholder="Street, building, apartment…"
-                              className={`min-h-[46px] w-full rounded-2xl border bg-white px-4 text-sm shadow-sm outline-none focus:ring-2 focus:ring-amber-200 ${addressError ? 'border-red-400 ring-2 ring-red-200' : 'border-stone-200'}`}
-                            />
-                            {addressError && (
-                              <p className="mt-1 text-xs font-semibold text-red-600" role="alert">
-                                Please enter a delivery address.
-                              </p>
-                            )}
-                          </label>
+                          <LocationPicker
+                            value={deliveryLocation}
+                            onChange={updateDeliveryLocation}
+                            addressError={addressError}
+                            addressLabel="Delivery address"
+                            addressPlaceholder="Street, building, apartment…"
+                          />
                         )}
                       </div>
 
@@ -1678,62 +1640,58 @@ export default function GuestScreen({
                   {checkoutStep === 2 && (
                     <>
                       <div className="mt-4 space-y-2">
-                        <label className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-3.5 transition-colors ${paymentChoice === 'now' ? 'border-stone-900 bg-stone-900 text-white' : 'border-stone-200 bg-white text-stone-900'}`}>
-                          <input
-                            type="radio"
-                            name="guest-payment"
-                            value="now"
-                            checked={paymentChoice === 'now'}
-                            onChange={() => setPaymentChoice('now')}
-                            className="mt-1 h-4 w-4 accent-amber-500"
-                          />
-                          <span className="min-w-0 flex-1">
-                            <span className="block text-sm font-extrabold">Pay now · Card</span>
-                            <span className={`mt-0.5 block text-[11px] ${paymentChoice === 'now' ? 'text-white/65' : 'text-stone-500'}`}>
-                              Simulated secure payment
-                            </span>
-                          </span>
-                          <span className="tnum shrink-0 text-sm font-extrabold">{money(checkoutCharges.total)}</span>
-                        </label>
-
-                        {pickup && payAtPickup && (
-                          <label className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-3.5 transition-colors ${paymentChoice === 'later' ? 'border-stone-900 bg-stone-900 text-white' : 'border-stone-200 bg-white text-stone-900'}`}>
+                        {qrReady && (
+                          <label className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-3.5 transition-colors ${effectivePaymentChoice === 'qr' ? 'border-stone-900 bg-stone-900 text-white' : 'border-stone-200 bg-white text-stone-900'}`}>
                             <input
                               type="radio"
                               name="guest-payment"
-                              value="later"
-                              checked={paymentChoice === 'later'}
-                              onChange={() => setPaymentChoice('later')}
+                              value="qr"
+                              checked={effectivePaymentChoice === 'qr'}
+                              onChange={() => setPaymentChoice('qr')}
                               className="mt-1 h-4 w-4 accent-amber-500"
+                              data-testid="checkout-payment-qr"
                             />
                             <span className="min-w-0 flex-1">
-                              <span className="block text-sm font-extrabold">Pay at pickup</span>
-                              <span className={`mt-0.5 block text-[11px] ${paymentChoice === 'later' ? 'text-white/65' : 'text-stone-500'}`}>
-                                Cash or card at the counter
+                              <span className="block text-sm font-extrabold">QR transfer</span>
+                              <span className={`mt-0.5 block text-[11px] ${effectivePaymentChoice === 'qr' ? 'text-white/65' : 'text-stone-500'}`}>
+                                {paymentSettings.qrLabel || 'Scan the restaurant QR with your bank app'}
                               </span>
                             </span>
+                            <span className="tnum shrink-0 text-sm font-extrabold">{money(checkoutCharges.total)}</span>
                           </label>
                         )}
 
-                        {delivery && payAtDoor && (
-                          <label className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-3.5 transition-colors ${paymentChoice === 'later' ? 'border-stone-900 bg-stone-900 text-white' : 'border-stone-200 bg-white text-stone-900'}`}>
+                        {cashReady && (
+                          <label className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-3.5 transition-colors ${effectivePaymentChoice === 'cash' ? 'border-stone-900 bg-stone-900 text-white' : 'border-stone-200 bg-white text-stone-900'}`}>
                             <input
                               type="radio"
                               name="guest-payment"
-                              value="later"
-                              checked={paymentChoice === 'later'}
-                              onChange={() => setPaymentChoice('later')}
+                              value="cash"
+                              checked={effectivePaymentChoice === 'cash'}
+                              onChange={() => setPaymentChoice('cash')}
                               className="mt-1 h-4 w-4 accent-amber-500"
+                              data-testid="checkout-payment-cash"
                             />
                             <span className="min-w-0 flex-1">
-                              <span className="block text-sm font-extrabold">Pay at the door</span>
-                              <span className={`mt-0.5 block text-[11px] ${paymentChoice === 'later' ? 'text-white/65' : 'text-stone-500'}`}>
-                                Cash or card to the rider
+                              <span className="block text-sm font-extrabold">
+                                {delivery
+                                  ? (payAtDoor ? 'Cash at the door' : 'Cash at the counter')
+                                  : (payAtPickup ? 'Cash at pickup' : 'Cash at the counter')}
+                              </span>
+                              <span className={`mt-0.5 block text-[11px] ${effectivePaymentChoice === 'cash' ? 'text-white/65' : 'text-stone-500'}`}>
+                                {delivery
+                                  ? (payAtDoor ? 'Pay the rider when your food arrives' : 'Pay before the rider leaves')
+                                  : (payAtPickup ? 'Pay when you collect your order' : 'Pay at the counter')}
                               </span>
                             </span>
                           </label>
                         )}
                       </div>
+                      <p className="mt-2 text-[11px] leading-relaxed text-stone-400">
+                        {effectivePaymentChoice === 'qr'
+                          ? 'Place the order first — the merchant QR and the exact amount appear on the next screen.'
+                          : 'Nothing is charged now. Your order goes to the kitchen and you pay in cash on collection.'}
+                      </p>
 
                       <div className="mt-4 rounded-2xl bg-stone-50 p-4 text-sm">
                         <div className="flex justify-between text-stone-500">
@@ -1756,7 +1714,8 @@ export default function GuestScreen({
                         </div>
                       </div>
                       <p className="mt-2 text-[11px] leading-relaxed text-stone-400">
-                        Demo checkout — no real card is charged. This order goes straight to the kitchen.
+                        This app never takes card details. QR transfers are confirmed by staff; cash is settled on
+                        collection.
                       </p>
 
                       <div className="mt-4 flex gap-2">
@@ -1886,7 +1845,12 @@ export default function GuestScreen({
         )}
 
         {payOpen && order && (
-          <PaySheet order={order} onClose={() => setPayOpen(false)} onPaid={() => { setPayOpen(false); setTab('orders') }} />
+          <GuestPaymentSheet
+            order={order}
+            guestToken={order.guestToken || guestToken}
+            onClose={() => setPayOpen(false)}
+            onDone={() => { setPayOpen(false); setTab('orders') }}
+          />
         )}
 
         {moveModalOpen && (

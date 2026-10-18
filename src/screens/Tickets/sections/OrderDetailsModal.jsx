@@ -1,5 +1,8 @@
 import { useState } from 'react'
+import { LocationPicker } from '../../../components/LocationPicker'
+import { MapLink } from '../../../components/MapLink'
 import { Field, Modal, btnPrimary, inputCls } from '../../../components/ui'
+import { hasCoordinates } from '../../../lib/geo'
 import { useRestora } from '../../../lib/store'
 
 function OrderDetailsModal({ order, onClose }) {
@@ -7,7 +10,14 @@ function OrderDetailsModal({ order, onClose }) {
   const isDelivery = order.type === 'delivery'
   const [name, setName] = useState(order.customer?.name || '')
   const [phone, setPhone] = useState(order.customer?.phone || '')
-  const [address, setAddress] = useState(order.customer?.address || '')
+  const [location, setLocation] = useState({
+    address: order.customer?.address || '',
+    unit: order.customer?.unit || '',
+    landmark: order.customer?.landmark || '',
+    lat: order.customer?.lat ?? null,
+    lng: order.customer?.lng ?? null,
+    accuracy: order.customer?.accuracy ?? null,
+  })
   const [fee, setFee] = useState(String(order.deliveryFee ?? 0))
   const [eta, setEta] = useState(order.eta ? order.eta.slice(0, 16) : '')
 
@@ -15,7 +25,17 @@ function OrderDetailsModal({ order, onClose }) {
     dispatch({
       type: 'SET_ORDER_DETAILS',
       orderId: order.id,
-      customer: { name, phone, address: isDelivery ? address : '' },
+      customer: {
+        name,
+        phone,
+        address: isDelivery ? location.address : '',
+        unit: isDelivery ? location.unit : '',
+        landmark: isDelivery ? location.landmark : '',
+        lat: isDelivery ? location.lat : null,
+        lng: isDelivery ? location.lng : null,
+        accuracy: isDelivery ? location.accuracy : null,
+      },
+      deliveryAddress: isDelivery ? location.address : undefined,
       deliveryFee: isDelivery ? Number(fee) || 0 : 0,
       eta: eta ? new Date(eta).toISOString() : null,
     })
@@ -42,9 +62,20 @@ function OrderDetailsModal({ order, onClose }) {
         </div>
         {isDelivery && (
           <>
-            <Field label="Delivery address">
-              <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="12 Riverside Rd" className={inputCls} maxLength={160} />
-            </Field>
+            <LocationPicker
+              value={location}
+              onChange={setLocation}
+              tone="dark"
+              addressLabel="Delivery address"
+              addressPlaceholder="12 Riverside Rd"
+            />
+            {!hasCoordinates(location) && (
+              <MapLink
+                address={location.address}
+                className="text-xs font-semibold text-amber-300"
+                label="Open address in Google Maps"
+              />
+            )}
             <Field label="Delivery fee">
               <input type="number" min="0" step="0.01" value={fee} onChange={(e) => setFee(e.target.value)} className={inputCls} />
             </Field>

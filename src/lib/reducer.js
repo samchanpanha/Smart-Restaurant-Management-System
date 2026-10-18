@@ -16,6 +16,7 @@ import {
   money,
   orderCharges,
   orderStatusFromItems,
+  paymentReference,
   plateCostFor,
   quoteWaitMinutes,
   reorderPointFor,
@@ -58,6 +59,7 @@ function mergeSettings(current, patch) {
     ...patch,
     stock: { ...current.stock, ...(patch.stock || {}) },
     pos: { ...current.pos, ...(patch.pos || {}) },
+    payments: { ...current.payments, ...(patch.payments || {}) },
     booking: { ...current.booking, ...(patch.booking || {}) },
     notifications: { ...current.notifications, ...(patch.notifications || {}) },
     telegram: { ...current.telegram, ...(patch.telegram || {}) },
@@ -766,17 +768,37 @@ function sanitizeFloorRoom(raw) {
 }
 
 /** Off-table orders carry a customer block; inline orders do not. */
+const customerCoord = (value, min, max) => {
+  if (value === null || value === undefined || value === '') return null
+  const n = Number(value)
+  if (!Number.isFinite(n) || n < min || n > max) return null
+  return Math.round(n * 1e6) / 1e6
+}
+
 function sanitizeCustomer(raw) {
   if (!raw || typeof raw !== 'object') return null
   const name = String(raw.name || '').trim().slice(0, 60)
   const phone = String(raw.phone || '').trim().slice(0, 30)
-  const address = String(raw.address || '').trim().slice(0, 160)
+  const address = String(raw.address || '').trim().slice(0, 240)
+  const unit = String(raw.unit || '').trim().slice(0, 40)
+  const landmark = String(raw.landmark || '').trim().slice(0, 120)
+  const note = String(raw.note || '').trim().slice(0, 160)
   const customerId = String(raw.customerId || '').trim().slice(0, 64)
-  if (!name && !phone && !address) return null
+  const lat = customerCoord(raw.lat, -90, 90)
+  const lng = customerCoord(raw.lng, -180, 180)
+  const hasPin = lat !== null && lng !== null
+  const accuracy = Math.max(0, Math.min(100000, Number(raw.accuracy) || 0))
+  if (!name && !phone && !address && !hasPin) return null
   return {
     name,
     phone,
     address,
+    ...(unit ? { unit } : {}),
+    ...(landmark ? { landmark } : {}),
+    ...(note ? { note } : {}),
+    // A pin is only useful as a pair; half a coordinate is dropped rather
+    // than sending a rider to the wrong hemisphere.
+    ...(hasPin ? { lat, lng, ...(accuracy ? { accuracy } : {}) } : {}),
     // Link back to the saved customer directory entry, when the check was
     // created from one. Optional, so legacy payloads keep their shape.
     ...(customerId ? { customerId } : {}),
@@ -788,13 +810,23 @@ function sanitizeCustomerRecord(raw) {
   if (!raw || typeof raw !== 'object') return null
   const name = String(raw.name || '').trim().slice(0, 60)
   const phone = String(raw.phone || '').trim().slice(0, 30)
+  const address = String(raw.address || '').trim().slice(0, 240)
+  const unit = String(raw.unit || '').trim().slice(0, 40)
+  const landmark = String(raw.landmark || '').trim().slice(0, 120)
   const note = String(raw.note || '').trim().slice(0, 200)
+  const lat = customerCoord(raw.lat, -90, 90)
+  const lng = customerCoord(raw.lng, -180, 180)
+  const hasPin = lat !== null && lng !== null
   if (!name && !phone) return null
   return {
     id: raw.id || uid('cus'),
     name,
     phone,
+    address,
+    ...(unit ? { unit } : {}),
+    ...(landmark ? { landmark } : {}),
     ...(note ? { note } : {}),
+    ...(hasPin ? { lat, lng } : {}),
     createdAt: String(raw.createdAt || '').slice(0, 30),
   }
 }
@@ -1194,10 +1226,11 @@ function shopReducerBase(state, action) {
 
     // ── Orders / tickets ───────────────────────────────────
     case 'CREATE_ORDER': {
-      const { orderType = 'dine_in', customer = null, deliveryFee = 0, eta = null } = action
+      const { orderType = 'dine_in', customer = null, deliveryFee = 0, eta = null, deliveryAddress = null } = action
       const offTable = OFF_TABLE_TYPES.includes(orderType)
       const tableId = offTable ? null : action.tableId
       const createdAt = new Date().toISOString()
+      const sanitized = offTable ? sanitizeCustomer(customer) : null
       // Dine-in: one open check per table. Takeout/delivery: many can coexist.
       if (!offTable) {
         const existing = state.orders.find(
@@ -1219,12 +1252,13 @@ function shopReducerBase(state, action) {
         items: [],
         ...(offTable
           ? {
-            customer: sanitizeCustomer(customer),
+            customer: sanitized,
             ...(orderType === 'delivery'
               ? {
                 deliveryFee: Math.max(0, roundMoney(Number(deliveryFee) || 0)),
                 deliveryStatus: 'queued',
                 deliveryStatusAt: createdAt,
+                deliveryAddress: String(deliveryAddress || '').trim().slice(0, 240) || sanitized?.address || null,
               }
               : {}),
             eta: eta || null,
@@ -1241,16 +1275,94 @@ function shopReducerBase(state, action) {
 
     case 'SET_ORDER_DETAILS': {
       // Edit the customer/fulfilment block on a takeout or delivery order.
-      const { orderId, customer, deliveryFee, eta } = action
+      const { orderId, customer, deliveryFee, eta, deliveryAddress } = action
       const order = state.orders.find((o) => o.id === orderId)
       if (!order || !OFF_TABLE_TYPES.includes(order.type)) return state
+      const sanitized = sanitizeCustomer(customer)
       const orders = state.orders.map((o) => {
         if (o.id !== orderId) return o
-        const next = { ...o, customer: sanitizeCustomer(customer) }
-        if (o.type === 'delivery') next.deliveryFee = Math.max(0, roundMoney(Number(deliveryFee) || 0))
+        const next = { ...o, customer: sanitized }
+        if (o.type === 'delivery') {
+          next.deliveryFee = Math.max(0, roundMoney(Number(deliveryFee) || 0))
+          if (deliveryAddress !== undefined) {
+            next.deliveryAddress = String(deliveryAddress || '').trim().slice(0, 240) || sanitized?.address || null
+          } else if (sanitized?.address) {
+            next.deliveryAddress = sanitized.address
+          }
+        }
         if (eta !== undefined) next.eta = eta || null
         return next
       })
+      return { ...state, orders }
+    }
+
+    case 'UPDATE_GUEST_ORDER': {
+      // The guest can fix their name, phone, address, or map pin from Orders
+      // until the food leaves the kitchen. The guest token is checked when
+      // the order carries one, so another browser cannot retarget a rider.
+      const { orderId, guestToken = null, customer, deliveryAddress } = action
+      const order = state.orders.find((o) => o.id === orderId)
+      if (!order || !OFF_TABLE_TYPES.includes(order.type)) return state
+      if (order.guestToken && String(guestToken || '') !== order.guestToken) return state
+      if (order.status === 'void') return state
+      if (order.type === 'delivery' && ['out_for_delivery', 'delivered', 'cancelled'].includes(order.deliveryStatus)) return state
+      const sanitized = sanitizeCustomer(customer)
+      if (!sanitized) return state
+      const orders = state.orders.map((o) => {
+        if (o.id !== orderId) return o
+        const next = { ...o, customer: sanitized }
+        if (o.type === 'delivery') {
+          next.deliveryAddress = String(deliveryAddress || sanitized.address || '').trim().slice(0, 240) || null
+        }
+        return next
+      })
+      return { ...state, orders }
+    }
+
+    case 'SET_PAYMENT_PREFERENCE': {
+      const { orderId, preference, guestToken = null } = action
+      if (!['qr', 'cash'].includes(preference)) return state
+      const order = state.orders.find((o) => o.id === orderId)
+      if (!order || ['paid', 'void'].includes(order.status)) return state
+      if (order.guestToken && guestToken && String(guestToken) !== order.guestToken) return state
+      const orders = state.orders.map((o) => (o.id === orderId ? { ...o, paymentPreference: preference } : o))
+      return { ...state, orders }
+    }
+
+    case 'CLAIM_QR_PAYMENT': {
+      // A guest says the transfer left their bank. This records the claim; it
+      // does not mark the check paid. Staff confirm in Tickets, or the
+      // "require confirmation" setting is off and the UI settles immediately.
+      const { orderId, guestToken = null, tip = 0 } = action
+      const order = state.orders.find((o) => o.id === orderId)
+      if (!order || ['paid', 'void'].includes(order.status)) return state
+      if (order.guestToken && String(guestToken || '') !== order.guestToken) return state
+      if (order.paymentClaim) return state
+      const menuById = Object.fromEntries(state.menu.map((m) => [m.id, m]))
+      const tipAmount = roundMoney(Number(tip) || 0)
+      const charges = orderCharges(order, menuById, state.settings || {}, { tip: tipAmount })
+      const at = new Date().toISOString()
+      const claim = {
+        method: 'qr',
+        amount: roundMoney(charges.grandTotal),
+        total: roundMoney(charges.total),
+        tip: tipAmount,
+        at,
+        reference: paymentReference(order.id),
+        by: 'guest',
+      }
+      const orders = state.orders.map((o) => (
+        o.id === orderId ? { ...o, paymentPreference: 'qr', paymentClaim: claim } : o
+      ))
+      return { ...state, orders }
+    }
+
+    case 'CLEAR_PAYMENT_CLAIM': {
+      const { orderId, guestToken = null, by = null } = action
+      const order = state.orders.find((o) => o.id === orderId)
+      if (!order || !order.paymentClaim) return state
+      if (order.guestToken && by !== 'staff' && String(guestToken || '') !== order.guestToken) return state
+      const orders = state.orders.map((o) => (o.id === orderId ? { ...o, paymentClaim: null } : o))
       return { ...state, orders }
     }
 
@@ -1273,7 +1385,9 @@ function shopReducerBase(state, action) {
         recipeSnapshot: null,
       }
       const orders = state.orders.map((o) =>
-        o.id === orderId ? { ...o, items: [...o.items, item] } : o,
+        o.id === orderId
+          ? { ...o, items: [...o.items, item], paymentClaim: o.paymentClaim ? null : o.paymentClaim }
+          : o,
       )
       return { ...state, orders }
     }
@@ -1395,9 +1509,11 @@ function shopReducerBase(state, action) {
         guestToken = null,
         payNow = false,
         paymentMethod = 'card',
+        paymentPreference = null,
         tip = 0,
       } = action
       const offTable = OFF_TABLE_TYPES.includes(orderType)
+      const preference = ['qr', 'cash'].includes(paymentPreference) ? paymentPreference : null
 
       // ── Off-table path (delivery / takeout) ────────────────────────────
       if (offTable) {
@@ -1427,6 +1543,7 @@ function shopReducerBase(state, action) {
           items: [],
           customer: sanitized,
           ...(token ? { guestToken: token } : {}),
+          ...(preference ? { paymentPreference: preference } : {}),
           eta: eta || null,
           ...(orderType === 'delivery'
             ? {
@@ -1783,6 +1900,7 @@ function shopReducerBase(state, action) {
               },
               tenderDetails,
               payments: finalPayments,
+              paymentClaim: null,
               billRequested: null,
             }
           : o,
@@ -2738,6 +2856,7 @@ function shopReducerBase(state, action) {
         documents: ['templates', 'documentCurrency', 'numbering', 'footerNote'],
         stock: ['stock'],
         pos: ['pos'],
+        payments: ['payments'],
         notifications: ['notifications'],
         targets: ['targetTurnMinutes', 'ticketMinutes', 'foodCostCap', 'rushHour'],
       }[section]

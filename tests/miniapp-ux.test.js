@@ -42,6 +42,24 @@ const { createRoot } = await import('react-dom/client')
 // middleware-mode HMR port.
 const server = await createServer({ server: { middlewareMode: true, hmr: false }, appType: 'custom', logLevel: 'error' })
 const { default: App } = await server.ssrLoadModule('/src/App.jsx')
+const { buildEmpire } = await server.ssrLoadModule('/src/lib/reducer.js')
+
+// 1×1 transparent PNG — enough for the <img> and the sanitizer.
+const QR_PIXEL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zl1sAAAAASUVORK5CYII='
+function qrSeed() {
+  const empire = buildEmpire()
+  const shop = empire.locations.downtown
+  shop.settings.payments = {
+    ...shop.settings.payments,
+    qrEnabled: true,
+    cashEnabled: true,
+    qrImageUrl: QR_PIXEL,
+    qrLabel: 'ABA · Demo',
+    qrNote: 'Scan, enter the exact amount, then tap I have paid.',
+    requireQrConfirmation: true,
+  }
+  return empire
+}
 
 const settle = async (ms = 40) => {
   await act(async () => { await new Promise((resolve) => dom.window.setTimeout(resolve, ms)) })
@@ -60,13 +78,14 @@ const type = (el, value) => act(() => {
 let root = null
 let container = null
 
-async function fresh(url) {
+async function fresh(url, seed = null) {
   if (root) {
     act(() => root.unmount())
     container.remove()
   }
   dom.window.localStorage.clear()
   dom.window.sessionStorage.clear()
+  if (seed) dom.window.localStorage.setItem('restora-v1', JSON.stringify(seed))
   dom.reconfigure({ url })
   root = null
   container = null
@@ -327,7 +346,7 @@ test('a guest can join and leave the waitlist when the day is full', async () =>
   assert.equal(dom.window.localStorage.getItem('restora_guest_waitlist_v1'), null)
 })
 
-test('pickup checkout quotes the fee, pays now, and opens tracking', async () => {
+test('pickup checkout places the order unpaid, takes cash, and opens tracking', async () => {
   await fresh('http://localhost:5173/?tg=1&guest=t12')
 
   const pickup = byText('button', 'Order for pickup')
@@ -352,11 +371,17 @@ test('pickup checkout quotes the fee, pays now, and opens tracking', async () =>
   await settle(40)
 
   type(document.querySelector('input[aria-label="Your name"]'), 'Sokha Chan')
+  type(document.querySelector('input[aria-label="Phone number"]'), '012345678')
   await settle(20)
   const toPayment = byText('button', 'Continue to payment')
   assert.ok(toPayment, 'details continue to payment')
   click(toPayment)
   await settle(40)
+
+  const cash = document.querySelector('[data-testid="checkout-payment-cash"]')
+  assert.ok(cash, 'cash is offered without a merchant QR')
+  assert.equal(cash.checked, true, 'cash is the default when no QR is uploaded')
+  assert.ok(!document.querySelector('[data-testid="checkout-payment-qr"]'), 'QR is hidden until the owner uploads one')
 
   const place = $$('button').find((button) => /Place order/.test(button.textContent))
   assert.ok(place, 'payment keeps the total on the CTA')
@@ -366,9 +391,9 @@ test('pickup checkout quotes the fee, pays now, and opens tracking', async () =>
 
   const done = document.querySelector('[data-testid="guest-checkout-done"]')
   assert.ok(done, 'the confirmation replaces the form')
-  assert.match(done.textContent, /Payment received/)
-  assert.match(done.textContent, /Paid by card/)
-  assert.match(done.textContent, /Reference/)
+  assert.match(done.textContent, /Order placed/)
+  assert.match(done.textContent, /Pay at pickup/)
+  assert.doesNotMatch(done.textContent, /Payment received|Paid by card/)
 
   const saved = JSON.parse(dom.window.localStorage.getItem('restora_guest_order_v1'))
   assert.ok(saved?.orderId, 'the order id survives a reload')
@@ -379,9 +404,32 @@ test('pickup checkout quotes the fee, pays now, and opens tracking', async () =>
   assert.ok(document.querySelector('[data-testid="guest-orders"]'), 'tracking lands on Orders')
   assert.match(document.body.textContent, /Pickup order/)
   assert.match(document.body.textContent, /In kitchen|Ready/)
+  assert.match(document.body.textContent, /Cash at pickup/)
+
+  const pay = $$('button').find((button) => /^Pay \$/.test(button.textContent.trim()))
+  assert.ok(pay, 'the unpaid pickup can choose payment from Orders')
+  click(pay)
+  await settle(60)
+
+  const paySheet = document.querySelector('[role="dialog"]')
+  assert.ok(paySheet, 'the payment sheet opens from the ticket')
+  assert.match(paySheet.textContent, /Settle your check/)
+  const cashPay = $$('[role="dialog"] button').find((button) => /^Pay \$.*in cash/.test(button.textContent.trim()))
+  assert.ok(cashPay, 'the cash option is the only method without a QR')
+  click(cashPay)
+  await settle(60)
+
+  const confirmed = document.querySelector('[data-testid="guest-cash-confirmed"]')
+  assert.ok(confirmed, 'cash confirms in place with collection instructions')
+  assert.match(confirmed.textContent, /Pay in cash/)
+  assert.match(confirmed.textContent, /counter/)
+  click(byText('[role="dialog"] button', 'Done'))
+  await settle(60)
+  assert.ok(!document.querySelector('[role="dialog"]'), 'the sheet closes after choosing cash')
+  assert.match(document.body.textContent, /Cash at pickup/)
 })
 
-test('delivery checkout validates the address, quotes the fee, and pays at the door', async () => {
+test('delivery checkout validates the address, saves the unit, and pays cash at the door', async () => {
   await fresh('http://localhost:5173/?tg=1&guest=t12')
 
   click(byText('button', 'Order for delivery'))
@@ -398,21 +446,22 @@ test('delivery checkout validates the address, quotes the fee, and pays at the d
   await settle(40)
 
   type(document.querySelector('input[aria-label="Your name"]'), 'Sokha Chan')
+  type(document.querySelector('input[aria-label="Phone number"]'), '012345678')
   await settle(20)
   click(byText('button', 'Continue to payment'))
   await settle(40)
-  assert.match(document.body.textContent, /Please enter a delivery address/, 'the address is required')
+  assert.match(document.body.textContent, /Add a street address so the rider can find you/, 'the address is required')
 
-  type(document.querySelector('input[aria-label="Delivery address"]'), '12 Riverside, Unit 3')
+  type(document.querySelector('input[aria-label="Delivery address"]'), '12 Riverside')
+  type(document.querySelector('input[aria-label="Building or unit"]'), 'Unit 3')
+  type(document.querySelector('input[aria-label="Landmark for the rider"]'), 'Next to the night market')
   await settle(20)
   click(byText('button', 'Continue to payment'))
   await settle(40)
 
-  const later = document.querySelector('input[name="guest-payment"][value="later"]')
-  assert.ok(later, 'delivery offers pay-at-the-door')
-  click(later)
-  await settle(30)
-  assert.equal(later.checked, true)
+  const cash = document.querySelector('[data-testid="checkout-payment-cash"]')
+  assert.ok(cash, 'delivery offers cash at the door')
+  assert.equal(cash.checked, true, 'cash is the default when no QR is uploaded')
 
   click($$('button').find((button) => /Place order/.test(button.textContent)))
   await settle(80)
@@ -428,20 +477,88 @@ test('delivery checkout validates the address, quotes the fee, and pays at the d
   assert.match(document.body.textContent, /Delivery order/)
   assert.match(document.body.textContent, /Delivering to/)
   assert.match(document.body.textContent, /12 Riverside/)
+  assert.match(document.body.textContent, /Unit 3/)
+  assert.match(document.body.textContent, /Next to the night market/)
   assert.match(document.body.textContent, /Delivery fee/)
   assert.match(document.body.textContent, /\$3\.50/)
-  const pay = $$('button').find((button) => /^Pay \$/.test(button.textContent.trim()))
-  assert.ok(pay, 'an unpaid delivery can settle from Orders')
+  assert.match(document.body.textContent, /Open location in Google Maps/)
 
+  click(byText('button', 'Edit details'))
+  await settle(60)
+  const editor = document.querySelector('[role="dialog"]')
+  assert.ok(editor, 'the guest can edit the delivery details from Orders')
+  type(document.querySelector('input[aria-label="Order name"]'), 'Sokha C.')
+  click(document.querySelector('[data-testid="guest-order-details-save"]'))
+  await settle(60)
+  assert.match(document.body.textContent, /Sokha C\./)
+  assert.match(document.body.textContent, /12 Riverside/)
+
+  const pay = $$('button').find((button) => /^Pay \$/.test(button.textContent.trim()))
+  assert.ok(pay, 'an unpaid delivery can choose payment from Orders')
   click(pay)
   await settle(60)
   const paySheet = document.querySelector('[role="dialog"]')
   assert.ok(paySheet, 'the pay sheet opens from the ticket')
-  assert.match(paySheet.textContent, /Your check/)
-  const settlePay = $$('[role="dialog"] button').find((button) => /^Pay \$/.test(button.textContent.trim()))
-  assert.ok(settlePay, 'the guest can settle the open bill')
-  click(settlePay)
-  await settle(500)
-  assert.ok(!document.querySelector('[role="dialog"]'), 'the pay sheet closes after settlement')
-  assert.match(document.body.textContent, /Paid · thank you!/)
+  assert.match(paySheet.textContent, /Settle your check/)
+  const cashPay = $$('[role="dialog"] button').find((button) => /^Pay \$.*in cash/.test(button.textContent.trim()))
+  assert.ok(cashPay, 'the guest can choose cash at the door')
+  click(cashPay)
+  await settle(60)
+  assert.ok(document.querySelector('[data-testid="guest-cash-confirmed"]'), 'cash confirms collection instructions')
+})
+
+test('QR checkout records a claim and waits for staff confirmation', async () => {
+  await fresh('http://localhost:5173/?tg=1&guest=t12', qrSeed())
+
+  click(byText('button', 'Order for pickup'))
+  await settle(60)
+  const add = $$('button').find((button) => button.getAttribute('aria-label') === 'Add Soup of the Day')
+  assert.ok(add, 'a dish can be added')
+  click(add)
+  await settle(40)
+
+  click($$('button').find((button) => /Review/.test(button.textContent)))
+  await settle(40)
+  click(byText('button', 'Continue'))
+  await settle(40)
+  type(document.querySelector('input[aria-label="Your name"]'), 'Dara Kim')
+  type(document.querySelector('input[aria-label="Phone number"]'), '098765432')
+  await settle(20)
+  click(byText('button', 'Continue to payment'))
+  await settle(40)
+
+  const qr = document.querySelector('[data-testid="checkout-payment-qr"]')
+  assert.ok(qr, 'an uploaded QR adds the transfer method')
+  assert.equal(qr.checked, true, 'QR is the default when configured')
+  assert.match(document.body.textContent, /ABA · Demo/)
+
+  click($$('button').find((button) => /Place order/.test(button.textContent)))
+  await settle(80)
+
+  const done = document.querySelector('[data-testid="guest-checkout-done"]')
+  assert.ok(done, 'the order is placed before payment')
+  assert.match(done.textContent, /QR transfer/)
+  const panel = document.querySelector('[data-testid="qr-payment-panel"]')
+  assert.ok(panel, 'the merchant QR is shown on the confirmation')
+  assert.match(panel.textContent, /Scan to pay/)
+  assert.match(panel.textContent, /Ref /)
+
+  click(document.querySelector('[data-testid="qr-payment-check"]'))
+  await settle(20)
+  click(document.querySelector('[data-testid="qr-payment-confirm"]'))
+  await settle(80)
+  assert.ok(document.querySelector('[data-testid="qr-claim-pending"]'), 'the claim waits for staff')
+  assert.match(document.body.textContent, /waiting for staff/)
+
+  click(byText('button', 'Track order'))
+  await settle(60)
+  const claim = document.querySelector('[data-testid="guest-qr-claim"]')
+  assert.ok(claim, 'Orders keeps the pending claim visible')
+  assert.match(claim.textContent, /Payment sent · waiting for staff/)
+  assert.ok(!$$('button').some((button) => /^Pay \$/.test(button.textContent.trim())), 'a pending claim hides the pay button')
+
+  click(byText('button', 'I did not send it — cancel claim'))
+  await settle(60)
+  assert.ok(!document.querySelector('[data-testid="guest-qr-claim"]'), 'the guest can withdraw a mistaken claim')
+  assert.ok($$('button').some((button) => /^Pay \$/.test(button.textContent.trim())), 'the pay button returns after cancelling')
 })

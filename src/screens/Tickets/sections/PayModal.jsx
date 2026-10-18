@@ -1,13 +1,13 @@
 import { useId, useMemo, useState } from 'react'
 import { Field, Modal, Stepper, btnPrimary } from '../../../components/ui'
-import { money, orderCharges } from '../../../lib/models'
+import { money, orderCharges, paymentReference } from '../../../lib/models'
 import { useRestora } from '../../../lib/store'
-import { QRCodeSVG } from 'qrcode.react'
 
 function PayModal({ order, onClose }) {
   const { state, dispatch, issueDocument } = useRestora()
   const menuById = useMemo(() => Object.fromEntries(state.menu.map((m) => [m.id, m])), [state.menu])
   const charges = useMemo(() => orderCharges(order, menuById, state.settings), [order, menuById, state.settings])
+  const payments = state.settings?.payments || {}
 
   // Split mode: 'full' | 'even' | 'byitem'
   const [split, setSplit] = useState('full')
@@ -16,13 +16,18 @@ function PayModal({ order, onClose }) {
   const [curSeat, setCurSeat] = useState(0)
   const [assign, setAssign] = useState({}) // itemId -> seat index
 
-  // Tips
-  const [tipPct, setTipPct] = useState(18)
-  const [customTip, setCustomTip] = useState('')
+  // Tips. A guest QR claim already carries its own tip; start from that
+  // exact amount so confirming the claim never invents a second gratuity.
+  const [tipPct, setTipPct] = useState(order.paymentClaim ? 0 : 18)
+  const [customTip, setCustomTip] = useState(order.paymentClaim?.tip ? String(order.paymentClaim.tip) : '')
   const tipAmount = customTip !== '' ? Math.max(0, Number(customTip) || 0) : Math.round(((charges.subtotal * tipPct) / 100) * 100) / 100
 
   // Payment method: 'card' | 'cash' | 'mixed' | 'qr'
-  const [method, setMethod] = useState('card')
+  const [method, setMethod] = useState(
+    order.paymentClaim || order.paymentPreference === 'qr'
+      ? 'qr'
+      : order.paymentPreference === 'cash' ? 'cash' : 'card',
+  )
 
   // Cash tender calculator
   const grandTotal = Math.round((charges.total + tipAmount) * 100) / 100
@@ -126,7 +131,7 @@ function PayModal({ order, onClose }) {
       wide
     >
       {/* ── Tabbed Split Mode ── */}
-      <div className="mt-3 flex gap-1.5 rounded-xl bg-black/40 p-1.5" role="tablist" aria-label="Split mode">
+      <div className="mt-3 flex gap-1.5 rounded-xl bg-[var(--surface-sunken)] p-1.5 ring-1 ring-inset ring-[var(--border)]" role="tablist" aria-label="Split mode">
         {[
           ['full', 'Full check'],
           ['even', 'Split evenly'],
@@ -139,7 +144,7 @@ function PayModal({ order, onClose }) {
             type="button"
             onClick={() => setSplit(id)}
             className={`min-h-[40px] flex-1 rounded-lg text-xs font-bold transition ${
-              split === id ? 'bg-amber-500 text-stone-950 shadow-sm' : 'text-zinc-400 hover:text-zinc-100'
+              split === id ? 'bg-amber-500 text-stone-950 shadow-sm' : 'text-[var(--text-muted)] hover:text-[var(--text-strong)]'
             }`}
           >
             {label}
@@ -148,7 +153,7 @@ function PayModal({ order, onClose }) {
       </div>
 
       {/* ── Order lines list with Seat Assignment ── */}
-      <ul className="mt-3 max-h-40 space-y-1 overflow-y-auto rounded-xl bg-black/20 p-2 text-sm ring-1 ring-inset ring-white/5">
+      <ul className="mt-3 max-h-40 space-y-1 overflow-y-auto rounded-xl bg-[var(--surface-sunken)] p-2 text-sm ring-1 ring-inset ring-[var(--border)]">
         {charges.lines.map((l) => (
           <li key={l.id}>
             <button
@@ -159,7 +164,7 @@ function PayModal({ order, onClose }) {
                 split === 'byitem' ? 'hover:bg-white/5 ring-1 ring-inset ring-transparent hover:ring-[var(--color-ink-600)]' : ''
               }`}
             >
-              <span className="text-zinc-200">
+              <span className="text-[var(--text-strong)]">
                 {l.qty}× {l.name}
                 {split === 'byitem' && (
                   <span
@@ -173,12 +178,12 @@ function PayModal({ order, onClose }) {
                   </span>
                 )}
               </span>
-              <span className="tnum font-medium text-zinc-300">{money(l.lineTotal)}</span>
+              <span className="tnum font-medium text-[var(--text)]">{money(l.lineTotal)}</span>
             </button>
           </li>
         ))}
         {order.items.filter((i) => i.comped && !i.voided).length > 0 && (
-          <li className="px-2.5 py-1 text-xs text-zinc-500">
+          <li className="px-2.5 py-1 text-xs text-[var(--text-muted)]">
             Comped {money(charges.compTotal)} — removed from bill, preserved in audit.
           </li>
         )}
@@ -186,21 +191,21 @@ function PayModal({ order, onClose }) {
 
       {/* ── Even Split Controls ── */}
       {split === 'even' && (
-        <div className="mt-3 flex items-center justify-between rounded-xl bg-[var(--color-ink-800)] p-3 ring-1 ring-inset ring-[var(--color-ink-600)]">
+        <div className="mt-3 flex items-center justify-between rounded-xl bg-[var(--surface-raised)] p-3 ring-1 ring-inset ring-[var(--border)]">
           <Field label="Split ways">
             <Stepper value={ways} onChange={setWays} min={2} max={8} />
           </Field>
           <div className="text-right">
-            <div className="text-[11px] uppercase tracking-widest text-zinc-400">Each person pays</div>
+            <div className="text-[11px] uppercase tracking-widest text-[var(--text-muted)]">Each person pays</div>
             <div className="tnum text-2xl font-black text-amber-300">{money(grandTotal / ways)}</div>
-            <div className="text-[11px] text-zinc-500">{ways} equal shares of {money(grandTotal)}</div>
+            <div className="text-[11px] text-[var(--text-muted)]">{ways} equal shares of {money(grandTotal)}</div>
           </div>
         </div>
       )}
 
       {/* ── By-Item / Seat Controls ── */}
       {split === 'byitem' && (
-        <div className="mt-3 space-y-2 rounded-xl bg-[var(--color-ink-800)] p-3 ring-1 ring-inset ring-[var(--color-ink-600)]">
+        <div className="mt-3 space-y-2 rounded-xl bg-[var(--surface-raised)] p-3 ring-1 ring-inset ring-[var(--border)]">
           <div className="flex items-center justify-between gap-3">
             <Field label="Guests">
               <Stepper value={seats} onChange={(v) => { setSeats(v); setCurSeat(0) }} min={2} max={6} />
@@ -215,7 +220,7 @@ function PayModal({ order, onClose }) {
                   className={`min-h-[40px] rounded-lg px-2.5 text-xs font-bold ring-1 ring-inset transition ${
                     curSeat === i
                       ? 'bg-sky-500 text-black ring-sky-400 font-extrabold shadow-sm'
-                      : 'text-zinc-300 ring-white/10 hover:bg-white/5'
+                      : 'text-[var(--text)] ring-[var(--border)] hover:bg-[var(--surface-hover)]'
                   }`}
                 >
                   {n}
@@ -224,7 +229,7 @@ function PayModal({ order, onClose }) {
               ))}
             </div>
           </div>
-          <p className="text-xs text-zinc-400">
+          <p className="text-xs text-[var(--text-muted)]">
             {unassigned.length > 0 ? (
               <span className="font-semibold text-red-300">⚠️ {unassigned.length} items unassigned. Tap an item to assign to {seatNames[curSeat]}.</span>
             ) : (
@@ -235,9 +240,9 @@ function PayModal({ order, onClose }) {
       )}
 
       {/* ── Tip Selector ── */}
-      <div className="mt-3 rounded-xl bg-[var(--color-ink-800)] p-3 ring-1 ring-inset ring-[var(--color-ink-600)]">
+      <div className="mt-3 rounded-xl bg-[var(--surface-raised)] p-3 ring-1 ring-inset ring-[var(--border)]">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">Tip the staff</span>
+          <span className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">Tip the staff</span>
           <span className="tnum text-xs font-bold text-amber-300">+{money(tipAmount)}</span>
         </div>
         <div className="mt-2 grid grid-cols-5 gap-1.5">
@@ -258,7 +263,7 @@ function PayModal({ order, onClose }) {
                 className={`flex flex-col items-center justify-center rounded-lg py-1.5 text-xs font-bold ring-1 ring-inset transition ${
                   active
                     ? 'bg-amber-500 text-stone-950 ring-amber-400'
-                    : 'text-zinc-300 ring-white/10 hover:bg-white/5'
+                    : 'text-[var(--text)] ring-[var(--border)] hover:bg-[var(--surface-hover)]'
                 }`}
               >
                 <span>{label}</span>
@@ -268,7 +273,7 @@ function PayModal({ order, onClose }) {
           })}
         </div>
         <div className="mt-2 flex items-center gap-2">
-          <label htmlFor={customTipId} className="text-xs text-zinc-400 whitespace-nowrap">Custom $:</label>
+          <label htmlFor={customTipId} className="text-xs text-[var(--text-muted)] whitespace-nowrap">Custom $:</label>
           <input
             id={customTipId}
             type="number"
@@ -277,14 +282,14 @@ function PayModal({ order, onClose }) {
             value={customTip}
             onChange={(e) => setCustomTip(e.target.value)}
             placeholder="0.00"
-            className="tnum min-h-[36px] w-full rounded-lg border border-zinc-700 bg-black/40 px-3 text-xs text-white outline-none focus:border-amber-400"
+            className="tnum min-h-[36px] w-full rounded-lg border border-[var(--border-strong)] bg-[var(--surface-sunken)] px-3 text-xs text-[var(--text-strong)] outline-none focus:border-amber-500"
           />
         </div>
       </div>
 
       {/* ── Totals breakdown ── */}
-      <div className="mt-3 space-y-1 rounded-xl bg-black/40 p-3 text-xs ring-1 ring-inset ring-white/5">
-        <div className="flex justify-between text-zinc-400"><span>Subtotal</span><span className="tnum">{money(charges.subtotal)}</span></div>
+      <div className="mt-3 space-y-1 rounded-xl bg-[var(--surface-sunken)] p-3 text-xs ring-1 ring-inset ring-[var(--border)]">
+        <div className="flex justify-between text-[var(--text-muted)]"><span>Subtotal</span><span className="tnum">{money(charges.subtotal)}</span></div>
         {charges.discount > 0 && (
           <div className="flex justify-between text-emerald-400">
             <span>Discount ({charges.discountPct ? `${(charges.discountPct * 100).toFixed(0)}%` : ''})</span>
@@ -292,12 +297,12 @@ function PayModal({ order, onClose }) {
           </div>
         )}
         {charges.service > 0 && (
-          <div className="flex justify-between text-zinc-400">
+          <div className="flex justify-between text-[var(--text-muted)]">
             <span>{charges.serviceLabel} ({(charges.servicePct * 100).toFixed(0)}%)</span>
             <span className="tnum">{money(charges.service)}</span>
           </div>
         )}
-        <div className="flex justify-between text-zinc-400">
+        <div className="flex justify-between text-[var(--text-muted)]">
           <span>{charges.taxLabel} ({(charges.taxPct * 100).toFixed(1)}%)</span>
           <span className="tnum">{money(charges.tax)}</span>
         </div>
@@ -307,7 +312,7 @@ function PayModal({ order, onClose }) {
             <span className="tnum">+{money(tipAmount)}</span>
           </div>
         )}
-        <div className="flex justify-between border-t border-white/10 pt-1.5 text-base font-extrabold">
+        <div className="flex justify-between border-t border-[var(--border)] pt-1.5 text-base font-extrabold text-[var(--text-strong)]">
           <span>Total to collect</span>
           <span className="tnum text-amber-300">{money(grandTotal)}</span>
         </div>
@@ -315,8 +320,8 @@ function PayModal({ order, onClose }) {
 
       {/* ── Payment Method Tabs ── */}
       <div className="mt-3">
-        <label className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">Tender type</label>
-        <div className="mt-1 grid grid-cols-4 gap-1.5" role="group" aria-label="Payment method">
+        <label className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">Tender type</label>
+        <div className="mt-1 grid grid-cols-4 gap-1.5 rounded-xl bg-[var(--surface-sunken)] p-2 text-sm ring-1 ring-inset ring-[var(--border)]" role="group" aria-label="Payment method">
           {[
             ['card', '💳 Card'],
             ['cash', '💵 Cash'],
@@ -330,8 +335,8 @@ function PayModal({ order, onClose }) {
               aria-pressed={method === m}
               className={`min-h-[44px] rounded-lg text-xs font-bold ring-1 ring-inset transition ${
                 method === m
-                  ? 'bg-white/15 text-white ring-amber-400 shadow-sm'
-                  : 'text-zinc-400 ring-white/10 hover:bg-white/5'
+                  ? 'bg-amber-500/15 text-[var(--text-strong)] ring-amber-500 shadow-sm'
+                  : 'text-[var(--text-muted)] ring-[var(--border)] hover:bg-[var(--surface-hover)]'
               }`}
             >
               {label}
@@ -345,7 +350,7 @@ function PayModal({ order, onClose }) {
         <div className="mt-3 rounded-xl bg-amber-500/10 p-3 ring-1 ring-inset ring-amber-500/30">
           <div className="flex items-center justify-between">
             <label htmlFor={cashInputId} className="text-xs font-bold text-amber-300">Cash received from customer</label>
-            <span className="text-[11px] text-zinc-400">Due: {money(grandTotal)}</span>
+            <span className="text-[11px] text-[var(--text-muted)]">Due: {money(grandTotal)}</span>
           </div>
           <div className="mt-2 flex gap-1.5">
             {[grandTotal, 10, 20, 50, 100].map((amt, idx) => (
@@ -353,14 +358,14 @@ function PayModal({ order, onClose }) {
                 key={idx}
                 type="button"
                 onClick={() => handleQuickCash(amt)}
-                className="flex-1 rounded-lg bg-black/40 py-1.5 text-xs font-bold text-zinc-200 ring-1 ring-inset ring-white/10 hover:bg-white/10"
+                className="flex-1 rounded-lg bg-[var(--surface)] py-1.5 text-xs font-bold text-[var(--text-strong)] ring-1 ring-inset ring-[var(--border)] hover:bg-[var(--surface-hover)]"
               >
                 {idx === 0 ? 'Exact' : `$${amt}`}
               </button>
             ))}
           </div>
           <div className="mt-2 flex items-center gap-2">
-            <span className="text-sm font-bold text-zinc-400">$</span>
+            <span className="text-sm font-bold text-[var(--text-muted)]">$</span>
             <input
               id={cashInputId}
               type="number"
@@ -369,7 +374,7 @@ function PayModal({ order, onClose }) {
               value={cashTenderedStr}
               onChange={(e) => setCashTenderedStr(e.target.value)}
               placeholder={String(grandTotal)}
-              className="tnum min-h-[40px] w-full rounded-lg border border-amber-500/40 bg-black/60 px-3 text-sm font-extrabold text-white outline-none focus:border-amber-400"
+              className="tnum min-h-[40px] w-full rounded-lg border border-amber-500/40 bg-[var(--surface)] px-3 text-sm font-extrabold text-[var(--text-strong)] outline-none focus:border-amber-500"
             />
           </div>
           {cashTendered > 0 && (
@@ -402,18 +407,18 @@ function PayModal({ order, onClose }) {
                 value={mixedCashStr}
                 onChange={(e) => setMixedCashStr(e.target.value)}
                 placeholder={String(Math.round(grandTotal / 2))}
-                className="tnum mt-1 min-h-[38px] w-full rounded-lg border border-zinc-700 bg-black/60 px-3 text-sm font-bold text-white outline-none focus:border-sky-400"
+                className="tnum mt-1 min-h-[38px] w-full rounded-lg border border-[var(--border-strong)] bg-[var(--surface)] px-3 text-sm font-bold text-[var(--text-strong)] outline-none focus:border-sky-500"
               />
             </div>
             <div>
               <label className="text-[11px] text-zinc-400">Remaining on Card ($)</label>
-              <div className="tnum mt-1 flex min-h-[38px] items-center rounded-lg bg-black/40 px-3 text-sm font-black text-sky-300 ring-1 ring-white/10">
+              <div className="tnum mt-1 flex min-h-[38px] items-center rounded-lg bg-[var(--surface)] px-3 text-sm font-black text-sky-700 ring-1 ring-[var(--border)]">
                 {money(mixedCard)}
               </div>
             </div>
           </div>
           <div className="mt-2 flex items-center justify-between pt-1 text-xs">
-            <span className="text-zinc-400">Cash handed over:</span>
+            <span className="text-[var(--text-muted)]">Cash handed over:</span>
             <input
               type="number"
               min="0"
@@ -421,7 +426,7 @@ function PayModal({ order, onClose }) {
               value={mixedCashTenderedStr}
               onChange={(e) => setMixedCashTenderedStr(e.target.value)}
               placeholder={String(mixedCash)}
-              className="tnum w-24 rounded border border-zinc-700 bg-black/40 px-2 py-1 text-right text-xs text-white"
+              className="tnum w-24 rounded border border-[var(--border-strong)] bg-[var(--surface)] px-2 py-1 text-right text-xs text-[var(--text-strong)]"
             />
           </div>
           {mixedCashTendered > mixedCash && (
@@ -435,24 +440,48 @@ function PayModal({ order, onClose }) {
 
       {/* ── QR / Digital Pay ── */}
       {method === 'qr' && (
-        <div className="mt-3 flex items-center gap-4 rounded-xl bg-purple-500/10 p-3 ring-1 ring-inset ring-purple-500/30">
-          <div className="rounded-lg bg-white p-2 shadow-sm">
-            <QRCodeSVG
-              value={`restora:pay?order=${order.id}&amount=${grandTotal}&loc=${state.settings.restaurantName || 'Restora'}`}
-              size={84}
-            />
-          </div>
-          <div className="flex-1 text-xs">
-            <div className="font-bold text-purple-300">Instant QR Payment</div>
-            <div className="text-zinc-400">Customer scans with Bakong, PromptPay, or Mobile Banking app.</div>
-            <div className="tnum mt-1.5 text-base font-black text-white">{money(grandTotal)}</div>
+        <div className="mt-3 rounded-xl bg-sky-500/10 p-3 ring-1 ring-inset ring-sky-500/30" data-testid="staff-payment-qr">
+          {order.paymentClaim && (
+            <div className="mb-2 rounded-lg bg-amber-500/15 px-3 py-2 text-xs text-amber-100 ring-1 ring-inset ring-amber-500/30">
+              <div className="font-bold">Guest says they transferred {money(order.paymentClaim.amount)}</div>
+              <div className="mt-0.5 text-amber-800">
+                Ref {order.paymentClaim.reference || paymentReference(order.id)}
+                {order.paymentClaim.at ? ` · ${new Date(order.paymentClaim.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
+              </div>
+              {Math.abs((Number(order.paymentClaim.amount) || 0) - grandTotal) > 0.009 && (
+                <div className="mt-1 font-semibold text-amber-300">
+                  The claim differs from the current total. Check the bank app before closing.
+                </div>
+              )}
+            </div>
+          )}
+          <div className="flex items-center gap-4">
+            <div className="shrink-0 rounded-lg bg-white p-2 shadow-sm">
+              {payments.qrImageUrl ? (
+                <img src={payments.qrImageUrl} alt="Merchant payment QR" className="h-24 w-24 object-contain" />
+              ) : (
+                <div className="flex h-24 w-24 flex-col items-center justify-center gap-1 px-2 text-center">
+                  <span className="text-xl" aria-hidden="true">▦</span>
+                  <span className="text-[10px] font-bold leading-tight text-zinc-600">No merchant QR uploaded</span>
+                </div>
+              )}
+            </div>
+            <div className="min-w-0 flex-1 text-xs">
+              <div className="font-bold text-sky-700">{payments.qrLabel || 'Merchant QR transfer'}</div>
+              <div className="mt-0.5 leading-relaxed text-[var(--text-muted)]">
+                {payments.qrImageUrl
+                  ? 'This is the same code the guest scanned. Confirm the bank transfer before closing.'
+                  : 'Upload the restaurant QR in Settings → Payments, or settle this check in cash or card.'}
+              </div>
+              <div className="tnum mt-1.5 text-base font-black text-[var(--text-strong)]">{money(grandTotal)}</div>
+            </div>
           </div>
         </div>
       )}
 
       {/* ── Card Provider Simulator ── */}
       {method === 'card' && (
-        <div className="mt-3 flex items-center justify-between rounded-xl bg-black/20 p-2.5 text-xs text-zinc-400 ring-1 ring-white/5">
+        <div className="mt-3 flex items-center justify-between rounded-xl bg-[var(--surface-raised)] p-2.5 text-xs text-[var(--text-muted)] ring-1 ring-[var(--border)]">
           <span>Card terminal: Simulated Chip / Tap</span>
           <div className="flex gap-1.5">
             {['visa', 'mastercard', 'amex'].map((brand) => (
@@ -461,7 +490,7 @@ function PayModal({ order, onClose }) {
                 type="button"
                 onClick={() => setCardType(brand)}
                 className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase transition ${
-                  cardType === brand ? 'bg-sky-500/30 text-sky-200 ring-1 ring-sky-400' : 'text-zinc-500 hover:text-zinc-300'
+                  cardType === brand ? 'bg-sky-500/15 text-sky-800 ring-1 ring-sky-500' : 'text-[var(--text-muted)] hover:text-[var(--text-strong)]'
                 }`}
               >
                 {brand}
@@ -480,7 +509,7 @@ function PayModal({ order, onClose }) {
           onChange={(e) => setAutoPrintReceipt(e.target.checked)}
           className="h-4 w-4 rounded border-zinc-700 bg-black text-amber-500 focus:ring-amber-400"
         />
-        <label htmlFor="auto-receipt-chk" className="text-xs text-zinc-300">
+        <label htmlFor="auto-receipt-chk" className="text-xs text-[var(--text)]">
           Auto-issue and file receipt document on close
         </label>
       </div>

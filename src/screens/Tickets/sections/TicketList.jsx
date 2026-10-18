@@ -133,6 +133,11 @@ function TicketList({ tab, setTab, tableFilter, setTableFilter, serverFilter, se
                         {DELIVERY_STATUS_META[o.deliveryStatus]?.label || 'Untracked'}
                       </StatusPill>
                     )}
+                    {o.paymentClaim && (
+                      <StatusPill tone="warn" size="sm">
+                        QR claim
+                      </StatusPill>
+                    )}
                   </div>
                   <StatusPill tone={meta.tone} size="sm">
                     {translateTicketStatus(o.status, lang)}

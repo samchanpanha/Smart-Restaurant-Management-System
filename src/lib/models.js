@@ -40,6 +40,11 @@ export function nextTableStatuses(from) {
 // from the location's settings (base currency first, override allowed).
 // Pass an explicit currency (code, config, or row) to force one.
 
+/** A short, readable transfer reference (letters + digits only). */
+export function paymentReference(orderId) {
+  return String(orderId || '').replace(/[^a-z0-9]/gi, '').slice(-6).toUpperCase() || '------'
+}
+
 export function money(n, currency) {
   return formatMoney(n, currency)
 }

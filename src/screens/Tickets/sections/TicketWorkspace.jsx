@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
+import { MapLink } from '../../../components/MapLink'
 import StatusPill from '../../../components/StatusPill'
 import { DELIVERY_STATUS_META, TICKET_STATUS_META } from '../../../lib/constants'
 import { buildInvoiceDocument, buildReceiptDocument, buildTicketDocument, documentFileName, downloadHtml, printHtml, renderDocumentHtml } from '../../../lib/documents'
 import { translateTableName, useI18n } from '../../../lib/i18n'
-import { formatClock, minutesBetween, money, orderTotals } from '../../../lib/models'
+import { formatClock, minutesBetween, money, orderTotals, paymentReference } from '../../../lib/models'
 import { documentNumber, sanitizeSettings } from '../../../lib/settings'
 import { useNow, useRestora } from '../../../lib/store'
 import { COURSES, serverName, ORDER_TYPE_LABEL, orderLabel } from '../shared.js'
@@ -141,6 +142,31 @@ function TicketWorkspace({ orderId, onError }) {
         </div>
       )}
 
+      {order.paymentClaim && !closed && (
+        <div
+          className="animate-status-in flex flex-wrap items-center justify-between gap-2 rounded-xl bg-amber-500/10 px-4 py-2.5 ring-1 ring-inset ring-amber-500/40"
+          role="alert"
+          data-testid="qr-claim-banner"
+        >
+          <div className="min-w-0 text-sm text-amber-100">
+            <strong>Guest says the QR transfer is done</strong>
+            <span className="text-amber-200/70">
+              {' '}· {money(order.paymentClaim.amount)}
+              {order.paymentClaim.tip > 0 ? ` (tip ${money(order.paymentClaim.tip)})` : ''}
+              {' '}· Ref {order.paymentClaim.reference || paymentReference(order.id)}
+              {order.paymentClaim.at ? ` · ${formatClock(order.paymentClaim.at)}` : ''}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setPaying(true)}
+            className="min-h-[44px] shrink-0 rounded-lg bg-amber-500 px-4 text-sm font-bold text-black hover:bg-amber-400"
+          >
+            Check &amp; confirm
+          </button>
+        </div>
+      )}
+
       <div className="rounded-2xl border border-[var(--color-ink-700)] bg-[var(--color-ink-900)] p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
@@ -213,7 +239,27 @@ function TicketWorkspace({ orderId, onError }) {
               {ORDER_TYPE_LABEL[order.type]}
             </span>
             {order.customer?.phone && <span>📞 {order.customer.phone}</span>}
-            {order.customer?.address && <span className="min-w-0 truncate">📍 {order.customer.address}</span>}
+            {order.customer?.address && (
+              <span className="min-w-0 truncate">
+                📍 {order.customer.address}
+                {order.customer.unit ? ` · ${order.customer.unit}` : ''}
+              </span>
+            )}
+            {order.customer?.landmark && <span className="min-w-0 truncate">🏁 {order.customer.landmark}</span>}
+            {order.customer?.address && (
+              <MapLink
+                lat={order.customer.lat}
+                lng={order.customer.lng}
+                address={order.customer.address}
+                className="text-amber-300"
+                label="Map"
+              />
+            )}
+            {order.paymentPreference && (
+              <span className="rounded-md bg-stone-500/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-zinc-300">
+                Guest · {order.paymentPreference === 'qr' ? 'QR' : 'Cash'}
+              </span>
+            )}
             {order.eta && <span>🕑 {formatClock(order.eta)}</span>}
             {order.deliveryFee > 0 && <span className="tnum">Fee {money(order.deliveryFee)}</span>}
             <button
