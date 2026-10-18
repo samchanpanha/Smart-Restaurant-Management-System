@@ -292,7 +292,6 @@ export function parseClassOverrides(source) {
     if (!keys.length) keys.push(selectors.replace(/\s+/g, ' ').trim())
     for (const raw of splitSelectorList(selectors)) {
       const selector = raw.trim().replace(/\s+/g, ' ')
-      const parts = selector.split(' ')
       // Only unconditional utilities can be stored as a flat `utility → colour`
       // row. `:is(.text-rose-100, .text-rose-400)` is a list of them;
       // `:is(.bg-orange-500, …).text-white` repaints white *only on those

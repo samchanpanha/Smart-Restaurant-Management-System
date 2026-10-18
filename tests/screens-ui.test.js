@@ -59,6 +59,7 @@ const { RestoraProvider } = await server.ssrLoadModule('/src/lib/store.jsx')
 const { default: AppShell } = await server.ssrLoadModule('/src/components/AppShell.jsx')
 const { Router } = await server.ssrLoadModule('/src/App.jsx')
 const { NAV_SECTIONS, ROLE_NAV } = await server.ssrLoadModule('/src/lib/constants.js')
+const { translateText, getAppLang } = await server.ssrLoadModule('/src/lib/i18n.js')
 
 // One marker per screen: something that only that screen prints.
 const MARKERS = {
@@ -134,6 +135,16 @@ function clickNav(label) {
     .find((entry) => (entry.textContent || '').includes(label))
   assert.ok(button, `sidebar has a ${label} entry`)
   act(() => { button.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
+}
+
+/**
+ * Copy is translated at runtime, so a test that looks for English text has to
+ * ask the app what that text is in the language it is currently rendering.
+ * Matching the literal English only worked while these strings were gaps in
+ * the dictionary — the moment they were translated, the selector found nothing.
+ */
+function inLang(english) {
+  return translateText(english, getAppLang())
 }
 
 before(async () => {
@@ -392,7 +403,7 @@ test('a takeout order starts without a table and shows its customer', async () =
   act(() => { newBtn.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
   await settle()
 
-  const takeout = $$('button').find((b) => b.textContent.trim() === 'Takeout')
+  const takeout = $$('button').find((b) => b.textContent.trim() === inLang('Takeout'))
   assert.ok(takeout, 'the Takeout order type is offered')
   act(() => { takeout.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
   await settle()
@@ -535,7 +546,7 @@ test('the AI section configures a provider instead of using the draft save bar',
   await settle()
 
   const aiTab = [...document.querySelectorAll('[aria-label="Settings sections"] button')]
-    .find((entry) => (entry.textContent || '').includes('Provider, model, API key'))
+    .find((entry) => (entry.textContent || '').includes(inLang('Provider, model, API key, how-to guides')))
   assert.ok(aiTab, 'Settings lists an AI assistant section')
   act(() => { aiTab.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
   await settle()
@@ -553,7 +564,7 @@ test('a host owner adds a branch from Settings and opens it', async () => {
   await flush()
 
   const branchesTab = [...document.querySelectorAll('[aria-label="Settings sections"] button')]
-    .find((entry) => (entry.textContent || '').includes('Manage multiple locations/branches'))
+    .find((entry) => (entry.textContent || '').includes(inLang('Manage multiple locations/branches')))
   assert.ok(branchesTab, 'Settings lists a Branches section')
   act(() => { branchesTab.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
   await settle()
@@ -584,7 +595,7 @@ test('a host owner removes a branch with an inline confirm and the workspace fol
   await flush()
 
   const branchesTab = [...document.querySelectorAll('[aria-label="Settings sections"] button')]
-    .find((entry) => (entry.textContent || '').includes('Manage multiple locations/branches'))
+    .find((entry) => (entry.textContent || '').includes(inLang('Manage multiple locations/branches')))
   assert.ok(branchesTab, 'Settings lists a Branches section')
   act(() => { branchesTab.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
   await settle()
@@ -655,7 +666,7 @@ test("the owner pushes one branch's menu to the others from Settings", async () 
   await settle()
   await flush()
   const branchesTab = [...document.querySelectorAll('[aria-label="Settings sections"] button')]
-    .find((entry) => (entry.textContent || '').includes('Manage multiple locations/branches'))
+    .find((entry) => (entry.textContent || '').includes(inLang('Manage multiple locations/branches')))
   act(() => { branchesTab.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
   await settle()
 
@@ -740,7 +751,7 @@ test('the Help center hands a question to the Ops Copilot', async () => {
     await settle()
 
     const aiTab = [...document.querySelectorAll('[aria-label="Settings sections"] button')]
-      .find((entry) => (entry.textContent || '').includes('Provider, model, API key'))
+      .find((entry) => (entry.textContent || '').includes(inLang('Provider, model, API key, how-to guides')))
     act(() => { aiTab.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })) })
     await settle()
 

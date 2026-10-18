@@ -59,7 +59,20 @@ function translateDevApi() {
   const stats = { requests: 0, strings: 0, upstream: 0, local: 0, errors: 0, lastError: null }
 
   async function handleLocally(req, res, url, rawBody) {
-    const target = String(url.searchParams.get('target') || '').trim().toLowerCase()
+    // The body is parsed first because that is where the browser client puts
+    // `target` — reading only the query string 400s every real request and
+    // leaves dev silently dictionary-only.
+    let body = {}
+    if (req.method === 'POST') {
+      try {
+        body = JSON.parse(rawBody || '{}')
+      } catch {
+        sendJson(res, 400, { ok: false, error: 'invalid JSON body' })
+        return
+      }
+    }
+
+    const target = String(body.target || url.searchParams.get('target') || '').trim().toLowerCase()
     if (!TRANSLATE_LANGS.includes(target)) {
       sendJson(res, 400, { ok: false, error: `unsupported target language: ${target || '(none)'}` })
       return
@@ -67,13 +80,6 @@ function translateDevApi() {
 
     let texts = []
     if (req.method === 'POST') {
-      let body = {}
-      try {
-        body = JSON.parse(rawBody || '{}')
-      } catch {
-        sendJson(res, 400, { ok: false, error: 'invalid JSON body' })
-        return
-      }
       const raw = Array.isArray(body.texts) ? body.texts : (typeof body.text === 'string' ? [body.text] : [])
       texts = raw.filter((text) => typeof text === 'string').slice(0, 120)
     } else {
