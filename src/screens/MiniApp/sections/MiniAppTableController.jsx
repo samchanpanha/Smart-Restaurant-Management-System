@@ -29,6 +29,9 @@ function MiniAppTableController({ onTableReady, activeTable, waitMin = 15, onOpe
   const copy = dict.miniapp || {}
   const { notify } = useToast()
   const now = useNow(15000)
+  const posSettings = state.settings?.pos || {}
+  const pickupOn = posSettings.pickupEnabled !== false
+  const deliveryOn = posSettings.deliveryEnabled !== false
 
   // Persistent guest session token (shared with the picker and the claim).
   const [sessionToken] = useState(guestSessionToken)
@@ -511,26 +514,36 @@ function MiniAppTableController({ onTableReady, activeTable, waitMin = 15, onOpe
             </button>
           ) : null}
 
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => pickMode('pickup')}
-              className={`flex min-h-12 items-center justify-center gap-2 rounded-[var(--radius-lg)] border border-stone-200 bg-white px-3 text-sm font-bold text-stone-700 transition-colors hover:bg-stone-50 ${FOCUS}`}
-            >
-              <span aria-hidden="true">🍽</span>
-              {copy.orderForPickup || 'Order for pickup'}
-              {lang !== 'en' && <span className="sr-only"> Order for pickup</span>}
-            </button>
-            <button
-              type="button"
-              onClick={() => pickMode('delivery')}
-              className={`flex min-h-12 items-center justify-center gap-2 rounded-[var(--radius-lg)] border border-stone-200 bg-white px-3 text-sm font-bold text-stone-700 transition-colors hover:bg-stone-50 ${FOCUS}`}
-            >
-              <span aria-hidden="true">🛵</span>
-              {copy.orderForDelivery || 'Order for delivery'}
-              {lang !== 'en' && <span className="sr-only"> Order for delivery</span>}
-            </button>
-          </div>
+          {(pickupOn || deliveryOn) ? (
+            <div className={`grid gap-2 ${pickupOn && deliveryOn ? 'grid-cols-2' : 'grid-cols-1'}`}>
+              {pickupOn && (
+                <button
+                  type="button"
+                  onClick={() => pickMode('pickup')}
+                  className={`flex min-h-12 items-center justify-center gap-2 rounded-[var(--radius-lg)] border border-stone-200 bg-white px-3 text-sm font-bold text-stone-700 transition-colors hover:bg-stone-50 ${FOCUS}`}
+                >
+                  <span aria-hidden="true">🍽</span>
+                  {copy.orderForPickup || 'Order for pickup'}
+                  {lang !== 'en' && <span className="sr-only"> Order for pickup</span>}
+                </button>
+              )}
+              {deliveryOn && (
+                <button
+                  type="button"
+                  onClick={() => pickMode('delivery')}
+                  className={`flex min-h-12 items-center justify-center gap-2 rounded-[var(--radius-lg)] border border-stone-200 bg-white px-3 text-sm font-bold text-stone-700 transition-colors hover:bg-stone-50 ${FOCUS}`}
+                >
+                  <span aria-hidden="true">🛵</span>
+                  {copy.orderForDelivery || 'Order for delivery'}
+                  {lang !== 'en' && <span className="sr-only"> Order for delivery</span>}
+                </button>
+              )}
+            </div>
+          ) : (
+            <p className="rounded-[var(--radius-lg)] bg-stone-100 px-4 py-3 text-center text-xs font-semibold leading-relaxed text-stone-500">
+              {copy.orderPaused || 'Pickup and delivery are paused right now. Please ask the host.'}
+            </p>
+          )}
 
           <button
             type="button"

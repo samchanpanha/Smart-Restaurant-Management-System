@@ -1662,6 +1662,7 @@ function enrichLangDict(langCode, raw) {
     seatedHint: isKm ? 'បានអង្គុយ · ចុចមុខម្ហូបដើម្បីកម្មង់' : isZh ? '已入座 · 点选菜品下单' : 'Seated · tap the menu to order',
     orderForPickup: isKm ? 'កម្មង់មកយក' : isZh ? '自取下单' : 'Order for pickup',
     orderForDelivery: isKm ? 'កម្មង់ដឹកជញ្ជូន' : isZh ? '配送下单' : 'Order for delivery',
+    orderPaused: isKm ? 'ការកម្មង់មកយក និងដឹកជញ្ជូនផ្អាកបណ្តោះអាសន្ន។ សូមសួរបុគ្គលិក។' : isZh ? '自取与配送暂时暂停。请咨询接待员。' : 'Pickup and delivery are paused right now. Please ask the host.',
     change: isKm ? 'ប្តូរ' : isZh ? '更改' : 'Change',
     bill: isKm ? 'គិតលុយ' : isZh ? '结账' : 'Bill',
     check: isKm ? 'គិតលុយ' : isZh ? '结账' : 'Check',

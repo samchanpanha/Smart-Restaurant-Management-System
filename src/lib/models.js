@@ -323,8 +323,11 @@ export function orderCharges(order, menuById, settings = {}, options = {}) {
 }
 
 /** Legacy shape used by the ticket + guest screens (tax rate only). */
-export function orderTotals(order, menuById, taxPct = 0) {
-  const charges = orderCharges(order, menuById, { taxPct })
+export function orderTotals(order, menuById, settings = 0) {
+  // Older callers pass just the tax percentage; newer guest screens pass the
+  // whole settings object so service, delivery, and tax stay on one sheet.
+  const config = settings && typeof settings === 'object' ? settings : { taxPct: settings }
+  const charges = orderCharges(order, menuById, config)
   return {
     lines: charges.lines,
     subtotal: charges.subtotal,

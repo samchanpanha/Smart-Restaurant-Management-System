@@ -365,25 +365,43 @@ the same QR ordering surface with the platform chrome — header colour from
 lands. Open it from a bot reply (`/qr 12`), a menu button, or the link/QR on the
 screen; outside Telegram it degrades to the plain web menu.
 
-The guest path is one journey, not a pile of dialogs:
+The guest path is one journey, not a pile of dialogs. The same shell serves the
+QR page and the mini app: **Menu · Orders · Book**, a persistent cart bar, and
+one bottom sheet for checkout.
 
 - **Step 1 — where are you eating?** An unseated guest gets a warm welcome
   card: *Sit now*, *Pickup*, *Delivery*, the live free-table count, an honest
   wait quote when the floor is tight, and a *Have a booking? Reschedule* link.
   A full or empty floor simply drops *Sit now* and keeps the two off-table
-  paths.
+  paths. An owner can pause either path in **Settings → Service & POS**; the
+  welcome card honours the switch.
 - **Step 2 — pick a table.** *Sit now* and the header switcher open the same
   picker (`sections/TablePicker.jsx`): party size first, then zone chips and a
   two-column grid. A free table is claimed in one tap — `MINIAPP_CLAIM_TABLE`
   is the seat, no confirmation sheet — and the claim carries the chosen party
   size plus the name Telegram already knows. A table already in service is
   shown as *Join* and just becomes the active menu.
-- **Step 3 — order and call service.** The slim dark bar names the table and
-  party, reports active orders or "check on the way", and carries 1-tap chips:
-  Move Table, Water, Napkins, Call Waiter, Bill, plus Check & Leave / Release.
-  Move, release, and reschedule use the kit bottom sheet; every action goes
-  through the shared reducer, so the floor, KDS, and other terminals see it
-  live.
+- **Step 3 — order.** Search, photo cards, flat category sections, and quick
+  add feed the cart. Checkout is a three-step sheet: **Review** (live subtotal,
+  delivery fee, minimum-order gate, tax), **Details** (name, phone, delivery
+  address), and **Payment**. Pickup and delivery quote their fee, minimum, and
+  ETA from **Settings → Service & POS**. *Pay now* is a simulated card
+  settlement; *pay at pickup* and *pay at the door* stay open in Orders.
+- **Step 4 — track it.** A settled ticket no longer disappears. **Orders**
+  carries the status stepper, delivery address or counter note, ETA, item
+  lines, the bill, an unpaid **Pay** action, *Add more*, and *Start another
+  order*. Seated guests get the same bill plus the server-payment request.
+- **Step 5 — book.** **Book** shows live 30-minute slots computed from the
+  enabled service windows (`findAvailableTablesForSlot`) with a party picker
+  and date strip. The confirmation keeps a guest-token-scoped reference;
+  reschedule and cancel are guarded by the restaurant's cutoff and
+  modification limits, and a full day falls back to the shared waitlist.
+
+The seated bar still names the table and party, reports active orders or
+"check on the way", and carries 1-tap chips: Move Table, Water, Napkins, Call
+Waiter, Bill, plus Check & Leave / Release. Move, release, and reschedule use
+the kit bottom sheet; every action goes through the shared reducer, so the
+floor, KDS, and other terminals see it live.
 
 Copy is translated (km/en/zh) with phrase-table entries for the static lines
 and `dict.miniapp` functions for the interpolated ones (table counts, waits,
@@ -439,10 +457,21 @@ Each table has a QR tent card (Floor → table → 📱 Table QR code). Guests s
 and get a light consumer app at `/?guest=<tableId>&owner=<slug>` — no login, no
 sidebar:
 
-- Menu (86'd dishes vanish instantly) with required modifiers enforced
-- Cart → **Send to kitchen**: one atomic `GUEST_SEND` lands on the table's
-  shared ticket, tagged QR, and fires the KDS + decrements stock
-- Live status per line (🔥 In kitchen → ✓ Ready) over the same SSE sync
+- Menu (86'd dishes vanish instantly) with search, photos, quick add, and
+  required modifiers enforced
+- Pickup and delivery without a table: the welcome card starts the same menu,
+  and checkout quotes the fee, minimum, ETA, and payment options from
+  **Settings → Service & POS**
+- Cart → **Review → Details → Payment**: one atomic `GUEST_SEND` lands on the
+  table's shared ticket (or creates the off-table ticket), tagged QR, and fires
+  the KDS + decrements stock. A pay-now choice settles in the same action
+  (`payNow`, `paymentMethod`, `tip`) so a payment can never arrive before the
+  order it pays.
+- **Orders** keeps the ticket after settlement: live status per line, delivery
+  address or pickup quote, the bill, an unpaid Pay action, Add more, and Start
+  another order
+- **Book** books a live slot (or joins the waitlist when full) and the
+  confirmation can reschedule or cancel within the restaurant's policy
 - 🙋 Call server + bill request raise alerts on staff screens (Dashboard rail,
   Tickets banner with "On my way" ack)
 - Pay the whole check with tip, or ask the server to take payment

@@ -298,7 +298,7 @@ function DishModal({ item, onAdd, onClose, showImages = true }) {
 function PaySheet({ order, onClose, onPaid }) {
   const { state, dispatch } = useRestora()
   const menuById = useMemo(() => Object.fromEntries(state.menu.map((m) => [m.id, m])), [state.menu])
-  const t = orderTotals(order, menuById, state.settings.taxPct)
+  const t = orderTotals(order, menuById, state.settings)
   const [tipPct, setTipPct] = useState(18)
   const [customTip, setCustomTip] = useState('')
   const [method, setMethod] = useState('apple_pay')
@@ -442,8 +442,8 @@ function PaySheet({ order, onClose, onPaid }) {
   )
 }
 
-function PaidCheckSummary({ table, paid, menuById, taxPct, onResetTable }) {
-  const t = paid ? orderTotals(paid, menuById, taxPct) : null
+function PaidCheckSummary({ table, paid, menuById, settings, onResetTable }) {
+  const t = paid ? orderTotals(paid, menuById, settings) : null
   const [rating, setRating] = useState(5)
   const [feedbackTags, setFeedbackTags] = useState([])
   const [showItemized, setShowItemized] = useState(false)
@@ -686,6 +686,8 @@ export default function GuestScreen({
   // Off-table checkout quotes come from Settings → Service & POS so the
   // guest and the counter never disagree about the fee or the wait.
   const serviceSettings = state.settings?.pos || {}
+  const pickupOn = serviceSettings.pickupEnabled !== false
+  const deliveryOn = serviceSettings.deliveryEnabled !== false
   const deliveryFee = delivery ? Math.max(0, Number(serviceSettings.deliveryFee) || 0) : 0
   const pickupEtaMinutes = Math.max(5, Number(serviceSettings.pickupEtaMinutes) || 20)
   const deliveryEtaMinutes = Math.max(5, Number(serviceSettings.deliveryEtaMinutes) || 35)
@@ -707,7 +709,7 @@ export default function GuestScreen({
   const confirmedId = placedOrder?.id || lastPlaced?.id || ''
   const confirmedEta = placedOrder?.eta || lastPlaced?.eta || etaQuote
   const confirmedTotal = placedOrder && placedOrder.items?.length
-    ? orderTotals(placedOrder, menuById, state.settings.taxPct).total
+    ? orderTotals(placedOrder, menuById, state.settings).total
     : (lastPlaced?.total || checkoutCharges.total)
   const confirmedAdded = !placedOrder?.items?.length && lastPlaced?.added
 
@@ -845,23 +847,32 @@ export default function GuestScreen({
         <div className="text-4xl">🧾</div>
         <h1 className="mt-3 text-xl font-extrabold">Hmm, that code didn&apos;t scan.</h1>
         <p className="mt-1 text-sm text-stone-500">Try the tent card on your table again, or ask your server.</p>
-        {allowPickup && (
+        {allowPickup && (pickupOn || deliveryOn) && (
           <div className="mt-5 space-y-2.5">
-            <button
-              type="button"
-              onClick={() => setPickup(true)}
-              className="min-h-[48px] w-full rounded-2xl bg-stone-900 text-sm font-extrabold text-white"
-            >
-              {gu.orderForPickup || '🍽 Order for pickup'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setDelivery(true)}
-              className="min-h-[48px] w-full rounded-2xl bg-amber-500 text-sm font-extrabold text-stone-950"
-            >
-              🛵 {gu.orderForDelivery || 'Order for delivery'}
-            </button>
+            {pickupOn && (
+              <button
+                type="button"
+                onClick={() => setPickup(true)}
+                className="min-h-[48px] w-full rounded-2xl bg-stone-900 text-sm font-extrabold text-white"
+              >
+                {gu.orderForPickup || '🍽 Order for pickup'}
+              </button>
+            )}
+            {deliveryOn && (
+              <button
+                type="button"
+                onClick={() => setDelivery(true)}
+                className="min-h-[48px] w-full rounded-2xl bg-amber-500 text-sm font-extrabold text-stone-950"
+              >
+                🛵 {gu.orderForDelivery || 'Order for delivery'}
+              </button>
+            )}
           </div>
+        )}
+        {allowPickup && !pickupOn && !deliveryOn && (
+          <p className="mt-5 rounded-2xl bg-stone-100 px-4 py-3 text-xs font-semibold leading-relaxed text-stone-500">
+            Pickup and delivery are paused right now. Please ask the host.
+          </p>
         )}
       </div>,
     )
@@ -873,7 +884,7 @@ export default function GuestScreen({
         table={table}
         paid={paid}
         menuById={menuById}
-        taxPct={state.settings.taxPct}
+        settings={state.settings}
         onResetTable={() => dispatch({ type: 'BUS_TABLE', tableId: table.id })}
       />,
     )
@@ -900,7 +911,7 @@ export default function GuestScreen({
                 🪑 Sit at {translateTableName(table.name, lang)}
               </button>
             )}
-            {allowPickup && (
+            {allowPickup && pickupOn && (
               <button
                 type="button"
                 onClick={() => setPickup(true)}
@@ -909,7 +920,7 @@ export default function GuestScreen({
                 {gu.orderForPickup || '🍽 Order for pickup'}
               </button>
             )}
-            {allowPickup && (
+            {allowPickup && deliveryOn && (
               <button
                 type="button"
                 onClick={() => setDelivery(true)}
@@ -918,11 +929,16 @@ export default function GuestScreen({
                 🛵 {gu.orderForDelivery || 'Order for delivery'}
               </button>
             )}
-            {allowPickup && (
+            {allowPickup && (pickupOn || deliveryOn) && (
               <p className="text-[11px] leading-relaxed text-stone-400">
                 {openTables.length
                   ? 'Or tap a free table above to sit down.'
                   : 'No tables are free right now — you can still order for pickup or delivery.'}
+              </p>
+            )}
+            {allowPickup && !pickupOn && !deliveryOn && (
+              <p className="text-[11px] leading-relaxed text-stone-400">
+                Pickup and delivery are paused right now. Please ask the host.
               </p>
             )}
           </div>
@@ -933,7 +949,7 @@ export default function GuestScreen({
 
   const heldAny = order ? order.items.some((i) => i.status === 'held' && !i.voided) : false
   const payable = order && ['sent', 'in_prep', 'ready', 'served'].includes(order.status) && !heldAny
-  const bill = order ? orderTotals(order, menuById, state.settings.taxPct) : null
+  const bill = order ? orderTotals(order, menuById, state.settings) : null
   const heading = delivery
     ? (gu.deliveryOrder || '🛵 Delivery order')
     : pickup
@@ -1042,6 +1058,8 @@ export default function GuestScreen({
                 <span className="sr-only">Search dishes</span>
                 <Icon name="search" size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" />
                 <input
+                  type="search"
+                  enterKeyHint="search"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="Search dishes"
@@ -1074,6 +1092,7 @@ export default function GuestScreen({
                 <button
                   key={c}
                   type="button"
+                  aria-pressed={cat === c}
                   onClick={() => setCat(c)}
                   className={`min-h-[40px] shrink-0 rounded-full px-4 text-sm font-bold transition-colors ${
                     cat === c
