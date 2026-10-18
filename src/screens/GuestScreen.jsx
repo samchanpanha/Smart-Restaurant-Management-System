@@ -21,7 +21,7 @@ import {
 } from '../lib/i18n'
 import { isFreeTableStatus, isTableInServiceStatus } from '../lib/constants'
 import { guestSessionToken, saveGuestOrder } from '../lib/guest-session'
-import { money, orderTotals, uid } from '../lib/models'
+import { money, orderCharges, orderTotals, uid } from '../lib/models'
 import { categoryTree } from '../lib/settings'
 import { useMenuCatalog } from '../lib/useMenuCatalog'
 import { useNow, useRestora } from '../lib/store'
@@ -597,6 +597,9 @@ export default function GuestScreen({
   const [guestPhone, setGuestPhone] = useState('')
   const [detail, setDetail] = useState(null)
   const [cartOpen, setCartOpen] = useState(false)
+  const [checkoutStep, setCheckoutStep] = useState(0)
+  const [paymentChoice, setPaymentChoice] = useState('now')
+  const [lastPlaced, setLastPlaced] = useState(null)
   const [payOpen, setPayOpen] = useState(false)
   const [justSent, setJustSent] = useState(false)
   // Order mode: pickup and delivery skip the table requirement.
@@ -619,16 +622,21 @@ export default function GuestScreen({
     () => state.tables.filter((t) => t.id !== tableId && isFreeTableStatus(t.status)),
     [state.tables, tableId],
   )
-  const pickupOrder = pickupOrderId
-    ? state.orders.find((o) => o.id === pickupOrderId && !['paid', 'void'].includes(o.status))
-    : null
-  const pickupPaid = pickupOrderId
-    ? state.orders.find((o) => o.id === pickupOrderId && o.status === 'paid')
-    : null
-  const deliveryOrder = deliveryOrderId
-    ? state.orders.find((o) => o.id === deliveryOrderId && !['paid', 'void'].includes(o.status))
-    : null
-  const order = delivery ? deliveryOrder : pickup ? pickupOrder : (table ? openOrderFor(state, tableId) : null)
+  // Keep the paid ticket in hand. The old screens dropped it as soon as it
+  // settled, which hid the confirmation, the bill, and the tracker exactly
+  // when the guest wanted them.
+  const pickupTicket = pickupOrderId ? state.orders.find((o) => o.id === pickupOrderId) : null
+  const pickupOrder = pickupTicket && !['paid', 'void'].includes(pickupTicket.status) ? pickupTicket : null
+  const pickupPaid = pickupTicket && pickupTicket.status === 'paid' ? pickupTicket : null
+  const deliveryTicket = deliveryOrderId ? state.orders.find((o) => o.id === deliveryOrderId) : null
+  const deliveryOrder = deliveryTicket && !['paid', 'void'].includes(deliveryTicket.status) ? deliveryTicket : null
+  const order = delivery
+    ? (deliveryOrder || deliveryTicket)
+    : pickup
+      ? (pickupOrder || pickupPaid)
+      : (table ? openOrderFor(state, tableId) : null)
+  const placedOrderId = delivery ? deliveryOrderId : pickup ? pickupOrderId : null
+  const placedOrder = placedOrderId ? state.orders.find((o) => o.id === placedOrderId) : null
   const paid = !pickup && !delivery && table ? paidOrderFor(state, tableId) : null
   const menuById = useMemo(() => Object.fromEntries(catalogMenu.map((m) => [m.id, m])), [catalogMenu])
   const activeMenu = useMemo(() => catalogMenu.filter((m) => m.active !== false), [catalogMenu])
@@ -675,6 +683,34 @@ export default function GuestScreen({
   const cartTotal = cart.reduce((s, c) => s + (menuById[c.menuItemId]?.price || 0) * c.qty, 0)
   const cartCount = cart.reduce((s, c) => s + c.qty, 0)
 
+  // Off-table checkout quotes come from Settings → Service & POS so the
+  // guest and the counter never disagree about the fee or the wait.
+  const serviceSettings = state.settings?.pos || {}
+  const deliveryFee = delivery ? Math.max(0, Number(serviceSettings.deliveryFee) || 0) : 0
+  const pickupEtaMinutes = Math.max(5, Number(serviceSettings.pickupEtaMinutes) || 20)
+  const deliveryEtaMinutes = Math.max(5, Number(serviceSettings.deliveryEtaMinutes) || 35)
+  const etaQuote = delivery
+    ? `${deliveryEtaMinutes}–${deliveryEtaMinutes + 10} min`
+    : pickup
+      ? `${pickupEtaMinutes}–${pickupEtaMinutes + 10} min`
+      : ''
+  const checkoutCharges = orderCharges(
+    { items: cart, deliveryFee },
+    menuById,
+    state.settings || {},
+  )
+  const minDeliveryOrder = delivery ? Math.max(0, Number(serviceSettings.minDeliveryOrder) || 0) : 0
+  const deliveryShortfall = Math.max(0, minDeliveryOrder - checkoutCharges.subtotal)
+  const payAtPickup = serviceSettings.payAtPickup !== false
+  const payAtDoor = serviceSettings.payAtDoor !== false
+  const confirmedPaid = placedOrder ? placedOrder.status === 'paid' : Boolean(lastPlaced?.paid)
+  const confirmedId = placedOrder?.id || lastPlaced?.id || ''
+  const confirmedEta = placedOrder?.eta || lastPlaced?.eta || etaQuote
+  const confirmedTotal = placedOrder && placedOrder.items?.length
+    ? orderTotals(placedOrder, menuById, state.settings.taxPct).total
+    : (lastPlaced?.total || checkoutCharges.total)
+  const confirmedAdded = !placedOrder?.items?.length && lastPlaced?.added
+
   function addToCart(menuItem, extra) {
     setCart((c) => [...c, {
       key: `${menuItem.id}-${Date.now()}-${c.length}`,
@@ -700,6 +736,20 @@ export default function GuestScreen({
       .filter((line) => line.qty > 0))
   }
 
+  function validateDetails() {
+    if ((pickup || delivery) && !guestName.trim()) {
+      setNameError(true)
+      return false
+    }
+    if (delivery && !deliveryAddress.trim()) {
+      setAddressError(true)
+      return false
+    }
+    setNameError(false)
+    setAddressError(false)
+    return true
+  }
+
   function sendCart() {
     if (!cart.length) return
     const name = guestName.trim()
@@ -717,6 +767,7 @@ export default function GuestScreen({
       // order the reducer actually created.
       const orderId = uid('o')
       setDeliveryOrderId(orderId)
+      setLastPlaced({ id: orderId, total: checkoutCharges.total, eta: etaQuote, paid: paymentChoice === 'now', added: false })
       saveGuestOrder({ orderId, type: 'delivery', guestToken, at: Date.now() })
       dispatch({
         type: 'GUEST_SEND',
@@ -725,6 +776,10 @@ export default function GuestScreen({
         guestToken,
         customer: { name, phone },
         deliveryAddress: deliveryAddress.trim(),
+        deliveryFee,
+        eta: etaQuote,
+        payNow: paymentChoice === 'now',
+        paymentMethod: 'card',
         items: cart.map((c) => ({ ...c, guest: name })),
       })
     } else if (pickup) {
@@ -732,6 +787,7 @@ export default function GuestScreen({
       const orderId = pickupOrderId || uid('o')
       if (!pickupOrderId) {
         setPickupOrderId(orderId)
+        setLastPlaced({ id: orderId, total: checkoutCharges.total, eta: etaQuote, paid: paymentChoice === 'now', added: false })
         saveGuestOrder({ orderId, type: 'takeout', guestToken, at: Date.now() })
         dispatch({
           type: 'GUEST_SEND',
@@ -739,9 +795,13 @@ export default function GuestScreen({
           orderId,
           guestToken,
           customer: { name, phone },
+          eta: etaQuote,
+          payNow: paymentChoice === 'now',
+          paymentMethod: 'card',
           items: cart.map((c) => ({ ...c, guest: name })),
         })
       } else {
+        setLastPlaced({ id: orderId, total: 0, eta: etaQuote, paid: false, added: true })
         for (const c of cart) {
           dispatch({ type: 'ADD_ITEM', orderId, menuItemId: c.menuItemId, qty: c.qty, modifiers: c.modifiers, course: c.course, notes: c.notes, by: 'guest', guest: name })
         }
@@ -755,10 +815,16 @@ export default function GuestScreen({
       })
     }
     setCart([])
-    setCartOpen(false)
-    setJustSent(true)
-    setTab('orders')
-    window.setTimeout(() => setJustSent(false), 5000)
+    if (delivery || pickup) {
+      // Keep the sheet open on the confirmation step; the guest chooses
+      // whether to track the order or add more dishes.
+      setCheckoutStep(3)
+    } else {
+      setCartOpen(false)
+      setJustSent(true)
+      setTab('orders')
+      window.setTimeout(() => setJustSent(false), 5000)
+    }
     // The Telegram mini app listens for this to fire a haptic tap.
     window.dispatchEvent(new CustomEvent('restora:order-sent', { detail: { tableId: tableId || null, orderType: delivery ? 'delivery' : pickup ? 'takeout' : 'dine_in' } }))
   }
@@ -801,7 +867,7 @@ export default function GuestScreen({
     )
   }
 
-  if (!pickup && (table.status === 'billed' || (paid && !order))) {
+  if (!pickup && !delivery && table && (table.status === 'billed' || (paid && !order))) {
     return shell(
       <PaidCheckSummary
         table={table}
@@ -861,70 +927,6 @@ export default function GuestScreen({
             )}
           </div>
         )}
-      </div>,
-    )
-  }
-
-  // ── Delivery paid / in-flight completion screen ─────────────────
-  if (delivery && deliveryOrderId) {
-    const liveDelivery = state.orders.find((o) => o.id === deliveryOrderId)
-    if (liveDelivery) {
-      const isPaid = liveDelivery.status === 'paid'
-      const isOut = liveDelivery.deliveryStatus === 'out_for_delivery' || liveDelivery.status === 'served'
-      return shell(
-        <div className="space-y-4">
-          <div className="rounded-3xl bg-white p-6 shadow-sm text-center">
-            <div className="text-4xl">{isPaid ? '✅' : isOut ? '🛵' : '📦'}</div>
-            <h1 className="mt-3 text-xl font-extrabold text-stone-900">
-              {isPaid ? 'Order delivered!' : isOut ? 'On the way!' : 'Order confirmed!'}
-            </h1>
-            <p className="mt-1 text-sm text-stone-500">
-              {isPaid
-                ? 'Thank you — enjoy your meal.'
-                : isOut
-                  ? 'Your rider is heading to you now.'
-                  : 'We\'re preparing your order. Hang tight!'}
-            </p>
-            {liveDelivery.deliveryAddress && (
-              <p className="mt-2 rounded-xl bg-stone-50 px-3 py-2 text-xs text-stone-600">
-                📍 Delivering to: <strong>{liveDelivery.deliveryAddress}</strong>
-              </p>
-            )}
-          </div>
-          <div className="rounded-3xl bg-white p-4 shadow-sm">
-            <OrderStatusStepper order={liveDelivery} isDelivery />
-          </div>
-          {!isPaid && (
-            <button
-              type="button"
-              onClick={() => { setDeliveryOrderId(null); setDelivery(true); setTab('menu') }}
-              className="min-h-[44px] w-full rounded-2xl border border-stone-200 bg-white text-xs font-bold text-stone-500"
-            >
-              Start a new delivery order
-            </button>
-          )}
-        </div>,
-      )
-    }
-  }
-
-  if (pickup && !pickupOrder && pickupPaid) {
-    const t = orderTotals(pickupPaid, menuById, state.settings.taxPct)
-    return shell(
-      <div className="rounded-3xl bg-white p-8 text-center shadow-sm">
-        <div className="text-4xl">🎉</div>
-        <h1 className="mt-3 text-xl font-extrabold">Thanks — your order is in!</h1>
-        <p className="mt-1 text-sm text-stone-500">We&apos;ll call your name when it&apos;s ready for pickup.</p>
-        <div className="tnum mt-4 rounded-2xl bg-stone-50 p-4 text-sm">
-          <div className="flex justify-between"><span>Total paid</span><strong>{money(t.total + (pickupPaid.tip || 0))}</strong></div>
-        </div>
-        <button
-          type="button"
-          onClick={() => { setPickupOrderId(null); setTab('menu'); setPickup(true) }}
-          className="mt-5 min-h-[48px] w-full rounded-2xl bg-stone-900 text-sm font-extrabold text-white"
-        >
-          Start another order
-        </button>
       </div>,
     )
   }
@@ -1189,6 +1191,29 @@ export default function GuestScreen({
               </div>
             )}
 
+            {order && (pickup || delivery) && (
+              <div className="rounded-3xl bg-white p-4 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400">
+                      {delivery ? 'Delivering to' : 'Collect at the counter'}
+                    </p>
+                    <p className="mt-0.5 truncate text-sm font-extrabold text-stone-900">
+                      {delivery ? (order.deliveryAddress || 'Address saved') : 'Restora · Downtown'}
+                    </p>
+                    {order.eta && (
+                      <p className="mt-1 text-[11px] font-semibold text-stone-500">Estimated {order.eta}</p>
+                    )}
+                  </div>
+                  <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${
+                    order.status === 'paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                  }`}>
+                    {order.status === 'paid' ? 'Paid' : delivery ? 'Pay at door' : 'Pay at pickup'}
+                  </span>
+                </div>
+              </div>
+            )}
+
             {order && (
               <div className="rounded-3xl bg-white p-4 shadow-sm">
                 <OrderStatusStepper order={order} isDelivery={delivery} />
@@ -1253,11 +1278,17 @@ export default function GuestScreen({
                   >
                     Pay {money(bill.total)}
                   </button>
+                ) : order.status === 'paid' ? (
+                  <div className="rounded-3xl bg-emerald-50 p-4 text-center text-sm font-bold text-emerald-800 shadow-sm">
+                    Paid · thank you!
+                  </div>
                 ) : (
                   <div className="rounded-3xl bg-white p-4 text-center text-sm text-stone-500 shadow-sm">
-                    {order.status === 'open' || heldAny
-                      ? 'Your server is still adding items — payment unlocks when everything is in.'
-                      : 'The check is closing — one moment.'}
+                    {pickup || delivery
+                      ? (delivery ? 'Pay the rider when your food arrives.' : 'Pay at the counter when you collect.')
+                      : order.status === 'open' || heldAny
+                        ? 'Your server is still adding items — payment unlocks when everything is in.'
+                        : 'The check is closing — one moment.'}
                   </div>
                 )}
               </>
@@ -1279,6 +1310,20 @@ export default function GuestScreen({
                 {order.billRequested ? 'Server notified ✓' : 'Ask server to take payment instead'}
               </button>
             )}
+
+            {(pickup || delivery) && order && ['paid', 'served', 'void'].includes(order.status) && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (pickup) setPickupOrderId(null)
+                  else setDeliveryOrderId(null)
+                  setTab('menu')
+                }}
+                className="min-h-[48px] w-full rounded-2xl border border-stone-200 bg-white text-sm font-bold text-stone-600"
+              >
+                Start another order
+              </button>
+            )}
           </div>
         )}
 
@@ -1289,7 +1334,7 @@ export default function GuestScreen({
           {cartCount > 0 && (
             <button
               type="button"
-              onClick={() => setCartOpen(true)}
+              onClick={() => { setCheckoutStep(0); setPaymentChoice('now'); setCartOpen(true) }}
               className="tnum mb-2 flex min-h-[54px] w-full items-center justify-between gap-3 rounded-2xl bg-[var(--guest-accent)] px-4 text-sm font-extrabold text-[var(--guest-ink)] shadow-sm"
             >
               <span className="flex items-center gap-2">
@@ -1329,157 +1374,495 @@ export default function GuestScreen({
         )}
 
         {cartOpen && (
-          <Sheet onClose={() => setCartOpen(false)} label="Your order" tall>
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-amber-700">
-                  {delivery ? 'Delivery' : pickup ? 'Pickup' : heading}
-                </p>
-                <h2 className="mt-0.5 text-xl font-extrabold text-stone-900">Review your order</h2>
-              </div>
-              <span className="shrink-0 rounded-full bg-stone-100 px-3 py-1 text-xs font-bold text-stone-600">
-                {cartCount} {cartCount === 1 ? 'item' : 'items'}
-              </span>
-            </div>
+          <Sheet
+            onClose={() => { setCartOpen(false); setCheckoutStep(0) }}
+            label="Your order"
+            tall
+          >
+            {pickup || delivery ? (
+              checkoutStep === 3 ? (
+                <div className="py-1 text-center" data-testid="guest-checkout-done">
+                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+                    <Icon name="check" size={30} />
+                  </div>
+                  <h2 className="mt-4 text-2xl font-extrabold text-stone-900">
+                    {confirmedPaid ? 'Payment received' : confirmedAdded ? 'Items added' : 'Order placed'}
+                  </h2>
+                  <p className="mt-1 text-sm leading-relaxed text-stone-500">
+                    {confirmedPaid
+                      ? 'Your order is already in the kitchen.'
+                      : confirmedAdded
+                        ? 'The kitchen has your extra dishes. Settle the bill from Orders when you are ready.'
+                        : delivery
+                          ? 'Pay the rider when your food arrives.'
+                          : 'Pay at the counter when you collect.'}
+                  </p>
 
-            <ul className="mt-4 space-y-2.5">
-              {cart.map((c) => {
-                const dish = menuById[c.menuItemId]
-                return (
-                  <li key={c.key} className="rounded-2xl bg-stone-50 p-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="text-sm font-extrabold text-stone-900">
-                          {dish ? translateDishName(dish, lang) : c.menuItemId}
-                          {lang !== 'en' && dish && <span className="sr-only"> {dish.name}</span>}
-                        </div>
-                        <div className="mt-0.5 text-[11px] leading-snug text-stone-500">
-                          {(c.modifiers || []).map((m) => translateModifier(m.value, lang)).join(' · ')}
-                          {c.notes ? `${(c.modifiers || []).length ? ' · ' : ''}“${c.notes}”` : ''}
-                        </div>
-                      </div>
-                      <span className="tnum shrink-0 text-sm font-extrabold text-stone-900">
-                        {money((dish?.price || 0) * c.qty)}
-                      </span>
+                  <div className="mt-5 space-y-2 rounded-2xl bg-stone-50 p-4 text-left text-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-stone-500">Reference</span>
+                      <strong className="font-mono text-stone-900">{confirmedId ? confirmedId.slice(-6).toUpperCase() : '—'}</strong>
                     </div>
-                    <div className="mt-2.5 flex items-center justify-between">
-                      <div className="inline-flex items-center rounded-full bg-white ring-1 ring-stone-200">
-                        <button
-                          type="button"
-                          aria-label={`Decrease ${dish?.name || 'item'}`}
-                          onClick={() => changeQty(c.key, -1)}
-                          className="flex h-10 w-10 items-center justify-center rounded-full text-lg font-bold text-stone-600 active:bg-stone-100"
-                        >
-                          −
-                        </button>
-                        <span className="tnum w-7 text-center text-sm font-extrabold">{c.qty}</span>
-                        <button
-                          type="button"
-                          aria-label={`Increase ${dish?.name || 'item'}`}
-                          onClick={() => changeQty(c.key, 1)}
-                          className="flex h-10 w-10 items-center justify-center rounded-full text-lg font-bold text-stone-600 active:bg-stone-100"
-                        >
-                          +
-                        </button>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => changeQty(c.key, -c.qty)}
-                        className="min-h-[40px] px-2 text-xs font-bold text-stone-400"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </li>
-                )
-              })}
-            </ul>
+                    {!confirmedAdded && (
+                      <>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-stone-500">Type</span>
+                          <strong className="text-stone-900">{delivery ? 'Delivery' : 'Pickup'}</strong>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-stone-500">Ready in</span>
+                          <strong className="text-stone-900">{confirmedEta}</strong>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-stone-500">Total</span>
+                          <strong className="tnum text-stone-900">{money(confirmedTotal)}</strong>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-stone-500">Payment</span>
+                          <strong className="text-stone-900">
+                            {confirmedPaid ? 'Paid by card' : delivery ? 'Pay at the door' : 'Pay at pickup'}
+                          </strong>
+                        </div>
+                      </>
+                    )}
+                  </div>
 
-            <div className="mt-5 space-y-2.5">
-              <div className="flex items-baseline justify-between">
-                <h3 className="text-xs font-bold uppercase tracking-widest text-stone-400">Your details</h3>
-                <span className="text-[10px] font-semibold text-stone-400">
-                  {pickup || delivery ? 'Required' : 'Optional'}
-                </span>
-              </div>
-              <input
-                value={guestName}
-                onChange={(event) => { setGuestName(event.target.value); setNameError(false) }}
-                maxLength={24}
-                aria-label="Your name"
-                autoComplete="name"
-                placeholder={delivery
-                  ? 'Your name — required for delivery'
-                  : pickup
-                    ? 'Your name — we’ll call it when your order is ready'
-                    : 'Your name (optional — helps the kitchen)'}
-                className={`min-h-[46px] w-full rounded-2xl border bg-white px-4 text-sm shadow-sm outline-none focus:ring-2 focus:ring-amber-200 ${nameError ? 'border-red-400 ring-2 ring-red-200' : 'border-stone-200'}`}
-              />
-              {nameError && (
-                <p className="text-xs font-semibold text-red-600" role="alert">
-                  {delivery ? 'Your name is required for delivery.' : 'Add your name so we can call your order.'}
-                </p>
-              )}
-              {(pickup || delivery) && (
-                <input
-                  value={guestPhone}
-                  onChange={(event) => setGuestPhone(event.target.value)}
-                  maxLength={30}
-                  type="tel"
-                  inputMode="tel"
-                  autoComplete="tel"
-                  aria-label="Phone number"
-                  placeholder="Phone number (optional — for order updates)"
-                  className="min-h-[46px] w-full rounded-2xl border border-stone-200 bg-white px-4 text-sm shadow-sm outline-none focus:ring-2 focus:ring-amber-200"
-                />
-              )}
-              {delivery && (
+                  <button
+                    type="button"
+                    onClick={() => { setCartOpen(false); setCheckoutStep(0); setTab('orders') }}
+                    className="mt-4 min-h-[52px] w-full rounded-2xl bg-stone-900 text-base font-extrabold text-white shadow-sm"
+                  >
+                    Track order
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setCartOpen(false); setCheckoutStep(0); setTab('menu') }}
+                    className="mt-2 min-h-[44px] w-full rounded-2xl text-sm font-bold text-stone-500"
+                  >
+                    Add more dishes
+                  </button>
+                  {!confirmedPaid && (
+                    <button
+                      type="button"
+                      onClick={() => { setCartOpen(false); setCheckoutStep(0); setTab('orders'); setPayOpen(true) }}
+                      className="mt-1 min-h-[40px] text-xs font-bold text-amber-700 underline underline-offset-2"
+                    >
+                      Pay now instead
+                    </button>
+                  )}
+                </div>
+              ) : (
                 <>
-                  <input
-                    value={deliveryAddress}
-                    onChange={(event) => { setDeliveryAddress(event.target.value); setAddressError(false) }}
-                    maxLength={120}
-                    aria-label="Delivery address"
-                    autoComplete="street-address"
-                    placeholder="Delivery address — street, building, apt…"
-                    className={`min-h-[46px] w-full rounded-2xl border bg-white px-4 text-sm shadow-sm outline-none focus:ring-2 focus:ring-amber-200 ${addressError ? 'border-red-400 ring-2 ring-red-200' : 'border-stone-200'}`}
-                  />
-                  {addressError && (
-                    <p className="text-xs font-semibold text-red-600" role="alert">
-                      Please enter a delivery address.
-                    </p>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-amber-700">
+                        {delivery ? 'Delivery checkout' : 'Pickup checkout'}
+                      </p>
+                      <h2 className="mt-0.5 text-xl font-extrabold text-stone-900">
+                        {checkoutStep === 0 ? 'Review your order' : checkoutStep === 1 ? 'Your details' : 'Payment'}
+                      </h2>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-stone-100 px-3 py-1 text-xs font-bold text-stone-600">
+                      {cartCount} {cartCount === 1 ? 'item' : 'items'}
+                    </span>
+                  </div>
+
+                  <ol className="mt-4 flex gap-2" aria-label="Checkout steps">
+                    {['Review', 'Details', 'Payment'].map((label, index) => (
+                      <li key={label} className="flex-1">
+                        <div className={`h-1.5 rounded-full ${index <= checkoutStep ? 'bg-[var(--guest-accent)]' : 'bg-stone-200'}`} />
+                        <div className={`mt-1 text-[10px] font-bold ${index === checkoutStep ? 'text-stone-900' : 'text-stone-400'}`}>
+                          {index + 1}. {label}
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+
+                  {checkoutStep === 0 && (
+                    <>
+                      <ul className="mt-4 space-y-2.5" data-testid="checkout-review">
+                        {cart.map((c) => {
+                          const dish = menuById[c.menuItemId]
+                          return (
+                            <li key={c.key} className="flex items-center gap-2.5 rounded-2xl bg-stone-50 p-3">
+                              <div className="min-w-0 flex-1">
+                                <div className="truncate text-sm font-extrabold text-stone-900">
+                                  {dish ? translateDishName(dish, lang) : c.menuItemId}
+                                </div>
+                                <div className="mt-0.5 truncate text-[11px] text-stone-500">
+                                  {(c.modifiers || []).map((m) => translateModifier(m.value, lang)).join(' · ')}
+                                  {c.notes ? `${(c.modifiers || []).length ? ' · ' : ''}“${c.notes}”` : ''}
+                                </div>
+                              </div>
+                              <div className="inline-flex shrink-0 items-center rounded-full bg-white ring-1 ring-stone-200">
+                                <button
+                                  type="button"
+                                  aria-label={`Decrease ${dish?.name || 'item'}`}
+                                  onClick={() => changeQty(c.key, -1)}
+                                  className="flex h-9 w-9 items-center justify-center rounded-full text-base font-bold text-stone-600"
+                                >
+                                  −
+                                </button>
+                                <span className="tnum w-6 text-center text-xs font-extrabold">{c.qty}</span>
+                                <button
+                                  type="button"
+                                  aria-label={`Increase ${dish?.name || 'item'}`}
+                                  onClick={() => changeQty(c.key, 1)}
+                                  className="flex h-9 w-9 items-center justify-center rounded-full text-base font-bold text-stone-600"
+                                >
+                                  +
+                                </button>
+                              </div>
+                              <span className="tnum w-16 shrink-0 text-right text-sm font-extrabold text-stone-900">
+                                {money((dish?.price || 0) * c.qty)}
+                              </span>
+                            </li>
+                          )
+                        })}
+                      </ul>
+
+                      <div className="mt-4 rounded-2xl bg-stone-50 p-4 text-sm">
+                        <div className="flex justify-between text-stone-600">
+                          <span>Subtotal</span>
+                          <span className="tnum">{money(checkoutCharges.subtotal)}</span>
+                        </div>
+                        {delivery && (
+                          <div className="mt-1 flex justify-between text-stone-600">
+                            <span>Delivery fee</span>
+                            <span className="tnum">{money(deliveryFee)}</span>
+                          </div>
+                        )}
+                        <div className="mt-1 flex justify-between text-stone-600">
+                          <span>Tax</span>
+                          <span className="tnum">{money(checkoutCharges.tax)}</span>
+                        </div>
+                        <div className="mt-1 flex justify-between border-t border-stone-200 pt-1.5 text-base font-extrabold text-stone-900">
+                          <span>Total</span>
+                          <span className="tnum">{money(checkoutCharges.total)}</span>
+                        </div>
+                      </div>
+
+                      {deliveryShortfall > 0 ? (
+                        <p className="mt-2 rounded-2xl bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-900" role="alert">
+                          Add {money(deliveryShortfall)} more to unlock delivery.
+                        </p>
+                      ) : delivery ? (
+                        <p className="mt-2 text-[11px] text-stone-400">Delivery minimum {money(minDeliveryOrder)}.</p>
+                      ) : null}
+
+                      <div className="mt-4 flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setCartOpen(false)}
+                          className="min-h-[52px] shrink-0 rounded-2xl border border-stone-200 bg-white px-4 text-sm font-bold text-stone-600"
+                        >
+                          Add more
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCheckoutStep(1)}
+                          disabled={!cart.length || deliveryShortfall > 0}
+                          className="min-h-[52px] flex-1 rounded-2xl bg-[var(--guest-accent)] text-sm font-extrabold text-[var(--guest-ink)] shadow-sm disabled:opacity-40"
+                        >
+                          Continue
+                        </button>
+                      </div>
+                    </>
+                  )}
+
+                  {checkoutStep === 1 && (
+                    <>
+                      <div className="mt-4 space-y-3">
+                        <label className="block">
+                          <span className="mb-1 block text-xs font-bold uppercase tracking-widest text-stone-400">Name</span>
+                          <input
+                            value={guestName}
+                            onChange={(event) => { setGuestName(event.target.value); setNameError(false) }}
+                            maxLength={24}
+                            aria-label="Your name"
+                            autoComplete="name"
+                            placeholder={delivery ? 'Name for the delivery' : 'Name we will call'}
+                            className={`min-h-[46px] w-full rounded-2xl border bg-white px-4 text-sm shadow-sm outline-none focus:ring-2 focus:ring-amber-200 ${nameError ? 'border-red-400 ring-2 ring-red-200' : 'border-stone-200'}`}
+                          />
+                          {nameError && (
+                            <p className="mt-1 text-xs font-semibold text-red-600" role="alert">
+                              Add your name so we can hand over the order.
+                            </p>
+                          )}
+                        </label>
+                        <label className="block">
+                          <span className="mb-1 block text-xs font-bold uppercase tracking-widest text-stone-400">Phone <span className="font-semibold normal-case tracking-normal text-stone-400">(optional)</span></span>
+                          <input
+                            value={guestPhone}
+                            onChange={(event) => setGuestPhone(event.target.value)}
+                            maxLength={30}
+                            type="tel"
+                            inputMode="tel"
+                            autoComplete="tel"
+                            aria-label="Phone number"
+                            placeholder="For order updates"
+                            className="min-h-[46px] w-full rounded-2xl border border-stone-200 bg-white px-4 text-sm shadow-sm outline-none focus:ring-2 focus:ring-amber-200"
+                          />
+                        </label>
+                        {delivery && (
+                          <label className="block">
+                            <span className="mb-1 block text-xs font-bold uppercase tracking-widest text-stone-400">Delivery address</span>
+                            <input
+                              value={deliveryAddress}
+                              onChange={(event) => { setDeliveryAddress(event.target.value); setAddressError(false) }}
+                              maxLength={120}
+                              aria-label="Delivery address"
+                              autoComplete="street-address"
+                              placeholder="Street, building, apartment…"
+                              className={`min-h-[46px] w-full rounded-2xl border bg-white px-4 text-sm shadow-sm outline-none focus:ring-2 focus:ring-amber-200 ${addressError ? 'border-red-400 ring-2 ring-red-200' : 'border-stone-200'}`}
+                            />
+                            {addressError && (
+                              <p className="mt-1 text-xs font-semibold text-red-600" role="alert">
+                                Please enter a delivery address.
+                              </p>
+                            )}
+                          </label>
+                        )}
+                      </div>
+
+                      <div className="mt-4 rounded-2xl bg-amber-50 p-4 text-sm text-amber-950">
+                        <div className="flex items-center justify-between gap-3">
+                          <strong>{delivery ? 'Delivery' : 'Pickup'}</strong>
+                          <span className="font-extrabold">{etaQuote}</span>
+                        </div>
+                        <p className="mt-1 text-[11px] leading-relaxed text-amber-800">
+                          {delivery
+                            ? 'The rider is dispatched when the kitchen finishes packing.'
+                            : 'We will call your name when your order is ready.'}
+                        </p>
+                      </div>
+
+                      <div className="mt-4 flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setCheckoutStep(0)}
+                          className="min-h-[52px] shrink-0 rounded-2xl border border-stone-200 bg-white px-4 text-sm font-bold text-stone-600"
+                        >
+                          Back
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { if (validateDetails()) setCheckoutStep(2) }}
+                          className="min-h-[52px] flex-1 rounded-2xl bg-[var(--guest-accent)] text-sm font-extrabold text-[var(--guest-ink)] shadow-sm"
+                        >
+                          Continue to payment
+                        </button>
+                      </div>
+                    </>
+                  )}
+
+                  {checkoutStep === 2 && (
+                    <>
+                      <div className="mt-4 space-y-2">
+                        <label className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-3.5 transition-colors ${paymentChoice === 'now' ? 'border-stone-900 bg-stone-900 text-white' : 'border-stone-200 bg-white text-stone-900'}`}>
+                          <input
+                            type="radio"
+                            name="guest-payment"
+                            value="now"
+                            checked={paymentChoice === 'now'}
+                            onChange={() => setPaymentChoice('now')}
+                            className="mt-1 h-4 w-4 accent-amber-500"
+                          />
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-sm font-extrabold">Pay now · Card</span>
+                            <span className={`mt-0.5 block text-[11px] ${paymentChoice === 'now' ? 'text-white/65' : 'text-stone-500'}`}>
+                              Simulated secure payment
+                            </span>
+                          </span>
+                          <span className="tnum shrink-0 text-sm font-extrabold">{money(checkoutCharges.total)}</span>
+                        </label>
+
+                        {pickup && payAtPickup && (
+                          <label className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-3.5 transition-colors ${paymentChoice === 'later' ? 'border-stone-900 bg-stone-900 text-white' : 'border-stone-200 bg-white text-stone-900'}`}>
+                            <input
+                              type="radio"
+                              name="guest-payment"
+                              value="later"
+                              checked={paymentChoice === 'later'}
+                              onChange={() => setPaymentChoice('later')}
+                              className="mt-1 h-4 w-4 accent-amber-500"
+                            />
+                            <span className="min-w-0 flex-1">
+                              <span className="block text-sm font-extrabold">Pay at pickup</span>
+                              <span className={`mt-0.5 block text-[11px] ${paymentChoice === 'later' ? 'text-white/65' : 'text-stone-500'}`}>
+                                Cash or card at the counter
+                              </span>
+                            </span>
+                          </label>
+                        )}
+
+                        {delivery && payAtDoor && (
+                          <label className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-3.5 transition-colors ${paymentChoice === 'later' ? 'border-stone-900 bg-stone-900 text-white' : 'border-stone-200 bg-white text-stone-900'}`}>
+                            <input
+                              type="radio"
+                              name="guest-payment"
+                              value="later"
+                              checked={paymentChoice === 'later'}
+                              onChange={() => setPaymentChoice('later')}
+                              className="mt-1 h-4 w-4 accent-amber-500"
+                            />
+                            <span className="min-w-0 flex-1">
+                              <span className="block text-sm font-extrabold">Pay at the door</span>
+                              <span className={`mt-0.5 block text-[11px] ${paymentChoice === 'later' ? 'text-white/65' : 'text-stone-500'}`}>
+                                Cash or card to the rider
+                              </span>
+                            </span>
+                          </label>
+                        )}
+                      </div>
+
+                      <div className="mt-4 rounded-2xl bg-stone-50 p-4 text-sm">
+                        <div className="flex justify-between text-stone-500">
+                          <span>Subtotal</span>
+                          <span className="tnum">{money(checkoutCharges.subtotal)}</span>
+                        </div>
+                        {delivery && (
+                          <div className="mt-1 flex justify-between text-stone-500">
+                            <span>Delivery fee</span>
+                            <span className="tnum">{money(deliveryFee)}</span>
+                          </div>
+                        )}
+                        <div className="mt-1 flex justify-between text-stone-500">
+                          <span>Tax</span>
+                          <span className="tnum">{money(checkoutCharges.tax)}</span>
+                        </div>
+                        <div className="mt-1 flex justify-between border-t border-stone-200 pt-1.5 text-base font-extrabold text-stone-900">
+                          <span>Total</span>
+                          <span className="tnum">{money(checkoutCharges.total)}</span>
+                        </div>
+                      </div>
+                      <p className="mt-2 text-[11px] leading-relaxed text-stone-400">
+                        Demo checkout — no real card is charged. This order goes straight to the kitchen.
+                      </p>
+
+                      <div className="mt-4 flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setCheckoutStep(1)}
+                          className="min-h-[52px] shrink-0 rounded-2xl border border-stone-200 bg-white px-4 text-sm font-bold text-stone-600"
+                        >
+                          Back
+                        </button>
+                        <button
+                          type="button"
+                          onClick={sendCart}
+                          disabled={!cart.length}
+                          className="tnum min-h-[52px] flex-1 rounded-2xl bg-[var(--guest-accent)] text-sm font-extrabold text-[var(--guest-ink)] shadow-sm disabled:opacity-40"
+                        >
+                          Place order · {money(checkoutCharges.total)}
+                        </button>
+                      </div>
+                    </>
                   )}
                 </>
-              )}
-            </div>
+              )
+            ) : (
+              <>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-amber-700">{heading}</p>
+                    <h2 className="mt-0.5 text-xl font-extrabold text-stone-900">Review your order</h2>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-stone-100 px-3 py-1 text-xs font-bold text-stone-600">
+                    {cartCount} {cartCount === 1 ? 'item' : 'items'}
+                  </span>
+                </div>
 
-            <div className="mt-4 rounded-2xl bg-stone-50 p-4 text-sm">
-              <div className="flex justify-between font-bold text-stone-900">
-                <span>Subtotal</span>
-                <span className="tnum">{money(cartTotal)}</span>
-              </div>
-              <p className="mt-1 text-[11px] leading-relaxed text-stone-400">
-                {delivery
-                  ? 'Delivery fee and tax are confirmed when you place the order.'
-                  : 'Tax is added to the final bill.'}
-              </p>
-            </div>
+                <ul className="mt-4 space-y-2.5">
+                  {cart.map((c) => {
+                    const dish = menuById[c.menuItemId]
+                    return (
+                      <li key={c.key} className="rounded-2xl bg-stone-50 p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-sm font-extrabold text-stone-900">
+                              {dish ? translateDishName(dish, lang) : c.menuItemId}
+                              {lang !== 'en' && dish && <span className="sr-only"> {dish.name}</span>}
+                            </div>
+                            <div className="mt-0.5 text-[11px] leading-snug text-stone-500">
+                              {(c.modifiers || []).map((m) => translateModifier(m.value, lang)).join(' · ')}
+                              {c.notes ? `${(c.modifiers || []).length ? ' · ' : ''}“${c.notes}”` : ''}
+                            </div>
+                          </div>
+                          <span className="tnum shrink-0 text-sm font-extrabold text-stone-900">
+                            {money((dish?.price || 0) * c.qty)}
+                          </span>
+                        </div>
+                        <div className="mt-2.5 flex items-center justify-between">
+                          <div className="inline-flex items-center rounded-full bg-white ring-1 ring-stone-200">
+                            <button
+                              type="button"
+                              aria-label={`Decrease ${dish?.name || 'item'}`}
+                              onClick={() => changeQty(c.key, -1)}
+                              className="flex h-10 w-10 items-center justify-center rounded-full text-lg font-bold text-stone-600 active:bg-stone-100"
+                            >
+                              −
+                            </button>
+                            <span className="tnum w-7 text-center text-sm font-extrabold">{c.qty}</span>
+                            <button
+                              type="button"
+                              aria-label={`Increase ${dish?.name || 'item'}`}
+                              onClick={() => changeQty(c.key, 1)}
+                              className="flex h-10 w-10 items-center justify-center rounded-full text-lg font-bold text-stone-600 active:bg-stone-100"
+                            >
+                              +
+                            </button>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => changeQty(c.key, -c.qty)}
+                            className="min-h-[40px] px-2 text-xs font-bold text-stone-400"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
 
-            <button
-              type="button"
-              onClick={sendCart}
-              disabled={!cart.length}
-              className="tnum mt-4 min-h-[52px] w-full rounded-2xl bg-[var(--guest-accent)] text-base font-extrabold text-[var(--guest-ink)] shadow-sm disabled:opacity-40"
-            >
-              {delivery ? 'Place delivery order' : pickup ? 'Place pickup order' : 'Send to kitchen'} · {money(cartTotal)}
-            </button>
-            <p className="mt-2 text-center text-[11px] leading-relaxed text-stone-400">
-              {delivery
-                ? 'Your order goes straight to the kitchen — a rider is dispatched when it is ready.'
-                : pickup
-                  ? 'We will call your name when your order is ready.'
-                  : 'Fires straight to the kitchen — the same as your server sending it.'}
-            </p>
+                <div className="mt-5 space-y-2.5">
+                  <div className="flex items-baseline justify-between">
+                    <h3 className="text-xs font-bold uppercase tracking-widest text-stone-400">Your details</h3>
+                    <span className="text-[10px] font-semibold text-stone-400">Optional</span>
+                  </div>
+                  <input
+                    value={guestName}
+                    onChange={(event) => { setGuestName(event.target.value); setNameError(false) }}
+                    maxLength={24}
+                    aria-label="Your name"
+                    autoComplete="name"
+                    placeholder="Your name (optional — helps the kitchen)"
+                    className="min-h-[46px] w-full rounded-2xl border border-stone-200 bg-white px-4 text-sm shadow-sm outline-none focus:ring-2 focus:ring-amber-200"
+                  />
+                </div>
+
+                <div className="mt-4 rounded-2xl bg-stone-50 p-4 text-sm">
+                  <div className="flex justify-between font-bold text-stone-900">
+                    <span>Subtotal</span>
+                    <span className="tnum">{money(cartTotal)}</span>
+                  </div>
+                  <p className="mt-1 text-[11px] leading-relaxed text-stone-400">Tax is added to the final bill.</p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={sendCart}
+                  disabled={!cart.length}
+                  className="tnum mt-4 min-h-[52px] w-full rounded-2xl bg-[var(--guest-accent)] text-base font-extrabold text-[var(--guest-ink)] shadow-sm disabled:opacity-40"
+                >
+                  Send to kitchen · {money(cartTotal)}
+                </button>
+                <p className="mt-2 text-center text-[11px] leading-relaxed text-stone-400">
+                  Fires straight to the kitchen — the same as your server sending it.
+                </p>
+              </>
+            )}
           </Sheet>
         )}
 

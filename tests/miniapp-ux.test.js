@@ -242,3 +242,110 @@ test('the Book tab turns a live slot into a real reservation', async () => {
   assert.ok(saved?.id, 'the booking id is kept for later management')
   assert.ok(saved?.token, 'scoped to this guest session')
 })
+
+test('pickup checkout quotes the fee, pays now, and opens tracking', async () => {
+  await fresh('http://localhost:5173/?tg=1&guest=t12')
+
+  const pickup = byText('button', 'Order for pickup')
+  assert.ok(pickup, 'the gate offers pickup')
+  click(pickup)
+  await settle(60)
+
+  const add = $$('button').find((button) => button.getAttribute('aria-label') === 'Add Soup of the Day')
+  assert.ok(add, 'a modifier-free dish can be added in one tap')
+  click(add)
+  await settle(40)
+
+  const review = $$('button').find((button) => /Review/.test(button.textContent))
+  assert.ok(review, 'the cart bar opens checkout')
+  click(review)
+  await settle(40)
+
+  assert.ok(document.querySelector('[data-testid="checkout-review"]'), 'step 1 is the review')
+  const cont = byText('button', 'Continue')
+  assert.ok(cont, 'review continues to details')
+  click(cont)
+  await settle(40)
+
+  type(document.querySelector('input[aria-label="Your name"]'), 'Sokha Chan')
+  await settle(20)
+  const toPayment = byText('button', 'Continue to payment')
+  assert.ok(toPayment, 'details continue to payment')
+  click(toPayment)
+  await settle(40)
+
+  const place = $$('button').find((button) => /Place order/.test(button.textContent))
+  assert.ok(place, 'payment keeps the total on the CTA')
+  assert.match(place.textContent, /\$\d/)
+  click(place)
+  await settle(80)
+
+  const done = document.querySelector('[data-testid="guest-checkout-done"]')
+  assert.ok(done, 'the confirmation replaces the form')
+  assert.match(done.textContent, /Payment received/)
+  assert.match(done.textContent, /Paid by card/)
+  assert.match(done.textContent, /Reference/)
+
+  const saved = JSON.parse(dom.window.localStorage.getItem('restora_guest_order_v1'))
+  assert.ok(saved?.orderId, 'the order id survives a reload')
+  assert.equal(saved?.type, 'takeout')
+
+  click(byText('button', 'Track order'))
+  await settle(60)
+  assert.ok(document.querySelector('[data-testid="guest-orders"]'), 'tracking lands on Orders')
+  assert.match(document.body.textContent, /Pickup order/)
+  assert.match(document.body.textContent, /In kitchen|Ready/)
+})
+
+test('delivery checkout validates the address, quotes the fee, and pays at the door', async () => {
+  await fresh('http://localhost:5173/?tg=1&guest=t12')
+
+  click(byText('button', 'Order for delivery'))
+  await settle(60)
+
+  const add = $$('button').find((button) => button.getAttribute('aria-label') === 'Add Soup of the Day')
+  assert.ok(add, 'delivery can add the same modifier-free dish')
+  click(add)
+  await settle(40)
+
+  click($$('button').find((button) => /Review/.test(button.textContent)))
+  await settle(40)
+  click(byText('button', 'Continue'))
+  await settle(40)
+
+  type(document.querySelector('input[aria-label="Your name"]'), 'Sokha Chan')
+  await settle(20)
+  click(byText('button', 'Continue to payment'))
+  await settle(40)
+  assert.match(document.body.textContent, /Please enter a delivery address/, 'the address is required')
+
+  type(document.querySelector('input[aria-label="Delivery address"]'), '12 Riverside, Unit 3')
+  await settle(20)
+  click(byText('button', 'Continue to payment'))
+  await settle(40)
+
+  const later = document.querySelector('input[name="guest-payment"][value="later"]')
+  assert.ok(later, 'delivery offers pay-at-the-door')
+  click(later)
+  await settle(30)
+  assert.equal(later.checked, true)
+
+  click($$('button').find((button) => /Place order/.test(button.textContent)))
+  await settle(80)
+
+  const done = document.querySelector('[data-testid="guest-checkout-done"]')
+  assert.ok(done, 'delivery has a confirmation step')
+  assert.match(done.textContent, /Order placed/)
+  assert.match(done.textContent, /Pay at the door/)
+  assert.doesNotMatch(done.textContent, /Payment received/)
+
+  click(byText('button', 'Track order'))
+  await settle(60)
+  assert.match(document.body.textContent, /Delivery order/)
+  assert.match(document.body.textContent, /Delivering to/)
+  assert.match(document.body.textContent, /12 Riverside/)
+  assert.match(document.body.textContent, /Delivery fee/)
+  assert.match(document.body.textContent, /\$3\.50/)
+  const pay = $$('button').find((button) => /^Pay \$/.test(button.textContent.trim()))
+  assert.ok(pay, 'an unpaid delivery can settle from Orders')
+})

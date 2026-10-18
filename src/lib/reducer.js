@@ -1393,6 +1393,9 @@ function shopReducerBase(state, action) {
         eta = null,
         orderId = null,
         guestToken = null,
+        payNow = false,
+        paymentMethod = 'card',
+        tip = 0,
       } = action
       const offTable = OFF_TABLE_TYPES.includes(orderType)
 
@@ -1460,14 +1463,46 @@ function shopReducerBase(state, action) {
           items: newLines,
           status: orderStatusFromItems(newLines, 'open'),
         }
-        const orders = capOrders([...state.orders, filledOrder])
+        // Pay-now settles in the same action as the send, so the server can
+        // never see PAY_ORDER arrive before the order it settles.
+        let settledOrder = filledOrder
+        if (payNow) {
+          const menuById = Object.fromEntries(state.menu.map((m) => [m.id, m]))
+          const tipAmount = roundMoney(Number(tip) || 0)
+          const method = ['card', 'cash', 'qr'].includes(paymentMethod) ? paymentMethod : 'card'
+          const charges = orderCharges(filledOrder, menuById, state.settings || {}, { tip: tipAmount })
+          settledOrder = {
+            ...filledOrder,
+            status: 'paid',
+            paidAt: nowIso,
+            payMethod: method,
+            tip: tipAmount,
+            total: charges.total,
+            charges: {
+              subtotal: charges.subtotal,
+              discount: charges.discount,
+              service: charges.service,
+              tax: charges.tax,
+              delivery: charges.delivery,
+              total: charges.total,
+              tip: tipAmount,
+              grandTotal: charges.grandTotal,
+            },
+            payments: [{
+              method,
+              amount: roundMoney(charges.total + tipAmount),
+              at: nowIso,
+            }],
+          }
+        }
+        const orders = capOrders([...state.orders, settledOrder])
         const sale = applyStockLines(state, saleMovements(state, totalDec, {
-          ref: filledOrder.id,
+          ref: settledOrder.id,
           note: `${newLines.reduce((sum, l) => sum + l.qty, 0)} line(s) from guest ${orderType}`,
         }), { at: nowIso, by: 'guest' })
         const inventory = sale ? sale.inventory : state.inventory
         const pendingUndo = {
-          orderId: filledOrder.id, sentAt: nowIso,
+          orderId: settledOrder.id, sentAt: nowIso,
           expiresAt: Date.now() + TARGETS.undoSendSeconds * 1000,
           itemIds: newLines.map((l) => l.id), restore: totalDec,
         }

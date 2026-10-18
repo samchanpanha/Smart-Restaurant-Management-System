@@ -7,6 +7,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { buildSeed, reducer } from '../src/lib/reducer.js'
 import { orderTotals } from '../src/lib/models.js'
+import { sanitizeSettings } from '../src/lib/settings.js'
 
 function fresh() {
   return buildSeed()
@@ -78,4 +79,49 @@ test('GUEST_SEND refuses an order with nothing orderable', () => {
   }))
 
   assert.equal(next, shop, 'nothing fired means the state must not change')
+})
+
+test('pay-now settles the order in the same action as the send', () => {
+  const next = reducer(fresh(), deliveryOrder({ payNow: true, paymentMethod: 'card' }))
+  const order = next.orders.find((o) => o.id === 'o_guest_client_1')
+  const menuById = Object.fromEntries(next.menu.map((m) => [m.id, m]))
+  const totals = orderTotals(order, menuById, next.settings.taxPct)
+
+  assert.equal(order.status, 'paid')
+  assert.ok(order.paidAt, 'the settlement timestamp is stamped')
+  assert.equal(order.payMethod, 'card')
+  assert.equal(order.total, totals.total, 'the stored check value matches the shared charge sheet')
+  assert.equal(order.payments.length, 1)
+  assert.equal(order.payments[0].method, 'card')
+  assert.equal(order.payments[0].amount, totals.total)
+})
+
+test('pay-at-door leaves the order open for the rider to settle', () => {
+  const next = reducer(fresh(), deliveryOrder({ payNow: false }))
+  const order = next.orders.find((o) => o.id === 'o_guest_client_1')
+
+  assert.notEqual(order.status, 'paid')
+  assert.equal(order.paidAt, null)
+  assert.equal(order.payments, undefined)
+})
+
+test('pickup and delivery quotes sanitize into safe service settings', () => {
+  const settings = sanitizeSettings({
+    pos: {
+      deliveryFee: -4,
+      minDeliveryOrder: 12.345,
+      pickupEtaMinutes: 999,
+      deliveryEtaMinutes: 0,
+      payAtDoor: false,
+      deliveryEnabled: false,
+    },
+  })
+
+  assert.equal(settings.pos.deliveryFee, 0)
+  assert.equal(settings.pos.minDeliveryOrder, 12.35)
+  assert.equal(settings.pos.pickupEtaMinutes, 180)
+  assert.equal(settings.pos.deliveryEtaMinutes, 5)
+  assert.equal(settings.pos.payAtDoor, false)
+  assert.equal(settings.pos.deliveryEnabled, false)
+  assert.equal(settings.pos.payAtPickup, true, 'unset booleans keep the guest-friendly default')
 })

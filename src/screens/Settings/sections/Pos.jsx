@@ -42,6 +42,59 @@ function PosSection({ draft, patch }) {
         </div>
       </Card>
 
+      <Card title="Pickup & delivery" sub="Guest checkout quotes, delivery fees, and the ways an off-table order can settle.">
+        <div className="grid gap-4 md:grid-cols-4">
+          <Field label="Delivery fee" hint="Base currency, added to delivery orders.">
+            <input
+              type="number"
+              min="0"
+              max="200"
+              step="0.5"
+              value={pos.deliveryFee ?? 3.5}
+              onChange={(e) => setPos('deliveryFee', Math.max(0, Number(e.target.value)))}
+              className={`${inputCls} tnum`}
+            />
+          </Field>
+          <Field label="Minimum delivery order" hint="0 means no minimum.">
+            <input
+              type="number"
+              min="0"
+              max="1000"
+              step="0.5"
+              value={pos.minDeliveryOrder ?? 0}
+              onChange={(e) => setPos('minDeliveryOrder', Math.max(0, Number(e.target.value)))}
+              className={`${inputCls} tnum`}
+            />
+          </Field>
+          <Field label="Pickup ETA (mins)" hint="Quoted after the guest orders.">
+            <input
+              type="number"
+              min="5"
+              max="180"
+              value={pos.pickupEtaMinutes ?? 20}
+              onChange={(e) => setPos('pickupEtaMinutes', Math.max(5, Number(e.target.value)))}
+              className={`${inputCls} tnum`}
+            />
+          </Field>
+          <Field label="Delivery ETA (mins)">
+            <input
+              type="number"
+              min="5"
+              max="180"
+              value={pos.deliveryEtaMinutes ?? 35}
+              onChange={(e) => setPos('deliveryEtaMinutes', Math.max(5, Number(e.target.value)))}
+              className={`${inputCls} tnum`}
+            />
+          </Field>
+        </div>
+        <div className="mt-4 grid gap-2 md:grid-cols-2">
+          <Toggle label="Pickup orders" hint="Guests can order ahead and collect at the counter." checked={pos.pickupEnabled !== false} onChange={(value) => setPos('pickupEnabled', value)} />
+          <Toggle label="Delivery orders" hint="Guests can enter an address and request a rider." checked={pos.deliveryEnabled !== false} onChange={(value) => setPos('deliveryEnabled', value)} />
+          <Toggle label="Pay at pickup" hint="Guest settles when they collect the order." checked={pos.payAtPickup !== false} onChange={(value) => setPos('payAtPickup', value)} />
+          <Toggle label="Pay at the door" hint="Guest settles with the rider on delivery." checked={pos.payAtDoor !== false} onChange={(value) => setPos('payAtDoor', value)} />
+        </div>
+      </Card>
+
       <Card title="Reservations & Table Transfers" sub="Self-service rescheduling cutoff windows, modification limits, and table change policies.">
         <div className="grid gap-4 md:grid-cols-3">
           <Field label="Reschedule cutoff (mins)" hint="Minutes before booking when self-service locks.">
