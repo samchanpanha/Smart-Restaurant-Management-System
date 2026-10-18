@@ -9,6 +9,7 @@ import { useRestora } from '../../lib/store'
 import { SeatDialog } from './sections/SeatDialog.jsx'
 import { TableCard } from './sections/TableCard.jsx'
 import { TableDetail } from './sections/TableDetail.jsx'
+import { TableQuickSheet } from './sections/TableQuickSheet.jsx'
 import { ReservationsPanel } from './sections/ReservationsPanel.jsx'
 import { WaitlistPanel } from './sections/WaitlistPanel.jsx'
 import { TableEditorModal } from './sections/TableEditorModal.jsx'
@@ -27,6 +28,7 @@ function FloorScreen() {
   const { lang, dict } = useI18n()
   const f = dict.floor || {}
   const [detailTableId, setDetailTableId] = useState(tabCtx.floorTable || null)
+  const [quickTableId, setQuickTableId] = useState(null) // tap-a-table action sheet
   const [seatCtx, setSeatCtx] = useState(null) // { tableId, party, name, reservationId, waitlistId }
   const [view, setView] = useState('map')
   const [managing, setManaging] = useState(false)
@@ -140,19 +142,22 @@ function FloorScreen() {
 
   const activeDetailId = detailTableId || selectedTableId
   const detailTable = activeDetailId ? state.tables.find((t) => t.id === activeDetailId) : null
+  const quickTable = quickTableId ? state.tables.find((t) => t.id === quickTableId) : null
 
   function openTable(table) {
     if (managing) {
       setEditor({ table })
       return
     }
-    if (table.status === 'free') {
-      // Fast path: tap a free table to seat immediately
-      setSeatCtx({ tableId: table.id, party: Math.min(table.seats, 4), name: '' })
-    } else {
-      setDetailTableId(table.id)
-      setTabCtx({ floorTable: table.id })
-    }
+    // One sheet for every status: the tile shows the facts, the sheet shows the
+    // actions. A free table used to seat itself with a guessed party size.
+    setQuickTableId(table.id)
+  }
+
+  function openDetails(tableId) {
+    setQuickTableId(null)
+    setDetailTableId(tableId)
+    setTabCtx({ floorTable: tableId })
   }
 
   return (
@@ -420,6 +425,15 @@ function FloorScreen() {
         </aside>
       </div>
 
+      {quickTable && (
+        <TableQuickSheet
+          table={quickTable}
+          onClose={() => setQuickTableId(null)}
+          onDetails={openDetails}
+          onFlash={flash}
+          onError={flash}
+        />
+      )}
       {detailTable && (
         <TableDetail
           table={detailTable}
