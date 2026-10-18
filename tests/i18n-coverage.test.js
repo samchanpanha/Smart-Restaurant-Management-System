@@ -124,7 +124,7 @@ const CJK_RE = /[\u3400-\u4dbf\u4e00-\u9fff]/
 const LOANWORDS = new Set([
   // Acronyms and product nouns the team writes in Latin on purpose.
   'AI', 'API', 'SLA', 'SKU', 'SKUs', 'KDS', 'POS', 'QR', 'KPI', 'COD', 'VAT', 'URL', 'ID',
-  'Telegram', 'Webhook', 'Bot', 'Chat', 'Token', 'Logo', 'Waste', 'Mini', 'App',
+  'Telegram', 'BotFather', 'Webhook', 'Bot', 'Chat', 'Token', 'Logo', 'Waste', 'Mini', 'App',
   'Ops', 'Copilot', 'SQLite', 'SQL', 'CSV', 'PDF', 'Excel', 'WhatsApp', 'Viber',
   'PNG', 'SVG', 'JPG', 'KB', 'MB', 'GB', 'Par', 'Restora',
   // Language endonyms ride in every locale by design.
