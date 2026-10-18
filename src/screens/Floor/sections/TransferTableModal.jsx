@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Field, Modal, inputCls } from '../../../components/ui'
+import { Button, Field, Input, Modal, Select } from '../../../components/ui'
+import { Icon } from '../../../components/Icon'
 import { translateTableName, useI18n } from '../../../lib/i18n'
 import { useRestora } from '../../../lib/store'
 
@@ -36,40 +37,36 @@ function TransferTableModal({ table, onClose, onTransferred }) {
     >
       <div className="mt-3 space-y-4">
         {availableTables.length === 0 ? (
-          <div className="rounded-xl bg-amber-500/10 p-4 text-sm text-amber-200">
+          <div className="flex items-center gap-2 rounded-[var(--radius-xl)] bg-[var(--warning-soft)] p-4 text-[var(--fs-body)] text-[var(--warning)]">
+            <Icon name="warning" size={16} />
             No tables are currently free or available to transfer to.
           </div>
         ) : (
           <>
             <Field label="Target Table">
-              <select
+              <Select
                 value={targetId}
                 onChange={(e) => setTargetId(e.target.value)}
-                className={inputCls}
+                aria-label="Target table"
               >
                 {availableTables.map((t) => (
                   <option key={t.id} value={t.id}>
                     {translateTableName(t.name, lang)} · {t.seats} seats · {t.zone}
                   </option>
                 ))}
-              </select>
+              </Select>
             </Field>
             <Field label="Reason (optional)">
-              <input
+              <Input
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 placeholder="e.g. Guest requested quieter booth"
-                className={inputCls}
                 maxLength={60}
               />
             </Field>
-            <button
-              type="button"
-              onClick={handleTransfer}
-              className="min-h-[44px] w-full rounded-lg bg-amber-500 py-2.5 text-sm font-bold text-black hover:bg-amber-400"
-            >
+            <Button block size="lg" onClick={handleTransfer}>
               Confirm Transfer
-            </button>
+            </Button>
           </>
         )}
       </div>

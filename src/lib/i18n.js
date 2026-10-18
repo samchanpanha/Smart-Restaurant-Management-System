@@ -1657,9 +1657,85 @@ function enrichLangDict(langCode, raw) {
     moveTable: isKm ? 'ប្តូរតុ' : isZh ? '换桌' : 'Move Table',
     water: isKm ? 'ទឹកផឹក' : isZh ? '加水' : 'Water',
     napkins: isKm ? 'ក្រដាសជូតមាត់' : isZh ? '纸巾' : 'Napkins',
-    callWaiter: isKm ? 'ហៅបុគ្គលិក' : isZh ? '呼叫服务员' : 'Call Waiter',
+    callWaiter: isKm ? 'ហៅបុគ្គលិក' : isZh ? '呼叫服务员' : 'Call server',
+    serverNotified: isKm ? 'បានជូនដំណឹងបុគ្គលិក' : isZh ? '已通知服务员' : 'Server notified',
+    seatedHint: isKm ? 'បានអង្គុយ · ចុចមុខម្ហូបដើម្បីកម្មង់' : isZh ? '已入座 · 点选菜品下单' : 'Seated · tap the menu to order',
+    orderForPickup: isKm ? 'កម្មង់មកយក' : isZh ? '自取下单' : 'Order for pickup',
+    orderForDelivery: isKm ? 'កម្មង់ដឹកជញ្ជូន' : isZh ? '配送下单' : 'Order for delivery',
+    orderPaused: isKm ? 'ការកម្មង់មកយក និងដឹកជញ្ជូនផ្អាកបណ្តោះអាសន្ន។ សូមសួរបុគ្គលិក។' : isZh ? '自取与配送暂时暂停。请咨询接待员。' : 'Pickup and delivery are paused right now. Please ask the host.',
+    change: isKm ? 'ប្តូរ' : isZh ? '更改' : 'Change',
     bill: isKm ? 'គិតលុយ' : isZh ? '结账' : 'Bill',
     check: isKm ? 'គិតលុយ' : isZh ? '结账' : 'Check',
+    // Journey copy. Static labels also live in the phrase table; the
+    // functions are the interpolated lines a flat phrase key cannot hold.
+    stepOne: isKm ? 'ជំហានទី 1 · សូមស្វាគមន៍' : isZh ? '第 1 步 · 欢迎' : 'Step 1 · Welcome',
+    whereEating: isKm ? 'ញ៉ាំនៅឯណា?' : isZh ? '您在哪里用餐？' : 'Where are you eating?',
+    stepTwo: isKm ? 'ជំហានទី 2 · ជ្រើសរើសតុ' : isZh ? '第 2 步 · 选择餐桌' : 'Step 2 · Pick a table',
+    stepThree: isKm ? 'ជំហានទី 3 · ចុចមុខម្ហូបដើម្បីកម្មង់' : isZh ? '第 3 步 · 点选菜品下单' : 'Step 3 · Tap the menu to order',
+    sitNow: isKm ? 'អង្គុយឥឡូវនេះ' : isZh ? '立即入座' : 'Sit now',
+    dineIn: isKm ? 'ញ៉ាំនៅហាង' : isZh ? '堂食' : 'Dine-in',
+    pickup: isKm ? 'មកយកខ្លួនឯង' : isZh ? '自取' : 'Pickup',
+    delivery: isKm ? 'ដឹកជញ្ជូន' : isZh ? '配送' : 'Delivery',
+    haveBooking: isKm ? 'មានការកក់? កែពេលវេលា' : isZh ? '已有预订？改期' : 'Have a booking? Reschedule',
+    noTablesYet: isKm ? 'មិនទាន់មានតុនៅឡើយទេ — អាចកម្មង់មកយក ឬដឹកជញ្ជូន' : isZh ? '暂无餐桌 — 可选择自取或配送' : 'No tables yet — order pickup or delivery',
+    allBusy: isKm ? 'តុទាំងអស់មានគេហើយ — អាចកម្មង់មកយក ឬដឹកជញ្ជូន' : isZh ? '所有餐桌都已占用 — 可选择自取或配送' : 'All tables are taken right now — order pickup or delivery',
+    tablesFree: (free, total) => (isKm
+      ? `${free} ក្នុងចំណោម ${total} តុទំនេរ — ចុចលើតុមួយដើម្បីអង្គុយ`
+      : isZh
+        ? `${total} 张餐桌中有 ${free} 张空闲 — 点击即可入座`
+        : `${free} of ${total} tables free — tap one to sit down`),
+    waitMin: (min) => (isKm ? `រង់ចាំប្រហែល ${min} នាទី` : isZh ? `约需等待 ${min} 分钟` : `~${min} min wait`),
+    seats: (n) => (isKm ? `${n} កៅអី` : isZh ? `${n} 座` : `${n} seats`),
+    guests: (n) => (isKm ? `ភ្ញៀវ ${n} នាក់` : isZh ? `${n} 位客人` : `${n} guests`),
+    activeOrders: (n) => (isKm
+      ? `ការកម្មង់សកម្ម ${n} នៅតុរបស់អ្នក`
+      : isZh
+        ? `您有 ${n} 个进行中的订单`
+        : `${n} active order${n === 1 ? '' : 's'} at your table`),
+    sitAt: (name) => (isKm ? `អង្គុយនៅ ${name}` : isZh ? `入座 ${name}` : `Sit at ${name}`),
+    releaseUnpaid: (n, name) => (isKm
+      ? `អ្នកមានវិក្កយបត្រ ${n} ដែលមិនទាន់បង់នៅ ${name}។ យើងនឹងជូនដំណឹងដល់បុគ្គលិកដើម្បីបញ្ចប់ការទូទាត់ និងបញ្ចេញតុ។`
+      : isZh
+        ? `您在 ${name} 还有 ${n} 张未结账单。我们会通知服务员处理付款并释放餐桌。`
+        : `You have ${n} open ticket${n === 1 ? '' : 's'} on ${name}. We will notify staff to finalize your payment and release the table.`),
+    releaseFree: (name) => (isKm
+      ? `ញ៉ាំរួចហើយ ឬមិនទាន់កម្មង់? ការបញ្ចេញ ${name} នឹងធ្វើឲ្យតុទំនេរសម្រាប់ភ្ញៀវផ្សេង។`
+      : isZh
+        ? `用餐结束或还未下单？释放 ${name} 可立即让其他客人使用。`
+        : `Finished dining or haven't ordered yet? Releasing ${name} immediately frees it for other guests.`),
+    cutoffLocked: (min) => (isKm
+      ? `ការកែពេលវេលាត្រូវបានចាក់សោក្នុងរយៈពេល ${min} នាទីមុនការកក់របស់អ្នក។ សូមទាក់ទងក្រុមការងារផ្ទាល់។`
+      : isZh
+        ? `距离预订时间 ${min} 分钟内无法改期。请直接联系前台。`
+        : `Rescheduling is locked within ${min} minutes of your reservation. Please contact our floor team directly.`),
+    limitReached: (max) => (isKm
+      ? `ឈានដល់ការកែដោយខ្លួនឯងអតិបរមា (${max})។ សូមនិយាយជាមួយបុគ្គលិកទទួលភ្ញៀវ។`
+      : isZh
+        ? `已达自助修改上限（${max} 次）。请到场后联系迎宾员。`
+        : `Maximum self-service modifications reached (${max}). Please speak with our host upon arrival.`),
+    noTablesFor: (n, time) => (isKm
+      ? `គ្មានតុសម្រាប់ភ្ញៀវ ${n} នាក់ នៅម៉ោង ${time} ទេ។`
+      : isZh
+        ? `${time} 没有可供 ${n} 位客人使用的餐桌。`
+        : `No tables matching ${n} guests available at ${time}.`),
+    serviceRequested: (label) => (isKm
+      ? `${label} · បានជូនដំណឹងដល់បុគ្គលិក`
+      : isZh
+        ? `${label} · 已通知服务员`
+        : `${label} · Staff notified`),
+    released: isKm ? 'បានបញ្ចេញតុ — អរគុណ!' : isZh ? '餐桌已释放 — 谢谢！' : 'Table released — thank you!',
+    billOnTheWay: isKm ? 'បានស្នើវិក្កយបត្រ — បុគ្គលិកកំពុងមក' : isZh ? '已请求结账 — 服务员马上到' : 'Bill requested — staff are on the way.',
+    billRequestedShort: isKm ? 'បានស្នើវិក្កយបត្រ' : isZh ? '已请求结账' : 'Bill requested',
+    billOnTheWayShort: isKm ? 'បានជូនដំណឹង · កំពុងយកវិក្កយបត្រ' : isZh ? '已通知 · 正在送来账单' : 'Server notified · Bringing your check',
+    moveRequested: (name) => (isKm
+      ? `បានស្នើប្តូរទៅ ${name} · រង់ចាំការអនុម័ត`
+      : isZh
+        ? `已申请换至 ${name} · 等待确认`
+        : `Move requested to ${name} · Awaiting staff approval`),
+    rescheduled: isKm ? 'បានកែពេលកក់ដោយជោគជ័យ!' : isZh ? '预订已成功改期！' : 'Reservation rescheduled successfully!',
+    changeTable: isKm ? 'ប្តូរតុ' : isZh ? '更换餐桌' : 'Change table',
+    quickServices: isKm ? 'សេវាកម្មរហ័សនៅតុ' : isZh ? '快捷餐桌服务' : 'Quick table services',
+    orderType: isKm ? 'ប្រភេទការកម្មង់' : isZh ? '订单类型' : 'Order type',
   }
   raw.tickets = {
     ...raw.tickets,

@@ -316,11 +316,20 @@ like any terminal action, and broadcasts over SSE. Nothing is a shadow copy.
    paste the token into **Settings → Telegram bot & mini app** (stored per
    restaurant, never shown again; the saved token wins over the env var and
    applies to the next message with no restart).
-2. Point Telegram at this server:
+2. Save the **Base URL** in the same place when the environment does not
+   already describe the deployment (see below).
+3. Open **Telegram & Mini App** in the sidebar. The setup checklist tracks the
+   whole wiring live — token · webhook · say `/start` — and each step turns
+   green as it is satisfied. **Register webhook** calls `setWebhook` with the
+   saved token and Base URL (and the `secret_token` when
+   `TELEGRAM_WEBHOOK_SECRET` is set); **Send test message** pings every chat
+   the bot currently notifies. The same card reads `getWebhookInfo` back, so a
+   wrong URL, a pending update, or Telegram's last error is visible on screen
+   instead of in a curl response. The equivalent call, for a script:
    ```bash
    curl "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook?url=$RESTORA_PUBLIC_URL/api/telegram/webhook&secret_token=$TELEGRAM_WEBHOOK_SECRET"
    ```
-3. Map chats to roles with `TELEGRAM_CHAT_ROLES=12345:manager,67890:staff`.
+4. Map chats to roles with `TELEGRAM_CHAT_ROLES=12345:manager,67890:staff`.
    Anything unmapped gets staff access: look-ups only.
 
 **Base URL.** `/qr <table>` and the mini-app links are built from one address,
@@ -356,6 +365,48 @@ the same QR ordering surface with the platform chrome — header colour from
 lands. Open it from a bot reply (`/qr 12`), a menu button, or the link/QR on the
 screen; outside Telegram it degrades to the plain web menu.
 
+The guest path is one journey, not a pile of dialogs. The same shell serves the
+QR page and the mini app: **Menu · Orders · Book**, a persistent cart bar, and
+one bottom sheet for checkout.
+
+- **Step 1 — where are you eating?** An unseated guest gets a warm welcome
+  card: *Sit now*, *Pickup*, *Delivery*, the live free-table count, an honest
+  wait quote when the floor is tight, and a *Have a booking? Reschedule* link.
+  A full or empty floor simply drops *Sit now* and keeps the two off-table
+  paths. An owner can pause either path in **Settings → Service & POS**; the
+  welcome card honours the switch.
+- **Step 2 — pick a table.** *Sit now* and the header switcher open the same
+  picker (`sections/TablePicker.jsx`): party size first, then zone chips and a
+  two-column grid. A free table is claimed in one tap — `MINIAPP_CLAIM_TABLE`
+  is the seat, no confirmation sheet — and the claim carries the chosen party
+  size plus the name Telegram already knows. A table already in service is
+  shown as *Join* and just becomes the active menu.
+- **Step 3 — order.** Search, photo cards, flat category sections, and quick
+  add feed the cart. Checkout is a three-step sheet: **Review** (live subtotal,
+  delivery fee, minimum-order gate, tax), **Details** (name, phone, delivery
+  address), and **Payment**. Pickup and delivery quote their fee, minimum, and
+  ETA from **Settings → Service & POS**. *Pay now* is a simulated card
+  settlement; *pay at pickup* and *pay at the door* stay open in Orders.
+- **Step 4 — track it.** A settled ticket no longer disappears. **Orders**
+  carries the status stepper, delivery address or counter note, ETA, item
+  lines, the bill, an unpaid **Pay** action, *Add more*, and *Start another
+  order*. Seated guests get the same bill plus the server-payment request.
+- **Step 5 — book.** **Book** shows live 30-minute slots computed from the
+  enabled service windows (`findAvailableTablesForSlot`) with a party picker
+  and date strip. The confirmation keeps a guest-token-scoped reference;
+  reschedule and cancel are guarded by the restaurant's cutoff and
+  modification limits, and a full day falls back to the shared waitlist.
+
+The seated bar still names the table and party, reports active orders or
+"check on the way", and carries 1-tap chips: Move Table, Water, Napkins, Call
+Waiter, Bill, plus Check & Leave / Release. Move, release, and reschedule use
+the kit bottom sheet; every action goes through the shared reducer, so the
+floor, KDS, and other terminals see it live.
+
+Copy is translated (km/en/zh) with phrase-table entries for the static lines
+and `dict.miniapp` functions for the interpolated ones (table counts, waits,
+guests, service confirmations).
+
 Three things keep the mini app fast on a phone, because a guest menu that takes
 seconds to appear is a lost table:
 
@@ -378,7 +429,11 @@ the device's guest session token with the table picker, so a guest who sits
 themselves down in Telegram orders onto the same ticket a server would print.
 
 Bot API surface: `POST /api/telegram/webhook` (always answers 200 so Telegram
-does not retry a command that already ran), `POST /api/telegram/simulate`
+does not retry a command that already ran), `POST /api/telegram/webhook/register`
+(owner/super-admin: registers this deployment's URL with the saved token),
+`GET /api/telegram/webhook/info` (owner/super-admin: the live `getWebhookInfo`,
+including the expected URL and whether it matches), `POST /api/telegram/test`
+(owner/super-admin: sends a real message to the notifier chats), `POST /api/telegram/simulate`
 (`dryRun` by default), `POST /api/telegram/digest` (`dryRun` previews),
 `GET /api/telegram/{status,commands,stats}`.
 
@@ -402,10 +457,21 @@ Each table has a QR tent card (Floor → table → 📱 Table QR code). Guests s
 and get a light consumer app at `/?guest=<tableId>&owner=<slug>` — no login, no
 sidebar:
 
-- Menu (86'd dishes vanish instantly) with required modifiers enforced
-- Cart → **Send to kitchen**: one atomic `GUEST_SEND` lands on the table's
-  shared ticket, tagged QR, and fires the KDS + decrements stock
-- Live status per line (🔥 In kitchen → ✓ Ready) over the same SSE sync
+- Menu (86'd dishes vanish instantly) with search, photos, quick add, and
+  required modifiers enforced
+- Pickup and delivery without a table: the welcome card starts the same menu,
+  and checkout quotes the fee, minimum, ETA, and payment options from
+  **Settings → Service & POS**
+- Cart → **Review → Details → Payment**: one atomic `GUEST_SEND` lands on the
+  table's shared ticket (or creates the off-table ticket), tagged QR, and fires
+  the KDS + decrements stock. A pay-now choice settles in the same action
+  (`payNow`, `paymentMethod`, `tip`) so a payment can never arrive before the
+  order it pays.
+- **Orders** keeps the ticket after settlement: live status per line, delivery
+  address or pickup quote, the bill, an unpaid Pay action, Add more, and Start
+  another order
+- **Book** books a live slot (or joins the waitlist when full) and the
+  confirmation can reschedule or cancel within the restaurant's policy
 - 🙋 Call server + bill request raise alerts on staff screens (Dashboard rail,
   Tickets banner with "On my way" ack)
 - Pay the whole check with tip, or ask the server to take payment
@@ -624,7 +690,7 @@ Express + SQLite (`better-sqlite3`) via action log + SSE when a server is presen
 | Step | Module | Status | What it proves |
 |------|--------|--------|----------------|
 | 1 | Object model + status machines | ✅ Done | Tables, tickets, items, recipes, inventory, alerts; strict machines; seed data; role-aware shell |
-| 2 | Floor seat/dirty | ✅ Done | Live map by zone, tap-to-seat, over-cap confirm, reservations, waitlist + honest wait quotes |
+| 2 | Floor seat/dirty | ✅ Done | Live plan by zone with tile telemetry (party + elapsed, long-turn alert) and filters that dim instead of hiding; one tap opens a status-aware action sheet — no silent seating, over-cap needs an explicit confirm — plus a tabbed host desk (reservations · waitlist) with honest wait quotes and a fit-aware table picker |
 | 3 | Tickets + delivery fulfillment | ✅ Done | Composer + required mods, 86 w/ substitute, 15s undo, split/pay/void; delivery queue, kitchen-ready handoff, delivered timestamps, type filter, v5 → v6 migration |
 | 4 | KDS fire/bump/86 | ✅ Done | Station columns + expo, live SLA timers, bump-all, 60s recall, shared 86 board |
 | 5 | Theoretical inventory on fire | ✅ Done | Stock exceptions, receive w/ plate-cost impact, count sheet w/ variance reasons, waste log; items can opt out of counting (`counted: false` skips sheets, alerts, and stock-flow reports) |

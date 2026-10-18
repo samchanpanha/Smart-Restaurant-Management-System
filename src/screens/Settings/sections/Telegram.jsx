@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Icon } from '../../../components/Icon'
-import { Card, Field, inputCls } from '../primitives'
+import StatusPill from '../../../components/StatusPill'
+import { Button, Card, Field, Input, SectionHeader } from '../../../components/ui'
 import { tgGetConfig, tgSaveConfig } from '../../../lib/telegram-client'
 
 // Telegram bot & mini app — two fields, saved from here. Both are stored
@@ -21,6 +22,18 @@ const URL_SOURCE_LABEL = {
   tenant: 'Saved here',
   environment: 'This deployment',
   none: 'Not set',
+}
+
+/** A numbered caption for a field — "1 · Bot token" reads as a step. */
+function StepLabel({ step, children }) {
+  return (
+    <span className="flex items-center gap-2">
+      <span aria-hidden="true" className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--accent-soft)] text-[10px] font-bold text-[var(--accent)]">
+        {step}
+      </span>
+      <span>{children}</span>
+    </span>
+  )
 }
 
 function TelegramSection() {
@@ -89,43 +102,44 @@ function TelegramSection() {
 
   return (
     <div className="space-y-4">
-      <Card
-        title="Telegram bot & mini app"
-        sub="Paste the bot token BotFather sent you and the public address of this deployment: chat commands for the manager, guest QR / mini app ordering for the table."
-        actions={(
-          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${configured ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`} data-testid="telegram-config-status">
-            <span className={`h-1.5 w-1.5 rounded-full ${configured ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-            {configured ? 'On' : 'Off'}
-          </span>
-        )}
-      >
+      <Card as="section">
+        <SectionHeader
+          icon={<Icon name="message" size={16} className="text-[var(--accent)]" />}
+          title="Step 1 · Connect your bot"
+          sub="Paste the bot token BotFather sent you and the public address of this deployment. Owner only — the server enforces it."
+          actions={(
+            <span data-testid="telegram-config-status">
+              <StatusPill tone={configured ? 'ok' : 'warn'} size="sm">{configured ? 'On' : 'Off'}</StatusPill>
+            </span>
+          )}
+        />
+
         {loading ? (
-          <p className="text-sm text-zinc-500">Loading configuration…</p>
+          <p className="text-sm text-[var(--text-muted)]">Loading configuration…</p>
         ) : (
           <>
             <div className="grid gap-4 md:grid-cols-2">
               <Field
-                label="Bot token"
+                label={<StepLabel step={1}>Bot token</StepLabel>}
                 hint={hasToken
                   ? `A token is already set (${TOKEN_SOURCE_LABEL[tokenSource] || tokenSource}). Type a new one to replace it.`
                   : 'From @BotFather. Stored per restaurant, never shown again after saving.'}
               >
-                <input
+                <Input
                   type="password"
                   value={token}
                   onChange={(event) => setToken(event.target.value)}
                   autoComplete="off"
                   maxLength={120}
-                  className={inputCls}
                   placeholder={hasToken ? '•••••••• (unchanged)' : '123456789:AA…'}
                   data-testid="telegram-config-token"
                 />
               </Field>
               <Field
-                label="Base URL"
-                hint="Where guest QR and mini-app links point. Leave blank to use this deployment's own address."
+                label={<StepLabel step={2}>Base URL</StepLabel>}
+                hint="Where guest QR and mini-app links point. Leave blank to use this deployment’s own address."
               >
-                <input
+                <Input
                   type="url"
                   value={publicUrl}
                   onChange={(event) => setPublicUrl(event.target.value)}
@@ -133,25 +147,27 @@ function TelegramSection() {
                   spellCheck={false}
                   inputMode="url"
                   maxLength={300}
-                  className={inputCls}
                   placeholder={publicUrlEffective || 'https://your-restaurant.example.com'}
                   data-testid="telegram-config-url"
                 />
               </Field>
             </div>
 
-            <p className="mt-3 flex items-center gap-1.5 text-[11px] text-zinc-500" data-testid="telegram-config-url-effective">
-              <Icon name="send" size={13} className="text-zinc-400" />
-              Guest links use{' '}
-              <span className="font-semibold text-zinc-700">
+            <div
+              className="mt-3 flex flex-wrap items-center gap-1.5 rounded-[var(--radius-lg)] bg-[var(--surface-hover)] px-3 py-2 text-[11px] text-[var(--text-muted)]"
+              data-testid="telegram-config-url-effective"
+            >
+              <Icon name="send" size={13} className="text-[var(--text-subtle)]" />
+              <span>Guest links use</span>
+              <span className="font-semibold text-[var(--text)]">
                 {publicUrlEffective || 'no address yet'}
               </span>
-              {' '}({URL_SOURCE_LABEL[publicUrlSource] || publicUrlSource}).
-            </p>
+              <span>({URL_SOURCE_LABEL[publicUrlSource] || publicUrlSource}).</span>
+            </div>
 
             <div className="mt-4 flex flex-wrap items-center gap-2">
-              <button
-                type="button"
+              <Button
+                data-testid="telegram-config-save"
                 disabled={!canSave}
                 onClick={() => {
                   const next = patch()
@@ -163,42 +179,64 @@ function TelegramSection() {
                       ? 'Saved. The bot uses this token on its next message.'
                       : 'Saved — guest links now use this address.')
                 }}
-                data-testid="telegram-config-save"
-                className="min-h-10 rounded-xl bg-orange-500 px-5 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-40"
               >
+                <Icon name="check" size={15} />
                 {saving ? 'Saving…' : 'Save Telegram settings'}
-              </button>
+              </Button>
               {hasToken && (
-                <button
+                <Button
                   type="button"
+                  variant="danger"
                   disabled={saving}
                   onClick={() => save({ token: '' }, 'Token removed — the bot stays quiet until one is saved.')}
-                  className="min-h-10 rounded-xl border border-red-200 bg-white px-4 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-40"
                 >
                   Remove token
-                </button>
+                </Button>
               )}
             </div>
 
-            <p className="mt-3 flex items-center gap-1.5 text-[11px] text-zinc-500">
-              <Icon name="send" size={13} className="text-zinc-400" />
-              Token source: <span className="font-semibold text-zinc-700">{TOKEN_SOURCE_LABEL[tokenSource] || tokenSource}</span>
+            <p className="mt-3 flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--text-muted)]">
+              <Icon name="send" size={13} className="text-[var(--text-subtle)]" />
+              <span>Token source:</span>
+              <span className="font-semibold text-[var(--text)]">{TOKEN_SOURCE_LABEL[tokenSource] || tokenSource}</span>
             </p>
 
-            {error && <p className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-xs font-semibold text-red-700" data-testid="telegram-config-error">{error}</p>}
-            {notice && <p className="mt-3 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">{notice}</p>}
+            {error && (
+              <p className="mt-3 rounded-[var(--radius-lg)] bg-[var(--danger-soft)] px-3 py-2 text-xs font-semibold text-[var(--danger)]" data-testid="telegram-config-error">
+                {error}
+              </p>
+            )}
+            {notice && (
+              <p className="mt-3 rounded-[var(--radius-lg)] bg-[var(--success-soft)] px-3 py-2 text-xs font-semibold text-[var(--success)]" role="status">
+                {notice}
+              </p>
+            )}
           </>
         )}
       </Card>
 
-      <Card title="How it works" sub="A short note on where these settings live.">
-        <ul className="list-disc space-y-1.5 pl-5 text-xs text-zinc-600">
-          <li>The token is stored per restaurant and is never sent back to the browser.</li>
-          <li>Chat commands, pushes, and the close-of-day digest all use this token — no restart needed.</li>
-          <li>Guest QR / mini-app links are built from the Base URL. Blank means the bot uses this deployment&apos;s own address (<code className="rounded bg-zinc-100 px-1">RESTORA_PUBLIC_URL</code>, or Render&apos;s automatic <code className="rounded bg-zinc-100 px-1">RENDER_EXTERNAL_URL</code>).</li>
-          <li>With no token set anywhere, Telegram stays silent and the rest of Restora is unchanged.</li>
-          <li>Point Telegram&apos;s webhook at <code className="rounded bg-zinc-100 px-1">/api/telegram/webhook</code> to receive commands.</li>
-        </ul>
+      <Card as="section">
+        <SectionHeader
+          icon={<Icon name="sparkles" size={16} className="text-[var(--accent)]" />}
+          title="What happens next"
+          sub="Saved on the server, never in the synced state guests can read."
+        />
+        <ol className="space-y-2.5">
+          {[
+            'Register the webhook from the Telegram screen — one click does it.',
+            'The token is stored per restaurant and never sent back to the browser.',
+            'Chat commands, pushes, and the close-of-day digest all use this token — no restart needed.',
+            'Guest QR / mini-app links are built from the Base URL. Blank means this deployment’s own address.',
+            'With no token set anywhere, Telegram stays silent and the rest of Restora is unchanged.',
+          ].map((line) => (
+            <li key={line} className="flex gap-2.5">
+              <span aria-hidden="true" className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--success-soft)] text-[var(--success)]">
+                <Icon name="check" size={12} />
+              </span>
+              <span className="text-xs leading-relaxed text-[var(--text-muted)]">{line}</span>
+            </li>
+          ))}
+        </ol>
       </Card>
     </div>
   )

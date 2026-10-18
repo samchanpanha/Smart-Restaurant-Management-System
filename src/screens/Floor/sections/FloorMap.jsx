@@ -1,18 +1,63 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { TABLE_STATUS_META } from '../../../lib/constants'
-import { translateTableName, translateTableStatus, translateZone, useI18n } from '../../../lib/i18n'
-import { useRestora } from '../../../lib/store'
+import { Icon } from '../../../components/Icon'
+import { Button, EmptyState } from '../../../components/ui'
+import { TABLE_STATUS_META, TARGETS } from '../../../lib/constants'
+import { translateTableName, translateZone, useI18n } from '../../../lib/i18n'
+import { formatClock, minutesBetween } from '../../../lib/models'
+import { useNow, useRestora } from '../../../lib/store'
+import { FloorToolbar } from './FloorToolbar.jsx'
 import { ZoneEditorModal } from './ZoneEditorModal.jsx'
-import { SNAP, MIN_SCALE, MAX_SCALE, toneClass, clampPct, snapPct, zoneBands } from '../shared.js'
+import { SNAP, MIN_SCALE, MAX_SCALE, toneClass, statusLabel, clampPct, snapPct, zoneBands } from '../shared.js'
 
-// Tile geometry in px (w-16 h-12 on the button) so the resize knob tracks
+// Tile geometry in px (w-20 h-14 on the button) so the resize knob tracks
 // the scaled footprint without inventing a second layout.
-const TILE_W = 64
-const TILE_H = 48
+const TILE_W = 80
+const TILE_H = 56
 const SCALE_MIN = 0.75
 const SCALE_MAX = 3
 const SCALE_STEP = 0.25
 const ZONE_MIN = 10
+
+// px a pointer must travel before an armed tile/zone drag becomes a drag.
+// Below it the gesture stays available to a second finger (pinch) or a tap.
+const DRAG_THRESHOLD = 4
+
+// A turn is "long" once it passes the alert ratio of the table's target.
+// Module-level so the filter counter and the tile agree without a clock dep.
+const isLongTurn = (table) => {
+  if (!table || (table.status !== 'seated' && table.status !== 'ordered') || !table.seatedAt) return false
+  const target = Number(table.targetTurnMinutes) || 0
+  return target > 0 && minutesBetween(table.seatedAt) / target >= TARGETS.turnAlertRatio
+}
+
+// Dirty, waiting on the bill, or running long — the host should look here first.
+const needsAttention = (table) => ['dirty', 'cleaning', 'billing', 'billed'].includes(table.status) || isLongTurn(table)
+
+// Live meta line for one tile. The shared 30s clock ticks *here* and nowhere
+// else, so elapsed minutes stay fresh without re-rendering the whole plan
+// (the KDS rule: isolate every clock read in a leaf).
+function TileMeta({ table, seatsLabel }) {
+  useNow(30000)
+  const occupied = table.status === 'seated' || table.status === 'ordered'
+  if (!occupied || !table.seatedAt) {
+    return (
+      <span className="text-[10px] font-semibold opacity-90">
+        {table.seats} {seatsLabel || 'seats'}
+      </span>
+    )
+  }
+  const mins = minutesBetween(table.seatedAt)
+  const long = isLongTurn(table)
+  return (
+    <span
+      className={`tnum mt-0.5 rounded-full px-1.5 text-[10px] font-bold leading-4 ${
+        long ? 'bg-[var(--surface)] text-[var(--danger)]' : 'bg-black/25 text-white'
+      }`}
+    >
+      {table.partySize ? `${table.partySize}p · ` : ''}{mins}m
+    </span>
+  )
+}
 
 // Room pixels per axis. 0 means auto-fit; the steppers land on 50s.
 const ROOM_MIN_W = 600
@@ -25,7 +70,18 @@ const scaleClamp = (value) => Math.min(SCALE_MAX, Math.max(SCALE_MIN, Math.round
 const roomClampW = (value) => Math.min(ROOM_MAX_W, Math.max(ROOM_MIN_W, Math.round(Number(value) / ROOM_STEP) * ROOM_STEP))
 const roomClampH = (value) => Math.min(ROOM_MAX_H, Math.max(ROOM_MIN_H, Math.round(Number(value) / ROOM_STEP) * ROOM_STEP))
 
-function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
+function FloorMap({
+  tables,
+  orders,
+  onOpen,
+  floorZones,
+  floor,
+  reservations = [],
+  filter = 'all',
+  onFilterChange,
+  onAddTable,
+  nextFree = null,
+}) {
   const { dispatch } = useRestora()
   const { lang, dict } = useI18n()
   const f = dict.floor || {}
@@ -46,12 +102,32 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
   const zoneResizeRef = useRef(null)
   const roomResizeRef = useRef(null)
   const panRef = useRef(null)
+  // Live pointers on the viewport: two of them are a pinch (zoom + pan),
+  // one is a background drag. The map never swallows page scroll — see the
+  // wheel effect and the touch-action class on the viewport.
+  const pointersRef = useRef(new Map())
+  const pinchRef = useRef(null) // { dist, z0, p0x, p0y } — gesture snapshot
+  // A tile/zone drag arms on pointerdown but only activates after the pointer
+  // actually moves, so a second finger can still turn the gesture into a pinch.
+  const tileDragIntentRef = useRef(null)
+  const zoneDragIntentRef = useRef(null)
   // Mirrored into a ref for native pointer math (drag deltas read it
   // outside the render cycle).
   const zoomRef = useRef(1)
+  const arrangeRef = useRef(false)
   useEffect(() => {
     zoomRef.current = zoom
   }, [zoom])
+  useEffect(() => {
+    arrangeRef.current = arrange
+  }, [arrange])
+  useEffect(() => {
+    const pointers = pointersRef.current
+    return () => {
+      pointers.clear()
+      pinchRef.current = null
+    }
+  }, [])
 
   const roomW = Math.max(0, Math.round(Number(floor?.roomW) || 0))
   const roomH = Math.max(0, Math.round(Number(floor?.roomH) || 0))
@@ -72,6 +148,90 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
     const orphans = (tables || []).filter((table) => !defined.has(table.zone || 'Main'))
     return zoneBands(orphans)
   }, [tables, zoneList])
+
+  // The soonest booked reservation per table — the tile wears a small ◷ so a
+  // host can see the room is spoken for before it fills.
+  const reservationsByTable = useMemo(() => {
+    const map = new Map()
+    for (const booking of reservations || []) {
+      if (!booking || booking.status !== 'booked' || !booking.tableId) continue
+      const current = map.get(booking.tableId)
+      if (!current || new Date(booking.time) < new Date(current.time)) map.set(booking.tableId, booking)
+    }
+    return map
+  }, [reservations])
+
+  // Filter values: 'all' | 'attention' | 'z:<zone name>' | 's:<status>'.
+  const matchesFilter = (table) => {
+    if (filter === 'all') return true
+    if (filter === 'attention') return needsAttention(table)
+    if (filter === 'occupied') return ['seated', 'ordered', 'billed', 'billing', 'occupied'].includes(table.status)
+    if (filter.startsWith('z:')) return (table.zone || 'Main') === filter.slice(2)
+    if (filter.startsWith('s:')) return table.status === filter.slice(2)
+    return true
+  }
+
+  const counts = useMemo(() => {
+    const byStatus = {}
+    const zoneCounts = new Map()
+    let attention = 0
+    let dimmed = 0
+    for (const table of tables || []) {
+      byStatus[table.status] = (byStatus[table.status] || 0) + 1
+      const zoneName = table.zone || 'Main'
+      zoneCounts.set(zoneName, (zoneCounts.get(zoneName) || 0) + 1)
+      if (needsAttention(table)) attention += 1
+      if (filter !== 'all') {
+        const match = filter.startsWith('z:')
+          ? zoneName === filter.slice(2)
+          : filter.startsWith('s:')
+            ? table.status === filter.slice(2)
+            : filter === 'occupied'
+              ? ['seated', 'ordered', 'billed', 'billing', 'occupied'].includes(table.status)
+              : needsAttention(table)
+        if (!match) dimmed += 1
+      }
+    }
+    return {
+      total: (tables || []).length,
+      attention,
+      dimmed,
+      byStatus,
+      zones: zoneList.map((zone) => ({ id: zone.id, name: zone.name, count: zoneCounts.get(zone.name) || 0 })),
+    }
+  }, [tables, zoneList, filter])
+
+  // Frame one percent-rect of the floor in the viewport (zone chips).
+  function focusRect(rect) {
+    const viewport = viewportRef.current
+    const content = contentRef.current
+    if (!viewport || !content) return
+    const bounds = viewport.getBoundingClientRect()
+    const vw = viewport.clientWidth || bounds.width
+    const vh = viewport.clientHeight || bounds.height
+    const cw = content.offsetWidth || vw
+    const ch = content.offsetHeight || vh
+    if (!(cw > 0) || !(ch > 0) || !(vw > 0) || !(vh > 0)) return
+    const w = Math.max(Number(rect.w) || 0, 1)
+    const h = Math.max(Number(rect.h) || 0, 1)
+    const nextZoom = Math.max(
+      MIN_SCALE,
+      Math.min(MAX_SCALE, Math.min(vw / ((w / 100) * cw), vh / ((h / 100) * ch)) * 0.9),
+    )
+    const cxRel = (((Number(rect.x) || 0) + w / 2) / 100 - 0.5) * cw
+    const cyRel = (((Number(rect.y) || 0) + h / 2) / 100 - 0.5) * ch
+    setZoom(nextZoom)
+    setPan({ x: -cxRel * nextZoom, y: -cyRel * nextZoom })
+  }
+
+  // Choosing a zone chip reframes the room on that zone; other filters leave
+  // the current view alone (the user is already looking at the right place).
+  useEffect(() => {
+    if (!filter.startsWith('z:')) return
+    const zone = zoneList.find((entry) => entry.name === filter.slice(2))
+    if (zone) focusRect(zone)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter])
 
   const itemCount = (table) => {
     const order = table.currentCheckId ? ordersByCheck.get(table.currentCheckId) : null
@@ -115,25 +275,48 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
 
   function startTileDrag(event, table) {
     if (!arrange) return
-    event.stopPropagation()
+    // Deliberately no stopPropagation: the viewport still has to see this
+    // pointer so a second finger can turn the gesture into a pinch. The drag
+    // arms here and only activates once the pointer actually moves.
     event.preventDefault()
     const rect = event.currentTarget.getBoundingClientRect()
-    dragRef.current = { id: table.id, offsetX: event.clientX - rect.left - rect.width / 2, offsetY: event.clientY - rect.top - rect.height / 2 }
-    const point = toPct(event.clientX - dragRef.current.offsetX, event.clientY - dragRef.current.offsetY)
-    setDrag({ id: table.id, x: snapPct(point.x), y: snapPct(point.y) })
-    event.currentTarget.setPointerCapture?.(event.pointerId)
+    tileDragIntentRef.current = {
+      id: table.id,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      offsetX: event.clientX - rect.left - rect.width / 2,
+      offsetY: event.clientY - rect.top - rect.height / 2,
+      node: event.currentTarget,
+      active: false,
+    }
   }
 
   function moveTileDrag(event) {
-    if (!dragRef.current) return
-    const point = toPct(event.clientX - dragRef.current.offsetX, event.clientY - dragRef.current.offsetY)
-    setDrag({ id: dragRef.current.id, x: snapPct(point.x), y: snapPct(point.y) })
+    const intent = tileDragIntentRef.current
+    if (!intent || intent.pointerId !== event.pointerId) return
+    if (pinchRef.current) {
+      tileDragIntentRef.current = null
+      return
+    }
+    if (!intent.active) {
+      if (Math.hypot(event.clientX - intent.startX, event.clientY - intent.startY) < DRAG_THRESHOLD) return
+      intent.active = true
+      intent.node.setPointerCapture?.(event.pointerId)
+      dragRef.current = intent
+    }
+    const point = toPct(event.clientX - intent.offsetX, event.clientY - intent.offsetY)
+    setDrag({ id: intent.id, x: snapPct(point.x), y: snapPct(point.y) })
   }
 
-  function endTileDrag() {
-    if (!dragRef.current) return
-    const id = dragRef.current.id
+  function endTileDrag(event) {
+    const intent = tileDragIntentRef.current
+    if (!intent || (event && intent.pointerId !== event.pointerId)) return
+    tileDragIntentRef.current = null
     dragRef.current = null
+    // A tap, not a drag: the tile stays exactly where it was.
+    if (!intent.active) return
+    const id = intent.id
     setDrag((current) => {
       if (current && current.id === id) {
         dispatch({ type: 'SET_TABLE_LAYOUT', tableId: id, posX: current.x, posY: current.y })
@@ -191,46 +374,66 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
     })
   }
 
-  // Zone rectangles: drag the body to move, the SE grip to resize.
+  // Zone rectangles: drag the body to move, the SE grip to resize. Like the
+  // tiles, the body drag arms first and activates on movement so a pinch that
+  // starts over a zone still works.
   function startZoneDrag(event, zone) {
     if (!arrange) return
-    event.stopPropagation()
     event.preventDefault()
     const rectScreen = event.currentTarget.getBoundingClientRect()
     const fullH = (zone.h ?? 100) >= 99.5
     const w = rectScreen.width || 1
     const h = rectScreen.height || 1
-    zoneDragRef.current = {
+    zoneDragIntentRef.current = {
       id: zone.id,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      x: Number.isFinite(Number(zone.x)) ? Number(zone.x) : 0,
+      y: Number.isFinite(Number(zone.y)) ? Number(zone.y) : 0,
       fullH,
       offXPct: ((event.clientX - rectScreen.left) / w) * (zone.w || 1) || 0,
       offYPct: fullH ? undefined : ((event.clientY - rectScreen.top) / h) * (zone.h || 1) || 0,
+      node: event.currentTarget,
+      active: false,
     }
-    setZoneDrag({ id: zone.id, x: zone.x, y: zone.y })
-    event.currentTarget.setPointerCapture?.(event.pointerId)
   }
 
   function moveZoneDrag(event) {
-    if (!zoneDragRef.current) return
+    const intent = zoneDragIntentRef.current
+    if (!intent || intent.pointerId !== event.pointerId) return
+    if (pinchRef.current) {
+      zoneDragIntentRef.current = null
+      return
+    }
+    if (!intent.active) {
+      if (Math.hypot(event.clientX - intent.startX, event.clientY - intent.startY) < DRAG_THRESHOLD) return
+      intent.active = true
+      intent.node.setPointerCapture?.(event.pointerId)
+      zoneDragRef.current = intent
+      setZoneDrag({ id: intent.id, x: intent.x, y: intent.y })
+      return
+    }
     const point = toPct(event.clientX, event.clientY)
-    const ref = zoneDragRef.current
     setZoneDrag((current) => {
-      if (!current || current.id !== ref.id) return current
+      if (!current || current.id !== intent.id) return current
       return {
-        id: ref.id,
-        x: snapPct(point.x - ref.offXPct),
-        y: ref.fullH ? current.y : snapPct(point.y - ref.offYPct),
+        id: intent.id,
+        x: snapPct(point.x - intent.offXPct),
+        y: intent.fullH ? current.y : snapPct(point.y - intent.offYPct),
       }
     })
   }
 
-  function endZoneDrag() {
-    if (!zoneDragRef.current) return
-    const id = zoneDragRef.current.id
+  function endZoneDrag(event) {
+    const intent = zoneDragIntentRef.current
+    if (!intent || (event && intent.pointerId !== event.pointerId)) return
+    zoneDragIntentRef.current = null
     zoneDragRef.current = null
+    if (!intent.active) return
     setZoneDrag((current) => {
-      if (current && current.id === id) {
-        dispatch({ type: 'UPDATE_FLOOR_ZONE', zoneId: id, patch: { rect: { x: current.x, y: current.y } } })
+      if (current && current.id === intent.id) {
+        dispatch({ type: 'UPDATE_FLOOR_ZONE', zoneId: intent.id, patch: { rect: { x: current.x, y: current.y } } })
       }
       return null
     })
@@ -318,9 +521,62 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
     resetView()
   }
 
+  // ── Pan + pinch ──────────────────────────────────────────────────────
+  // The viewport owns two gestures: one finger drags the room, two fingers
+  // pinch-zoom around their midpoint (and pan with it). Both write the same
+  // `pan`/`zoom` pair the buttons and Fit use.
+  function viewportCenter() {
+    const viewport = viewportRef.current
+    if (!viewport) return null
+    const rect = viewport.getBoundingClientRect()
+    return { cx: rect.left + rect.width / 2, cy: rect.top + rect.height / 2 }
+  }
+
+  function startPinch() {
+    const points = [...pointersRef.current.values()]
+    const center = viewportCenter()
+    if (points.length < 2 || !center) return
+    const [a, b] = points
+    const dist = Math.max(8, Math.hypot(a.x - b.x, a.y - b.y))
+    const ux = (a.x + b.x) / 2 - center.cx
+    const uy = (a.y + b.y) / 2 - center.cy
+    const current = zoomRef.current || 1
+    pinchRef.current = {
+      dist,
+      z0: current,
+      // The floor point under the finger midpoint — held still for the gesture.
+      p0x: (ux - pan.x) / current,
+      p0y: (uy - pan.y) / current,
+    }
+    // A pinch beats any armed tile/zone drag and the background pan.
+    panRef.current = null
+    tileDragIntentRef.current = null
+    zoneDragIntentRef.current = null
+  }
+
+  function movePinch() {
+    const pinch = pinchRef.current
+    const center = viewportCenter()
+    const points = [...pointersRef.current.values()]
+    if (!pinch || !center || points.length < 2) return
+    const [a, b] = points
+    const dist = Math.max(8, Math.hypot(a.x - b.x, a.y - b.y))
+    const nextZoom = Math.max(MIN_SCALE, Math.min(MAX_SCALE, pinch.z0 * (dist / pinch.dist)))
+    const ux = (a.x + b.x) / 2 - center.cx
+    const uy = (a.y + b.y) / 2 - center.cy
+    setZoom(nextZoom)
+    setPan({ x: ux - pinch.p0x * nextZoom, y: uy - pinch.p0y * nextZoom })
+  }
+
   function startPan(event) {
-    if (dragRef.current || tileResizeRef.current || zoneDragRef.current || zoneResizeRef.current || roomResizeRef.current) return
     if (event.pointerType === 'mouse' && event.button !== 0) return
+    pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
+    if (pointersRef.current.size === 2) {
+      startPinch()
+      return
+    }
+    if (pointersRef.current.size > 1) return
+    if (dragRef.current || tileResizeRef.current || zoneDragRef.current || zoneResizeRef.current || roomResizeRef.current) return
     // Let tile taps stay taps — capturing here would swallow the click.
     if (event.target.closest?.('button')) return
     panRef.current = { x: event.clientX, y: event.clientY, ox: pan.x, oy: pan.y }
@@ -328,6 +584,13 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
   }
 
   function movePan(event) {
+    if (pointersRef.current.has(event.pointerId)) {
+      pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
+    }
+    if (pinchRef.current) {
+      movePinch()
+      return
+    }
     if (!panRef.current) return
     setPan({
       x: panRef.current.ox + (event.clientX - panRef.current.x),
@@ -335,8 +598,30 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
     })
   }
 
-  function endPan() {
+  function endPan(event) {
+    if (event?.pointerId != null) pointersRef.current.delete(event.pointerId)
+    if (pointersRef.current.size < 2) pinchRef.current = null
     panRef.current = null
+  }
+
+  // Double-click / double-tap the empty floor: zoom in on that spot.
+  function zoomAtPoint(clientX, clientY, factor) {
+    const center = viewportCenter()
+    if (!center) return
+    const current = zoom || 1
+    const nextZoom = Math.max(MIN_SCALE, Math.min(MAX_SCALE, current * factor))
+    const ux = clientX - center.cx
+    const uy = clientY - center.cy
+    setPan({
+      x: ux - ((ux - pan.x) / current) * nextZoom,
+      y: uy - ((uy - pan.y) / current) * nextZoom,
+    })
+    setZoom(nextZoom)
+  }
+
+  function handleDoubleClick(event) {
+    if (arrange || event.target.closest?.('button')) return
+    zoomAtPoint(event.clientX, event.clientY, 1.4)
   }
 
   function nudge(event, table) {
@@ -366,11 +651,14 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
     })
   }
 
-  // Wheel zoom lives on a native listener so it can preventDefault.
+  // Wheel zoom lives on a native listener so it can preventDefault — but only
+  // when the user asked for it (Ctrl/⌘ + wheel) or is arranging the room.
+  // Plain wheel is page scroll: the map must never trap the workspace.
   useEffect(() => {
     const node = viewportRef.current
     if (!node) return undefined
     const onWheel = (event) => {
+      if (!event.ctrlKey && !event.metaKey && !arrangeRef.current) return
       event.preventDefault()
       setZoom((value) => Math.max(MIN_SCALE, Math.min(MAX_SCALE, value - event.deltaY * 0.0015)))
     }
@@ -382,68 +670,103 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
   const resetView = () => { setZoom(1); setPan({ x: 0, y: 0 }) }
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 px-5 py-4">
+    <section className="overflow-hidden rounded-[var(--radius-2xl)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-sm)]">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border-subtle)] px-5 py-4">
         <div>
-          <h2 className="text-base font-bold text-zinc-900">
+          <h2 className="text-[var(--fs-h3)] font-bold text-[var(--text-strong)]">
             {lang === 'km' ? 'ប្លង់តុភោជនីយដ្ឋាន' : lang === 'zh' ? '餐厅餐桌平面图' : 'Restaurant floor'}
           </h2>
-          <p className="mt-0.5 text-xs text-zinc-500">
+          <p className="mt-0.5 text-[var(--fs-caption)] text-[var(--text-muted)]">
             {arrange
-              ? (lang === 'km' ? 'អូសតុ/តំបន់ដើម្បីរៀបចំ · ប្រើសង្កត់ក្រោមដើម្បីធ្វើឱ្យធំជាង · អូសផ្ទៃខាងក្រោយដើម្បីផ្លាស់ទី' : lang === 'zh' ? '拖动餐桌/区域调整布局 · 用角柄缩放 · 拖动空白区域平移' : 'Drag tables & zones to arrange · corner grips resize · drag the room to pan')
-              : (lang === 'km' ? 'ស្ថានភាពតុផ្ទាល់ · ចុចលើតុសម្រាប់សកម្មភាព' : lang === 'zh' ? '实时桌台状态 · 点击餐桌进行操作' : 'Live table status · tap a table for actions')}
+              ? (lang === 'km' ? 'អូសតុ/តំបន់ដើម្បីរៀបចំ · ប្រើសង្កត់ក្រោមដើម្បីធ្វើឱ្យធំជាង · ច្របាច់ពីរម្រាម ឬ Ctrl+កង់កណ្ដុរដើម្បីពង្រីក · អូសផ្ទៃខាងក្រោយដើម្បីផ្លាស់ទី' : lang === 'zh' ? '拖动餐桌/区域调整布局 · 用角柄缩放 · 双指捏合或 Ctrl+滚轮缩放 · 拖动空白区域平移' : 'Drag tables & zones to arrange · corner grips resize · pinch or Ctrl+wheel to zoom · drag empty space to pan')
+              : (lang === 'km' ? 'ស្ថានភាពតុផ្ទាល់ · ចុចលើតុសម្រាប់សកម្មភាព · ចុចពីរដងដើម្បីពង្រីក' : lang === 'zh' ? '实时桌台状态 · 点击餐桌进行操作 · 双击放大' : 'Live table status · tap a table for actions · double-click to zoom in')}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {arrange && (
-            <div className="flex items-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-2 py-0.5 shadow-sm">
-              <button type="button" onClick={() => bumpRoom('w', -ROOM_STEP)} aria-label="Room width smaller" className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-50">−</button>
-              <span className="tnum min-w-[64px] text-center text-[11px] font-semibold text-zinc-600" title="Room width">
+            <div className="flex items-center gap-1.5 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5 shadow-[var(--shadow-sm)]">
+              <button type="button" onClick={() => bumpRoom('w', -ROOM_STEP)} aria-label="Room width smaller" className="flex h-11 w-11 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] hover:bg-[var(--surface-hover)]">−</button>
+              <span className="tnum min-w-[64px] text-center text-[var(--fs-caption)] font-semibold text-[var(--text)]" title="Room width">
                 W {roomDrag ? roomDrag.w : roomW || (lang === 'km' ? 'ស្វ័យប្រវត្តិ' : lang === 'zh' ? '自适应' : 'auto')}
               </span>
-              <button type="button" onClick={() => bumpRoom('w', ROOM_STEP)} aria-label="Room width larger" className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-50">+</button>
-              <span className="mx-1 h-4 w-px bg-zinc-200" />
-              <button type="button" onClick={() => bumpRoom('h', -ROOM_STEP)} aria-label="Room height smaller" className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-50">−</button>
-              <span className="tnum min-w-[64px] text-center text-[11px] font-semibold text-zinc-600" title="Room height">
+              <button type="button" onClick={() => bumpRoom('w', ROOM_STEP)} aria-label="Room width larger" className="flex h-11 w-11 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] hover:bg-[var(--surface-hover)]">+</button>
+              <span className="mx-1 h-4 w-px bg-[var(--border)]" />
+              <button type="button" onClick={() => bumpRoom('h', -ROOM_STEP)} aria-label="Room height smaller" className="flex h-11 w-11 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] hover:bg-[var(--surface-hover)]">−</button>
+              <span className="tnum min-w-[64px] text-center text-[var(--fs-caption)] font-semibold text-[var(--text)]" title="Room height">
                 H {roomDrag ? roomDrag.h : roomH || (lang === 'km' ? 'ស្វ័យប្រវត្តិ' : lang === 'zh' ? '自适应' : 'auto')}
               </span>
-              <button type="button" onClick={() => bumpRoom('h', ROOM_STEP)} aria-label="Room height larger" className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-50">+</button>
-              <span className="mx-1 h-4 w-px bg-zinc-200" />
-              <button type="button" onClick={fitRoom} className="rounded-lg px-2 text-[11px] font-bold text-orange-600 hover:bg-orange-50">
+              <button type="button" onClick={() => bumpRoom('h', ROOM_STEP)} aria-label="Room height larger" className="flex h-11 w-11 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] hover:bg-[var(--surface-hover)]">+</button>
+              <span className="mx-1 h-4 w-px bg-[var(--border)]" />
+              <button type="button" onClick={fitRoom} className="min-h-11 rounded-[var(--radius-md)] px-3 text-[var(--fs-caption)] font-bold text-[var(--accent)] hover:bg-[var(--accent-soft)]">
                 {lang === 'km' ? 'ធ្វើឱ្យសម' : lang === 'zh' ? '适合窗口' : 'Fit'}
               </button>
             </div>
           )}
-          <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">
-            <span className="h-2 w-2 rounded-full bg-emerald-500" />
+          <span className="inline-flex items-center gap-2 rounded-full bg-[var(--success-soft)] px-3 py-1.5 text-[var(--fs-caption)] font-semibold text-[var(--success)]">
+            <span className="h-2 w-2 rounded-full bg-[var(--success)]" />
             {lang === 'km' ? 'ទិដ្ឋភាពផ្ទាល់' : lang === 'zh' ? '实时视图' : 'Live view'}
           </span>
-          <div className="flex items-center rounded-xl border border-zinc-200 bg-white p-0.5 shadow-sm" role="group" aria-label="Zoom">
-            <button type="button" onClick={() => zoomBy(1 / 1.2)} aria-label="Zoom out" className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-50">−</button>
-            <button type="button" onClick={resetView} aria-label="Reset view" className="tnum min-w-[44px] rounded-lg px-1 text-xs font-semibold text-zinc-500 hover:bg-zinc-50">{Math.round(zoom * 100)}%</button>
-            <button type="button" onClick={() => zoomBy(1.2)} aria-label="Zoom in" className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-50">+</button>
+          {!arrange && nextFree?.table && (
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full bg-[var(--info-soft)] px-3 py-1.5 text-[var(--fs-caption)] font-semibold text-[var(--info)]"
+              title={`${translateTableName(nextFree.table.name, lang)} · ${nextFree.table.partySize || nextFree.table.seats} guests · ${nextFree.mins}m to go`}
+            >
+              <Icon name="clock" size={12} />
+              Next free: {translateTableName(nextFree.table.name, lang)} · ~{nextFree.mins}m
+            </span>
+          )}
+          <div className="flex items-center rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] p-0.5 shadow-[var(--shadow-sm)]" role="group" aria-label="Zoom">
+            <button type="button" onClick={() => zoomBy(1 / 1.2)} aria-label="Zoom out" className="flex h-11 w-11 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] hover:bg-[var(--surface-hover)]">−</button>
+            <button type="button" onClick={resetView} aria-label="Reset view" className="tnum min-h-11 min-w-[44px] rounded-[var(--radius-md)] px-1 text-[var(--fs-label)] font-semibold text-[var(--text-muted)] hover:bg-[var(--surface-hover)]">{Math.round(zoom * 100)}%</button>
+            <button type="button" onClick={() => zoomBy(1.2)} aria-label="Zoom in" className="flex h-11 w-11 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] hover:bg-[var(--surface-hover)]">+</button>
           </div>
-          <button
-            type="button"
+          <Button
+            variant={arrange ? 'primary' : 'secondary'}
             onClick={() => setArrange((value) => !value)}
             aria-pressed={arrange}
-            className={`min-h-9 rounded-xl border px-3 text-xs font-semibold shadow-sm transition-colors ${arrange ? 'border-orange-500 bg-orange-500 text-white hover:bg-orange-600' : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50'}`}
           >
             {arrange
               ? (lang === 'km' ? 'រួចរាល់' : lang === 'zh' ? '完成' : 'Done arranging')
               : (lang === 'km' ? 'រៀបចំប្លង់' : lang === 'zh' ? '排列布局' : 'Arrange layout')}
-          </button>
+          </Button>
         </div>
       </div>
 
+      {counts.total > 0 && (
+        <FloorToolbar zones={counts.zones} counts={counts} filter={filter} onFilter={onFilterChange} />
+      )}
+
       <div
         ref={viewportRef}
+        role="region"
+        aria-label="Floor plan"
         onPointerDown={startPan}
         onPointerMove={movePan}
         onPointerUp={endPan}
+        onPointerCancel={endPan}
         onPointerLeave={endPan}
-        className="relative min-h-[420px] cursor-grab touch-none overflow-hidden bg-[#fffdf9] active:cursor-grabbing"
+        onDoubleClick={handleDoubleClick}
+        className={`relative min-h-[420px] cursor-grab overflow-hidden bg-[var(--surface-sunken)] active:cursor-grabbing ${arrange ? 'touch-none' : 'touch-pan-y'}`}
       >
+        {counts.total === 0 && (
+          <div className="absolute inset-0 z-40 flex items-center justify-center bg-[var(--surface-sunken)] p-6">
+            <EmptyState
+              icon="tables"
+              title={lang === 'km' ? 'មិនមានតុនៅឡើយទេ' : lang === 'zh' ? '暂无餐桌' : 'No tables yet'}
+              sub={lang === 'km'
+                ? 'បន្ថែមតុដំបូង រួចអូសវាទៅទីតាំងរបស់វានៅលើប្លង់។'
+                : lang === 'zh'
+                  ? '添加第一张餐桌，然后在平面图上把它拖到位置。'
+                  : 'Add the first table, then drag it into place on the plan.'}
+              action={(
+                <Button size="md" onClick={() => onAddTable?.()}>
+                  {lang === 'km' ? 'បន្ថែមតុ' : lang === 'zh' ? '添加餐桌' : 'Add table'}
+                  {lang !== 'en' && <span className="sr-only"> Add table</span>}
+                </Button>
+              )}
+            />
+          </div>
+        )}
         <div
           ref={contentRef}
           className="relative min-h-[420px]"
@@ -454,14 +777,14 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
             transformOrigin: 'center center',
           }}
         >
-          <div className={`pointer-events-none absolute inset-4 rounded-[28px] border-2 sm:inset-6 ${roomW || roomH ? 'border-orange-300' : 'border-[#e8e2d8]'}`} />
+          <div className={`pointer-events-none absolute inset-4 rounded-[28px] border-2 sm:inset-6 ${roomW || roomH ? 'border-[var(--accent)]/50' : 'border-[var(--border-strong)]'}`} />
 
           {bands.map((band) => {
             const left = clampPct(band.min - 10)
             const right = clampPct(band.max + 10)
             return (
-              <div key={`band_${band.zone}`} className="pointer-events-none absolute inset-y-6 rounded-2xl border border-dashed border-zinc-300/70 bg-white/40" style={{ left: `${left}%`, width: `${Math.max(6, right - left)}%` }}>
-                <span className="absolute left-1/2 top-2 -translate-x-1/2 whitespace-nowrap rounded-full bg-white/90 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500 shadow-sm">
+              <div key={`band_${band.zone}`} className="pointer-events-none absolute inset-y-6 rounded-[var(--radius-xl)] border border-dashed border-[var(--border-strong)] bg-[var(--surface)]/40" style={{ left: `${left}%`, width: `${Math.max(6, right - left)}%` }}>
+                <span className="absolute left-1/2 top-2 -translate-x-1/2 whitespace-nowrap rounded-full bg-[var(--surface)]/90 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] shadow-[var(--shadow-sm)]">
                   {translateZone(band.zone, lang)} · {band.count}
                 </span>
               </div>
@@ -479,7 +802,7 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
                 onPointerMove={moveZoneDrag}
                 onPointerUp={endZoneDrag}
                 onPointerCancel={endZoneDrag}
-                className={`absolute rounded-2xl border-2 border-dashed ${zoneDrag?.id === zone.id || zoneResize?.id === zone.id ? 'border-orange-400 bg-orange-50/50' : 'border-zinc-400/70 bg-white/40'} ${arrange ? 'cursor-move' : 'pointer-events-none border-zinc-300/70'}`}
+                className={`absolute rounded-[var(--radius-xl)] border-2 border-dashed ${zoneDrag?.id === zone.id || zoneResize?.id === zone.id ? 'border-[var(--accent)] bg-[var(--accent-soft)]' : 'border-[var(--border-strong)]/70 bg-[var(--surface)]/40'} ${arrange ? 'cursor-move' : 'pointer-events-none border-[var(--border-subtle)]'}`}
                 style={{
                   left: `${rect.x}%`,
                   width: `${rect.w}%`,
@@ -493,7 +816,7 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
                     type="button"
                     onPointerDown={(event) => event.stopPropagation()}
                     onClick={() => { if (arrange) setZoneEditor(zone) }}
-                    className={`rounded-full bg-white/90 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500 shadow-sm ${arrange ? 'pointer-events-auto cursor-pointer ring-1 ring-orange-300 hover:text-orange-600' : ''}`}
+                    className={`rounded-full bg-[var(--surface)]/90 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] shadow-[var(--shadow-sm)] ${arrange ? 'pointer-events-auto cursor-pointer ring-1 ring-[var(--accent)]/40 hover:text-[var(--accent)]' : ''}`}
                   >
                     {translateZone(zone.name, lang)} · {count}{arrange ? ' ✎' : ''}
                   </button>
@@ -506,7 +829,7 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
                     onPointerMove={moveZoneResize}
                     onPointerUp={endZoneResize}
                     onPointerCancel={endZoneResize}
-                    className="absolute bottom-1.5 right-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-white text-[10px] font-black text-zinc-500 shadow-md ring-1 ring-zinc-300/80 hover:bg-orange-500 hover:text-white"
+                    className="absolute bottom-1.5 right-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-[var(--surface)] text-[10px] font-black text-[var(--text-muted)] shadow-[var(--shadow-md)] ring-1 ring-[var(--border-strong)] hover:bg-[var(--accent)] hover:text-[var(--text-on-accent)]"
                   >
                     ⤢
                   </button>
@@ -515,10 +838,10 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
             )
           })}
 
-          <div className="pointer-events-none absolute left-5 top-4 rounded-xl border border-zinc-200 bg-white/90 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500 shadow-sm">
+          <div className="pointer-events-none absolute left-5 top-4 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)]/90 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] shadow-[var(--shadow-sm)]">
             {dict.nav?.kitchen || 'Kitchen'}
           </div>
-          <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 bg-[#fffdf9] px-3 text-[10px] font-semibold text-zinc-500">
+          <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 bg-[var(--surface-sunken)] px-3 text-[10px] font-semibold text-[var(--text-muted)]">
             {lang === 'km' ? 'ច្រកចូល' : lang === 'zh' ? '入口' : 'Entrance'}
           </div>
 
@@ -530,14 +853,22 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
             const count = itemCount(table)
             const dragging = drag?.id === table.id
             const resizing = resize?.id === table.id
+            const longTurn = isLongTurn(table)
             const showBill = table.status === 'billed' || table.status === 'billing'
             const showSelf = Boolean(table.selfSeated)
+            const showMove = Boolean(table.pendingTransfer && table.pendingTransfer.status === 'pending')
+            const booking = reservationsByTable.get(table.id)
+            const dim = !matchesFilter(table)
             // The shipped hover/drag transforms stay untouched while the
             // tile is at its default size; a custom scale takes over the
             // transform entirely (inline style beats any hover class).
             const usesInlineTransform = scale !== 1
             return (
-              <div key={table.id} className="absolute -translate-x-1/2 -translate-y-1/2" style={{ left: `${x}%`, top: `${y}%` }}>
+              <div
+                key={table.id}
+                className={`absolute -translate-x-1/2 -translate-y-1/2 transition-opacity duration-200 ${dim ? 'opacity-25' : ''}`}
+                style={{ left: `${x}%`, top: `${y}%` }}
+              >
                 <button
                   type="button"
                   onClick={() => { if (!arrange && !dragging) onOpen(table) }}
@@ -548,19 +879,22 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
                   onKeyDown={(event) => nudge(event, table)}
                   aria-label={`${table.name}, ${meta.label}, ${table.seats} seats`}
                   aria-grabbed={arrange ? dragging : undefined}
-                  title={`${translateTableName(table.name, lang)} · ${translateTableStatus(table.status, lang)}`}
+                  title={`${translateTableName(table.name, lang)} · ${statusLabel(table.status, lang)}`}
                   style={usesInlineTransform ? { transform: `scale(${scale})` } : undefined}
-                  className={`group relative flex h-12 w-16 flex-col items-center justify-center ${shape} text-sm font-bold shadow-md ring-4 ring-white/80 ${toneClass(table.status)} ${dragging ? 'ring-orange-400' : ''} ${!arrange && !usesInlineTransform ? 'hover:-translate-y-0.5 hover:scale-105' : ''} ${arrange ? 'cursor-grab' : ''}`}
+                  className={`group relative flex h-14 w-20 flex-col items-center justify-center ${shape} text-sm font-bold shadow-[var(--shadow-md)] ring-4 ${longTurn ? 'ring-[var(--warning)]' : 'ring-[var(--surface)]/80'} ${toneClass(table.status)} ${dragging ? 'ring-[var(--accent)]' : ''} ${!arrange && !usesInlineTransform ? 'hover:-translate-y-0.5 hover:scale-105' : ''} ${arrange ? 'cursor-grab' : ''}`}
                 >
                   <span className="absolute -top-2 left-1/2 h-2 w-5 -translate-x-1/2 rounded-t-full bg-current opacity-30" />
                   <span className="absolute -bottom-2 left-1/2 h-2 w-5 -translate-x-1/2 rounded-b-full bg-current opacity-30" />
-                  {table.name.replace('Table ', '')}
+                  <span className="max-w-full truncate px-1 leading-none">{table.name.replace('Table ', '')}</span>
+                  <TileMeta table={table} seatsLabel={f.seats || 'seats'} />
 
-                  {(showBill || showSelf || count > 0) && (
-                    <span className="absolute -right-1.5 -top-1.5 flex items-center gap-0.5">
-                      {showSelf && <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-violet-600 px-1 text-[8px] font-bold text-white ring-2 ring-white" title="Self-seated">S</span>}
-                      {showBill && <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-600 px-1 text-[8px] font-bold text-white ring-2 ring-white" title="Bill requested">$</span>}
-                      {count > 0 && <span className="tnum flex h-4 min-w-4 items-center justify-center rounded-full bg-zinc-900/80 px-1 text-[8px] font-bold text-white ring-2 ring-white" title={`${count} items on the check`}>{count}</span>}
+                  {(showBill || showSelf || showMove || booking || count > 0) && (
+                    <span className="absolute -right-2 -top-2 flex items-center gap-0.5">
+                      {showMove && <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--warning)] px-1 text-[9px] font-bold text-white ring-2 ring-[var(--surface)]" title="Move requested">⇄</span>}
+                      {booking && <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--info)] px-1 text-[9px] font-bold text-white ring-2 ring-[var(--surface)]" title={`Booked ${formatClock(booking.time)} · ${booking.name}`}>◷</span>}
+                      {showSelf && <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--info)] px-1 text-[9px] font-bold text-white ring-2 ring-[var(--surface)]" title="Self-seated">S</span>}
+                      {showBill && <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--warning)] px-1 text-[9px] font-bold text-white ring-2 ring-[var(--surface)]" title="Bill requested">$</span>}
+                      {count > 0 && <span className="tnum flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--text-strong)]/85 px-1 text-[9px] font-bold text-[var(--surface)] ring-2 ring-[var(--surface)]" title={`${count} items on the check`}>{count}</span>}
                     </span>
                   )}
                 </button>
@@ -572,7 +906,7 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
                     onPointerMove={moveTileResize}
                     onPointerUp={endTileResize}
                     onPointerCancel={endTileResize}
-                    className="absolute z-20 flex h-5 w-5 items-center justify-center rounded-full bg-white text-[10px] font-black text-zinc-500 shadow-md ring-1 ring-zinc-300/80 hover:bg-orange-500 hover:text-white"
+                    className="absolute z-20 flex h-6 w-6 items-center justify-center rounded-full bg-[var(--surface)] text-[10px] font-black text-[var(--text-muted)] shadow-[var(--shadow-md)] ring-1 ring-[var(--border-strong)] hover:bg-[var(--accent)] hover:text-[var(--text-on-accent)]"
                     style={{
                       left: `${(TILE_W * (scale + 1)) / 2 - 10}px`,
                       top: `${(TILE_H * (scale + 1)) / 2 - 10}px`,
@@ -583,7 +917,9 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
                   </button>
                 )}
                 <span className="pointer-events-none mt-1 flex items-center justify-center gap-1">
-                  <span className="rounded-full bg-white/90 px-1.5 py-0.5 text-[9px] font-semibold text-zinc-500 shadow-sm">{table.seats} {f.seats || 'seats'}</span>
+                  <span className="whitespace-nowrap rounded-full bg-[var(--surface)]/90 px-1.5 py-0.5 text-[9px] font-semibold text-[var(--text-muted)] shadow-[var(--shadow-sm)]">
+                    {statusLabel(table.status, lang)}
+                  </span>
                 </span>
               </div>
             )
@@ -598,7 +934,7 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
               onPointerMove={moveRoomResize}
               onPointerUp={endRoomResize}
               onPointerCancel={endRoomResize}
-              className="absolute bottom-2 right-2 z-30 flex h-7 w-7 items-center justify-center rounded-full bg-orange-500 text-xs font-black text-white shadow-lg ring-2 ring-white hover:bg-orange-600"
+              className="absolute bottom-2 right-2 z-30 flex h-8 w-8 items-center justify-center rounded-full bg-[var(--accent)] text-xs font-black text-[var(--text-on-accent)] shadow-[var(--shadow-lg)] ring-2 ring-[var(--surface)] hover:bg-[var(--accent-hover)]"
             >
               ⤡
             </button>
@@ -606,15 +942,15 @@ function FloorMap({ tables, orders, onOpen, floorZones, floor }) {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-x-5 gap-y-2 border-t border-zinc-100 px-5 py-3 text-[11px] text-zinc-600">
-        {Object.entries(TABLE_STATUS_META)
-          .filter(([status]) => ['free', 'reserved', 'seated', 'ordered', 'billed', 'dirty'].includes(status))
-          .map(([status, meta]) => (
-            <span key={status} className="inline-flex items-center gap-2">
-              <i className={`h-2.5 w-2.5 rounded-full ${toneClass(status).split(' ')[0]}`} />
-              {translateTableStatus(status, lang) || meta.label}
-            </span>
-          ))}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-[var(--border-subtle)] px-5 py-2.5 text-[var(--fs-caption)] text-[var(--text-subtle)]">
+        <span className="inline-flex items-center gap-1.5">
+          <Icon name="tables" size={12} />
+          {lang === 'km' ? 'ចុចលើតុដើម្បីមើលសកម្មភាព' : lang === 'zh' ? '点击餐桌查看操作' : 'Tap a table for actions'}
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <Icon name="swap" size={12} />
+          {lang === 'km' ? 'អូសផ្ទៃទំនេរដើម្បីផ្លាស់ទី · Ctrl+កង់ ដើម្បីពង្រីក' : lang === 'zh' ? '拖动空白处平移 · Ctrl+滚轮缩放' : 'Drag empty space to pan · Ctrl+wheel to zoom'}
+        </span>
       </div>
 
       {zoneEditor && (

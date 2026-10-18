@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Field, Stepper, inputCls } from '../../../components/ui'
+import { Button, Field, Input, Select, Stepper } from '../../../components/ui'
 import { TARGETS } from '../../../lib/constants'
 import { translateTableName, translateTableStatus, useI18n } from '../../../lib/i18n'
 import { formatClock } from '../../../lib/models'
@@ -7,6 +7,8 @@ import { useNow, useRestora } from '../../../lib/store'
 import { slotLabel, localInputDefault } from '../shared.js'
 import { RescheduleModal } from './RescheduleModal.jsx'
 
+// The reservation book, list only — the tab strip, count and card live in
+// HostDesk so both host tools share one card.
 function ReservationsPanel({ onSeatRes, onError }) {
   const { state, dispatch } = useRestora()
   useNow(30000)
@@ -42,8 +44,8 @@ function ReservationsPanel({ onSeatRes, onError }) {
       },
     })
     if (tableId) {
-      const t = state.tables.find((x) => x.id === tableId)
-      if (t && t.status === 'free') dispatch({ type: 'SET_TABLE_STATUS', tableId, to: 'reserved' })
+      const table = state.tables.find((entry) => entry.id === tableId)
+      if (table && table.status === 'free') dispatch({ type: 'SET_TABLE_STATUS', tableId, to: 'reserved' })
     }
     setAdding(false)
     setName('')
@@ -54,120 +56,114 @@ function ReservationsPanel({ onSeatRes, onError }) {
   }
 
   return (
-    <section className="rounded-2xl border border-[var(--color-ink-700)] bg-[var(--color-ink-900)] p-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-bold uppercase tracking-widest text-zinc-400">
-          {f.reservations || 'Reservations'} · {upcoming.length} {f.booked || 'booked'}
-        </h2>
-        <button
-          type="button"
-          onClick={() => setAdding((v) => !v)}
-          className="min-h-[44px] rounded-lg border border-[var(--color-ink-600)] px-3 text-sm text-zinc-200 hover:bg-white/5"
-        >
-          {adding ? (f.cancel || 'Cancel') : (lang === 'km' ? '+ កក់តុ' : lang === 'zh' ? '+ 预订' : '+ Book')}
-        </button>
+    <>
+      <div className="mb-3 flex justify-end">
+        <Button size="sm" variant={adding ? 'secondary' : 'primary'} onClick={() => setAdding((value) => !value)}>
+          {adding
+            ? (f.cancel || 'Cancel')
+            : (lang === 'km' ? '+ កក់តុ' : lang === 'zh' ? '+ 预订' : '+ Book')}
+          {lang !== 'en' && <span className="sr-only"> {adding ? 'Cancel' : '+ Book'}</span>}
+        </Button>
       </div>
 
       {adding && (
-        <div className="mt-3 space-y-3 rounded-xl bg-[var(--color-ink-800)] p-3 ring-1 ring-inset ring-[var(--color-ink-600)]">
-          <Field label={f.guestName || 'Name'}>
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Carter party" className={inputCls} maxLength={40} />
+        <div className="mb-3 space-y-3 rounded-[var(--radius-xl)] bg-[var(--surface-raised)] p-3 ring-1 ring-inset ring-[var(--border-subtle)]">
+          <Field label={f.guestName || 'Guest name'}>
+            <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Carter party" maxLength={40} />
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label={f.partySize || 'Party'}>
               <Stepper value={party} onChange={setParty} />
             </Field>
             <Field label={f.time || 'Time'}>
-              <input type="datetime-local" value={time} onChange={(e) => setTime(e.target.value)} className={inputCls} />
+              <Input type="datetime-local" value={time} onChange={(event) => setTime(event.target.value)} />
             </Field>
           </div>
           <Field label="Assign table (optional)">
-            <select value={tableId} onChange={(e) => setTableId(e.target.value)} className={inputCls}>
+            <Select value={tableId} onChange={(event) => setTableId(event.target.value)}>
               <option value="">Unassigned</option>
               {state.tables
-                .filter((t) => t.status === 'free')
-                .map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {translateTableName(t.name, lang)} · {t.seats} {f.seats || 'seats'}
+                .filter((table) => table.status === 'free')
+                .map((table) => (
+                  <option key={table.id} value={table.id}>
+                    {translateTableName(table.name, lang)} · {table.seats} {f.seats || 'seats'}
                   </option>
                 ))}
-            </select>
+            </Select>
           </Field>
-          <button
-            type="button"
-            onClick={add}
-            className="min-h-[44px] w-full rounded-lg bg-amber-500 py-2.5 text-sm font-bold text-black hover:bg-amber-400"
-          >
+          <Field label="Notes (optional)">
+            <Input value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Window seat, birthday" maxLength={80} />
+          </Field>
+          <Button block onClick={add}>
             {f.saveReservation || 'Book reservation'}
-          </button>
+          </Button>
         </div>
       )}
 
-      <ul className="mt-3 max-h-72 space-y-2 overflow-y-auto">
-        {upcoming.length === 0 && <li className="text-sm text-zinc-500">{f.noReservations || 'No upcoming reservations.'}</li>}
-        {upcoming.map((r) => {
-          const minsUntil = Math.round((new Date(r.time) - Date.now()) / 60000)
+      <ul className="max-h-72 space-y-2 overflow-y-auto">
+        {upcoming.length === 0 && (
+          <li className="rounded-[var(--radius-xl)] border border-dashed border-[var(--border)] px-4 py-6 text-center text-[var(--fs-body)] text-[var(--text-muted)]">
+            {f.noReservations || 'No upcoming reservations.'}
+          </li>
+        )}
+        {upcoming.map((reservation) => {
+          const minsUntil = Math.round((new Date(reservation.time) - Date.now()) / 60000)
           const overdue = minsUntil < -TARGETS.noShowMinutes
-          const assigned = r.tableId ? state.tables.find((t) => t.id === r.tableId) : null
+          const assigned = reservation.tableId ? state.tables.find((table) => table.id === reservation.tableId) : null
           return (
             <li
-              key={r.id}
-              className={`rounded-xl p-3 ring-1 ring-inset ${
+              key={reservation.id}
+              className={`rounded-[var(--radius-xl)] p-3 ring-1 ring-inset ${
                 overdue
-                  ? 'bg-red-500/5 ring-red-500/30'
-                  : 'bg-[var(--color-ink-800)] ring-[var(--color-ink-600)]'
+                  ? 'bg-[var(--danger-soft)] ring-[var(--danger)]/30'
+                  : 'bg-[var(--surface-raised)] ring-[var(--border-subtle)]'
               }`}
             >
               <div className="flex items-start justify-between gap-2">
-                <div>
-                  <div className="text-sm font-semibold text-zinc-100">{r.name}</div>
-                  <div className="text-xs text-zinc-400">
-                    {f.partySize || 'Party'} · {r.partySize} · {formatClock(r.time)} · {slotLabel(r.time)}
+                <div className="min-w-0">
+                  <div className="truncate text-[var(--fs-body)] font-semibold text-[var(--text-strong)]">{reservation.name}</div>
+                  <div className="tnum text-[var(--fs-label)] text-[var(--text-muted)]">
+                    {f.partySize || 'Party'} · {reservation.partySize} · {formatClock(reservation.time)} · {slotLabel(reservation.time)}
                   </div>
-                  <div className={`text-[11px] ${overdue ? 'font-semibold text-red-300' : 'text-zinc-500'}`}>
+                  <div className={`text-[var(--fs-caption)] ${overdue ? 'font-semibold text-[var(--danger)]' : 'text-[var(--text-subtle)]'}`}>
                     {minsUntil >= 0 ? `in ${minsUntil}m` : `${-minsUntil}m ago`}
-                    {assigned ? ` · ${translateTableName(assigned.name, lang)} (${translateTableStatus(assigned.status, lang)})` : ' · no table yet'}
-                    {r.notes ? ` · ${r.notes}` : ''}
+                    {assigned
+                      ? ` · ${translateTableName(assigned.name, lang)} (${translateTableStatus(assigned.status, lang)})`
+                      : ' · no table yet'}
+                    {reservation.notes ? ` · ${reservation.notes}` : ''}
                   </div>
                 </div>
               </div>
-              <div className="mt-2 flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => onSeatRes(r)}
-                  className="min-h-[44px] flex-1 rounded-lg bg-amber-500/90 px-2 py-1.5 text-xs font-bold text-black hover:bg-amber-400"
-                >
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Button size="sm" className="flex-1" onClick={() => onSeatRes(reservation)}>
                   {f.seat || 'Seat'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setReschedulingRes(r)}
-                  className="min-h-[44px] flex-1 rounded-lg border border-amber-500/50 px-2 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-500/10"
-                >
-                  {dict.common?.reschedule || 'Reschedule'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => dispatch({ type: 'SET_RESERVATION', id: r.id, patch: { status: 'no_show' } })}
+                </Button>
+                <Button size="sm" variant="secondary" className="flex-1" onClick={() => setReschedulingRes(reservation)}>
+                  {f.reschedule || 'Reschedule'}
+                </Button>
+                <Button
+                  size="sm"
+                  variant={overdue ? 'dangerGhost' : 'secondary'}
+                  className="flex-1"
                   title={overdue ? 'Overdue — mark no-show' : 'Mark no-show'}
-                  className={`min-h-[44px] flex-1 rounded-lg border px-2 py-1.5 text-xs hover:bg-white/5 ${
-                    overdue ? 'border-red-500/50 text-red-300' : 'border-[var(--color-ink-600)] text-zinc-300'
-                  }`}
+                  onClick={() => dispatch({ type: 'SET_RESERVATION', id: reservation.id, patch: { status: 'no_show' } })}
                 >
                   {f.noShow || 'No-show'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => dispatch({ type: 'SET_RESERVATION', id: r.id, patch: { status: 'cancelled' } })}
-                  className="min-h-[44px] flex-1 rounded-lg border border-[var(--color-ink-600)] px-2 py-1.5 text-xs text-zinc-400 hover:bg-white/5"
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="flex-1"
+                  onClick={() => dispatch({ type: 'SET_RESERVATION', id: reservation.id, patch: { status: 'cancelled' } })}
                 >
                   {f.cancel || 'Cancel'}
-                </button>
+                </Button>
               </div>
             </li>
           )
         })}
       </ul>
+
       {reschedulingRes && (
         <RescheduleModal
           reservation={reschedulingRes}
@@ -177,20 +173,21 @@ function ReservationsPanel({ onSeatRes, onError }) {
       )}
 
       {past.length > 0 && (
-        <details className="mt-2 text-xs text-zinc-500">
-          <summary className="cursor-pointer py-2">Earlier: {past.length} seated / no-show / cancelled</summary>
+        <details className="mt-2 text-[var(--fs-label)] text-[var(--text-subtle)]">
+          <summary className="cursor-pointer py-2">
+            Earlier: {past.length} seated / no-show / cancelled
+          </summary>
           <ul className="space-y-1 pb-1">
-            {past.slice(-5).reverse().map((r) => (
-              <li key={r.id}>
-                {r.name} · {r.partySize} · {formatClock(r.time)} · {r.status.replace('_', ' ')}
+            {past.slice(-5).reverse().map((reservation) => (
+              <li key={reservation.id}>
+                {reservation.name} · {reservation.partySize} · {formatClock(reservation.time)} · {reservation.status.replace('_', ' ')}
               </li>
             ))}
           </ul>
         </details>
       )}
-    </section>
+    </>
   )
 }
-
 
 export { ReservationsPanel }

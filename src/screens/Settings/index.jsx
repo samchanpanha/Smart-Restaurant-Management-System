@@ -27,6 +27,7 @@ import { DataSection } from './sections/Data'
 import { DocumentsSection } from './sections/Documents'
 import { FoodSection } from './sections/Food'
 import { MoneySection } from './sections/Money'
+import { PaymentsSection } from './sections/Payments'
 import { PosSection } from './sections/Pos'
 import { StockSection } from './sections/Stock'
 import { TelegramSection } from './sections/Telegram'
@@ -42,6 +43,7 @@ const SECTIONS = [
   { id: 'stock', label: 'Stock rules', blurb: 'Valuation, reorder, auto-86' },
   { id: 'food', label: 'Food & menu', blurb: 'Tags, allergens, courses, photos, service windows' },
   { id: 'pos', label: 'Service & POS', blurb: 'Tips, splits, printers, QR' },
+  { id: 'payments', label: 'Payments', blurb: 'Guest QR and cash at checkout' },
   { id: 'dashboard', label: 'Dashboard', blurb: 'Hero, KPI cards, section toggles, targets' },
   { id: 'alerts', label: 'Alerts', blurb: 'What pings whom, and when' },
   { id: 'ai', label: 'AI assistant & Guides', blurb: 'Provider, model, API key, how-to guides' },
@@ -57,6 +59,7 @@ const SECTION_ICON = {
   money: 'costing',
   stock: 'inventory',
   pos: 'pos',
+  payments: 'wallet',
   dashboard: 'dashboard',
   alerts: 'bell',
   ai: 'sparkles',
@@ -106,6 +109,7 @@ export default function SettingsScreen({ initialSection = 'business' }) {
     stock: st.inventoryTab || 'Stock rules',
     food: st.foodTab || 'Food & menu',
     pos: st.posTab || 'Service & POS',
+    payments: st.paymentsTab || 'Payments',
     dashboard: st.dashboardTab || 'Dashboard',
     alerts: st.notificationsTab || 'Alerts & notifications',
     ai: st.aiTab || 'AI assistant & Guides',
@@ -199,6 +203,8 @@ export default function SettingsScreen({ initialSection = 'business' }) {
         return <FoodSection draft={draft} patch={patch} />
       case 'pos':
         return <PosSection draft={draft} patch={patch} />
+      case 'payments':
+        return <PaymentsSection draft={draft} patch={patch} />
       case 'dashboard':
         return <DashboardSection draft={draft} patch={patch} />
       case 'alerts':

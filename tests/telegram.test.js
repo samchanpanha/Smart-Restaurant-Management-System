@@ -571,3 +571,190 @@ test('the saved Base URL drives the bot’s guest links and survives a token sav
     await new Promise((resolve) => srv.close(resolve))
   }
 })
+
+// ─── One-click setup: register the webhook, send a test message ────
+// The setup checklist on the Telegram screen drives these. The Bot API is
+// stubbed — no token, no internet — so what is verified is the request
+// shape, the owner gate, and the plain-English answer when a step is
+// missing (those buttons must never show a raw network error).
+
+function setupApp({ token = '111:AAHtenanttoken', publicUrl = '', notifier = null, fetchImpl = null } = {}) {
+  const app = express()
+  app.use(express.json())
+  app.use(createTelegramRouter({
+    getState: () => buildEmpire(),
+    applyAction: () => true,
+    resolveTenant: (req, _res, next) => { req.tenantId = req.get('x-tenant') || 'default'; next() },
+    requireAdmin: (req, res, next) => (req.get('x-role') === 'owner' ? next() : res.status(403).json({ error: 'owner access required' })),
+    getConfig: () => ({}),
+    setConfig: () => {},
+    getToken: () => token,
+    publicUrl,
+    notifier,
+    fetchImpl,
+  }).router)
+  return app
+}
+
+async function withSetupServer(app, fn) {
+  const srv = await new Promise((resolve) => { const s = app.listen(0, '127.0.0.1', () => resolve(s)) })
+  const url = (path) => `http://127.0.0.1:${srv.address().port}${path}`
+  const call = (method, path, body, headers = {}) => fetch(url(path), {
+    method,
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+  try {
+    return await fn({ url, call })
+  } finally {
+    await new Promise((resolve) => srv.close(resolve))
+  }
+}
+
+/** Save/restore the env the base-URL chain reads, so tests never leak. */
+function withCleanTelegramEnv(fn) {
+  const names = ['TELEGRAM_BOT_TOKEN', 'RESTORA_PUBLIC_URL', 'RENDER_EXTERNAL_URL', 'PUBLIC_URL']
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]))
+  for (const name of names) delete process.env[name]
+  return Promise.resolve()
+    .then(fn)
+    .finally(() => {
+      for (const name of names) {
+        if (previous[name] === undefined) delete process.env[name]
+        else process.env[name] = previous[name]
+      }
+    })
+}
+
+test('the setup buttons are owner-gated and name the missing step', async () => {
+  await withCleanTelegramEnv(async () => {
+    // No token anywhere: info is honest, both buttons refuse in plain English.
+    await withSetupServer(setupApp({ token: '' }), async ({ call }) => {
+      assert.equal((await call('GET', '/api/telegram/webhook/info', undefined, { 'x-role': 'staff' })).status, 403)
+      const owner = { 'x-role': 'owner' }
+      const info = await (await call('GET', '/api/telegram/webhook/info', undefined, owner)).json()
+      assert.equal(info.ok, true)
+      assert.equal(info.configured, false, 'no token yet is a normal state, not an error')
+      assert.equal(info.registered, false)
+
+      const register = await call('POST', '/api/telegram/webhook/register', {}, owner)
+      assert.equal(register.status, 400)
+      assert.match((await register.json()).error, /Save a bot token first/)
+      const test = await call('POST', '/api/telegram/test', {}, owner)
+      assert.equal(test.status, 400)
+      assert.match((await test.json()).error, /Save a bot token first/)
+    })
+
+    // Token saved, no public address: the webhook cannot be built yet.
+    const emptyInfo = async () => ({ ok: true, json: async () => ({ ok: true, result: {} }) })
+    await withSetupServer(setupApp({ token: '111:AAHtenanttoken', publicUrl: '', fetchImpl: emptyInfo }), async ({ call }) => {
+      const owner = { 'x-role': 'owner' }
+      const info = await (await call('GET', '/api/telegram/webhook/info', undefined, owner)).json()
+      assert.equal(info.configured, true)
+      assert.equal(info.registered, false, 'Telegram has no webhook for this bot yet')
+      assert.equal(info.expectedUrl, '', 'and this server has no address to build one from')
+
+      const register = await call('POST', '/api/telegram/webhook/register', {}, owner)
+      assert.equal(register.status, 400)
+      assert.match((await register.json()).error, /Set the Base URL first/)
+      const test = await call('POST', '/api/telegram/test', {}, owner)
+      assert.equal(test.status, 400)
+      assert.match((await test.json()).error, /No chat to message/)
+    })
+  })
+})
+
+test('Register webhook calls setWebhook with the saved token and Base URL', async () => {
+  const calls = []
+  const fetchImpl = async (target, options) => {
+    const method = String(target).split('/').pop()
+    calls.push({ method, url: String(target), body: JSON.parse(options.body || '{}') })
+    if (method === 'setWebhook') {
+      return { ok: true, json: async () => ({ ok: true, result: true, description: 'Webhook was set' }) }
+    }
+    return {
+      ok: true,
+      json: async () => ({
+        ok: true,
+        result: {
+          url: 'https://restora.test/api/telegram/webhook',
+          pending_update_count: 3,
+          last_error_message: 'Wrong response from the webhook: 500',
+          last_error_date: 1700000000,
+        },
+      }),
+    }
+  }
+  const previousSecret = process.env.TELEGRAM_WEBHOOK_SECRET
+  process.env.TELEGRAM_WEBHOOK_SECRET = 's3cret'
+  try {
+    await withSetupServer(setupApp({ publicUrl: 'https://restora.test', fetchImpl }), async ({ call }) => {
+      const owner = { 'x-role': 'owner' }
+      const registered = await (await call('POST', '/api/telegram/webhook/register', {}, owner)).json()
+      assert.deepEqual(registered, { ok: true, url: 'https://restora.test/api/telegram/webhook', secret: true })
+      assert.equal(calls[0].method, 'setWebhook')
+      assert.match(calls[0].url, /bot111:AAHtenanttoken\/setWebhook$/, 'the saved tenant token is the one calling')
+      assert.equal(calls[0].body.url, 'https://restora.test/api/telegram/webhook')
+      assert.equal(calls[0].body.secret_token, 's3cret', 'the webhook secret travels with the registration')
+      assert.deepEqual(calls[0].body.allowed_updates, ['message', 'edited_message', 'channel_post'])
+
+      const info = await (await call('GET', '/api/telegram/webhook/info', undefined, owner)).json()
+      assert.equal(calls[1].method, 'getWebhookInfo')
+      assert.equal(info.registered, true)
+      assert.equal(info.matches, true, 'the registered URL is exactly what this server expects')
+      assert.equal(info.pendingUpdates, 3)
+      assert.match(info.lastError, /Wrong response/)
+      assert.equal(info.lastErrorAt, new Date(1700000000 * 1000).toISOString())
+      assert.equal(info.secret, true)
+    })
+  } finally {
+    if (previousSecret === undefined) delete process.env.TELEGRAM_WEBHOOK_SECRET
+    else process.env.TELEGRAM_WEBHOOK_SECRET = previousSecret
+  }
+})
+
+test('a Telegram refusal comes back with Telegram’s own reason', async () => {
+  const fetchImpl = async () => ({
+    ok: false,
+    status: 400,
+    json: async () => ({ ok: false, description: 'Bad Request: Webhook URL must use HTTPS' }),
+  })
+  await withCleanTelegramEnv(async () => {
+    await withSetupServer(setupApp({ publicUrl: 'http://localhost:5173', fetchImpl }), async ({ call }) => {
+      const res = await call('POST', '/api/telegram/webhook/register', {}, { 'x-role': 'owner' })
+      assert.equal(res.status, 502)
+      const body = await res.json()
+      assert.match(body.error, /must use HTTPS/)
+      assert.equal(body.url, 'http://localhost:5173/api/telegram/webhook', 'the attempted URL comes back for context')
+    })
+  })
+})
+
+test('Send test message reaches every chat the bot can already see', async () => {
+  const sends = []
+  const fetchImpl = async (target, options) => {
+    const body = JSON.parse(options.body || '{}')
+    sends.push(body)
+    if (body.chat_id === '-100123') {
+      return { ok: false, status: 400, json: async () => ({ ok: false, description: 'chat not found' }) }
+    }
+    return { ok: true, json: async () => ({ ok: true, result: { message_id: 9 } }) }
+  }
+  const notifier = () => ({ targets: () => ['5', '-100123'], stats: {} })
+  await withSetupServer(setupApp({ notifier, fetchImpl }), async ({ call }) => {
+    const owner = { 'x-role': 'owner' }
+    const sent = await (await call('POST', '/api/telegram/test', {}, owner)).json()
+    assert.equal(sent.ok, true, 'one delivery is enough to prove the link')
+    assert.equal(sent.sent, 1)
+    assert.deepEqual(sent.targets, ['5', '-100123'])
+    assert.equal(sent.results.length, 2)
+    assert.equal(sent.results[0].ok, true)
+    assert.match(sent.results[1].error, /chat not found/)
+    assert.match(sends[0].text, /Restora bot is connected/)
+
+    // A named chat wins when the caller passes one.
+    sends.length = 0
+    await call('POST', '/api/telegram/test', { chatId: '777' }, owner)
+    assert.deepEqual(sends.map((row) => row.chat_id), ['777'])
+  })
+})

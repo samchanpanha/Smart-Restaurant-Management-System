@@ -1,17 +1,11 @@
 
-
-const SESSION_KEY = 'restora_miniapp_session_v1'
-function guestSessionToken() {
-  try {
-    const existing = localStorage.getItem(SESSION_KEY)
-    if (existing) return existing
-    const created = `sess_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
-    localStorage.setItem(SESSION_KEY, created)
-    return created
-  } catch {
-    return `sess_${Date.now().toString(36)}`
-  }
-}
+import {
+  GUEST_ORDER_KEY,
+  GUEST_SESSION_KEY,
+  guestSessionToken,
+  loadGuestOrder,
+  saveGuestOrder,
+} from '../../lib/guest-session.js'
 
 function telegramWebApp() {
   const app = typeof window !== 'undefined' ? window.Telegram?.WebApp : null
@@ -39,4 +33,13 @@ const TABLE_TAG = {
   cleaning: 'Being cleaned',
   dirty: 'Being cleaned',
 }
-export { SESSION_KEY, guestSessionToken, telegramWebApp, applyTelegramTheme, TABLE_TAG }
+export {
+  GUEST_ORDER_KEY,
+  GUEST_SESSION_KEY,
+  guestSessionToken,
+  loadGuestOrder,
+  saveGuestOrder,
+  telegramWebApp,
+  applyTelegramTheme,
+  TABLE_TAG,
+}
