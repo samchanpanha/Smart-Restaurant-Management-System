@@ -18,6 +18,7 @@ import {
   useI18n,
 } from '../lib/i18n'
 import { isFreeTableStatus, isTableInServiceStatus } from '../lib/constants'
+import { guestSessionToken, saveGuestOrder } from '../lib/guest-session'
 import { money, orderTotals, uid } from '../lib/models'
 import { categoryTree } from '../lib/settings'
 import { useMenuCatalog } from '../lib/useMenuCatalog'
@@ -592,6 +593,7 @@ export default function GuestScreen({ tableId, allowPickup = false, onSelfSeat =
   const [delivery, setDelivery] = useState(() => initialOrderMode === 'delivery')
   const [pickupOrderId, setPickupOrderId] = useState(null)
   const [deliveryOrderId, setDeliveryOrderId] = useState(null)
+  const [guestToken] = useState(() => guestSessionToken())
   const [deliveryAddress, setDeliveryAddress] = useState('')
   const [addressError, setAddressError] = useState(false)
   const [nameError, setNameError] = useState(false)
@@ -709,11 +711,16 @@ export default function GuestScreen({ tableId, allowPickup = false, onSelfSeat =
       const addr = deliveryAddress.trim()
       if (!addr) { setAddressError(true); setCartOpen(false); return }
       // Single atomic action — creates the delivery order + fires lines.
+      // The client id travels with the action so tracking can find the
+      // order the reducer actually created.
       const orderId = uid('o')
       setDeliveryOrderId(orderId)
+      saveGuestOrder({ orderId, type: 'delivery', guestToken, at: Date.now() })
       dispatch({
         type: 'GUEST_SEND',
         orderType: 'delivery',
+        orderId,
+        guestToken,
         customer: { name },
         deliveryAddress: addr,
         items: cart.map((c) => ({ ...c, guest: name })),
@@ -724,7 +731,15 @@ export default function GuestScreen({ tableId, allowPickup = false, onSelfSeat =
       const orderId = pickupOrderId || uid('o')
       if (!pickupOrderId) {
         setPickupOrderId(orderId)
-        dispatch({ type: 'GUEST_SEND', orderType: 'takeout', customer: { name }, items: cart.map((c) => ({ ...c, guest: name })) })
+        saveGuestOrder({ orderId, type: 'takeout', guestToken, at: Date.now() })
+        dispatch({
+          type: 'GUEST_SEND',
+          orderType: 'takeout',
+          orderId,
+          guestToken,
+          customer: { name },
+          items: cart.map((c) => ({ ...c, guest: name })),
+        })
       } else {
         for (const c of cart) {
           dispatch({ type: 'ADD_ITEM', orderId, menuItemId: c.menuItemId, qty: c.qty, modifiers: c.modifiers, course: c.course, notes: c.notes, by: 'guest', guest: name })

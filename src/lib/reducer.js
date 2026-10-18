@@ -1391,6 +1391,8 @@ function shopReducerBase(state, action) {
         deliveryFee = 0,
         deliveryAddress = null,
         eta = null,
+        orderId = null,
+        guestToken = null,
       } = action
       const offTable = OFF_TABLE_TYPES.includes(orderType)
 
@@ -1400,8 +1402,16 @@ function shopReducerBase(state, action) {
         const nowIso = createdAt
         const inventoryById = Object.fromEntries(state.inventory.map((i) => [i.id, i]))
         const sanitized = sanitizeCustomer(customer)
+        // The guest keeps a client-generated id so the confirmation screen,
+        // tracking tab, and bill all point at the order the reducer created.
+        // A collision (replay) falls back to a fresh id instead of merging.
+        const requestedId = String(orderId || '').trim().slice(0, 64)
+        const id = requestedId && !state.orders.some((o) => o.id === requestedId)
+          ? requestedId
+          : uid('o')
+        const token = String(guestToken || '').trim().slice(0, 64)
         const newOrder = {
-          id: uid('o'),
+          id,
           tableId: null,
           type: orderType,
           serverId: 'guest',
@@ -1413,6 +1423,7 @@ function shopReducerBase(state, action) {
           compTotal: 0,
           items: [],
           customer: sanitized,
+          ...(token ? { guestToken: token } : {}),
           eta: eta || null,
           ...(orderType === 'delivery'
             ? {
