@@ -23,6 +23,15 @@
 // instance-wide webhook, both save to the tenant the bot serves
 // (botTenantId), not the caller's; TELEGRAM_BOT_TOKEN / RESTORA_PUBLIC_URL
 // remain the fallbacks everywhere.
+//
+// The Telegram screen's setup checklist gets three owner-gated routes:
+// GET /api/telegram/webhook/info (is the webhook registered, and where),
+// POST /api/telegram/webhook/register (call setWebhook with the saved
+// token + Base URL — the "Register webhook" button) and POST
+// /api/telegram/test (send a confirmation message to every reachable
+// chat — the "Send test message" button). All three act on the bot's own
+// identity and answer with plain English when a step is missing, never
+// with a raw network error.
 
 import express from 'express'
 import { runTelegramCommand, parseTelegramUpdate, replyKeyboard, TELEGRAM_COMMANDS } from '../src/lib/telegram.js'
@@ -96,6 +105,10 @@ export function createTelegramRouter({
   setConfig = null,
   requireAdmin = null,
   resolveTenant = null,
+  // Injected for tests: the setup routes (webhook info / register / test
+  // message) call the Telegram Bot API. Production passes nothing and the
+  // global fetch is used.
+  fetchImpl = null,
   // The bot is one webhook + one token for the whole instance, so the token the
   // Settings field saves must land on the tenant the bot actually reads
   // (DEFAULT_TENANT in server/index.js). Without this, a save by an owner whose
@@ -343,6 +356,120 @@ export function createTelegramRouter({
       }
       setConfig(ownerId, next)
       res.json(present(ownerId))
+    })
+
+    // ─── One-click setup ──────────────────────────────────────────
+    // The step-by-step checklist on the Telegram screen drives these:
+    // "Register webhook" (setWebhook with the saved token + Base URL) and
+    // "Send test message" (prove the round trip). Both act on the bot's
+    // own identity, like every other route here, and explain what is
+    // missing in plain English instead of surfacing a network error.
+    const apiFetch = () => fetchImpl || globalThis.fetch
+
+    async function callTelegram(method, payload) {
+      const botToken = token()
+      if (!botToken) return { ok: false, error: 'Save a bot token first — Settings → Telegram bot & mini app.' }
+      const f = apiFetch()
+      if (typeof f !== 'function') return { ok: false, error: 'No network client on this server.' }
+      try {
+        const controller = new AbortController()
+        const timer = setTimeout(() => controller.abort(), SEND_TIMEOUT_MS)
+        const res = await f(`${API_BASE}/bot${botToken}/${method}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload || {}),
+          signal: controller.signal,
+        })
+        clearTimeout(timer)
+        const json = await res.json().catch(() => ({}))
+        if (!res.ok || json?.ok === false) {
+          return { ok: false, error: json?.description || `Telegram answered HTTP ${res.status}` }
+        }
+        return { ok: true, result: json?.result }
+      } catch (err) {
+        return { ok: false, error: err?.message || 'Telegram is unreachable right now.' }
+      }
+    }
+
+    /** The address this server expects Telegram to call. */
+    function webhookUrl() {
+      const base = publicBase()
+      return base ? `${base}/api/telegram/webhook` : ''
+    }
+
+    // What step ② needs: registered / where / last delivery error. No token
+    // yet is a normal state, not an error — the screen says "step ① first".
+    router.get('/api/telegram/webhook/info', resolveTenant, requireAdmin, async (req, res) => {
+      res.setHeader('Cache-Control', 'no-store')
+      const secret = Boolean(String(process.env.TELEGRAM_WEBHOOK_SECRET || '').trim())
+      if (!token()) {
+        return res.json({ ok: true, configured: false, registered: false, url: '', expectedUrl: webhookUrl(), matches: false, secret })
+      }
+      const info = await callTelegram('getWebhookInfo', {})
+      if (!info.ok) return res.status(502).json({ ok: false, configured: true, error: info.error })
+      const result = info.result || {}
+      const url = String(result.url || '')
+      res.json({
+        ok: true,
+        configured: true,
+        registered: Boolean(url),
+        url,
+        expectedUrl: webhookUrl(),
+        matches: Boolean(url) && url === webhookUrl(),
+        pendingUpdates: Number(result.pending_update_count) || 0,
+        lastError: result.last_error_message || '',
+        lastErrorAt: result.last_error_date ? new Date(result.last_error_date * 1000).toISOString() : null,
+        secret,
+      })
+    })
+
+    router.post('/api/telegram/webhook/register', resolveTenant, requireAdmin, async (req, res) => {
+      if (!token()) {
+        return res.status(400).json({ ok: false, error: 'Save a bot token first — Settings → Telegram bot & mini app.' })
+      }
+      const url = webhookUrl()
+      if (!isHttpUrl(url)) {
+        return res.status(400).json({ ok: false, error: 'Set the Base URL first — the webhook needs this server’s public address.' })
+      }
+      const secret = String(process.env.TELEGRAM_WEBHOOK_SECRET || '').trim()
+      const payload = { url, allowed_updates: ['message', 'edited_message', 'channel_post'] }
+      if (secret) payload.secret_token = secret
+      const set = await callTelegram('setWebhook', payload)
+      if (!set.ok) return res.status(502).json({ ok: false, error: set.error, url })
+      res.json({ ok: true, url, secret: Boolean(secret) })
+    })
+
+    // "Send test message": the bot can already reach every chat that has
+    // messaged it plus the configured ids — prove it with one message
+    // (a named chatId wins when the caller passes one).
+    router.post('/api/telegram/test', resolveTenant, requireAdmin, async (req, res) => {
+      if (!token()) {
+        return res.status(400).json({ ok: false, error: 'Save a bot token first — Settings → Telegram bot & mini app.' })
+      }
+      const body = req.body || {}
+      const explicit = String(body.chatId || '').trim()
+      let targets = explicit ? [explicit] : []
+      if (!targets.length) {
+        try {
+          const empire = getState()
+          const shop = empire?.locations?.downtown || Object.values(empire?.locations || {})[0]
+          const active = notifier?.()
+          targets = active?.targets ? active.targets(shop?.settings).map(String) : []
+        } catch { /* no reachable chat — reported below */ }
+      }
+      if (!targets.length) {
+        return res.status(400).json({ ok: false, error: 'No chat to message yet — send the bot /start once from your phone, then try again.' })
+      }
+      const text = typeof body.text === 'string' && body.text.trim()
+        ? body.text.trim().slice(0, 200)
+        : '✅ Restora bot is connected — floor updates will land in this chat.'
+      const results = []
+      for (const chatId of targets) {
+        const sent = await sendTelegramMessage(chatId, text, { token: token(), fetchImpl: apiFetch() })
+        results.push({ chatId, ok: sent.ok === true, error: sent.error || (sent.skipped ? sent.reason : undefined) })
+      }
+      const sentCount = results.filter((row) => row.ok).length
+      res.json({ ok: sentCount > 0, sent: sentCount, targets, results })
     })
   }
 
