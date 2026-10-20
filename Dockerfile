@@ -36,7 +36,6 @@ COPY --from=build /app/server ./server
 COPY --from=build /app/src ./src
 
 RUN mkdir -p /data && chown -R node:node /data
-VOLUME ["/data"]
 
 USER node
 EXPOSE 3001
